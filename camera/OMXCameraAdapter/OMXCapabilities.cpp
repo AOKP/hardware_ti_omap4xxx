@@ -101,6 +101,7 @@ const CapPixelformat OMXCameraAdapter::mPixelformats [] = {
     { OMX_COLOR_FormatYUV420SemiPlanar, CameraParameters::PIXEL_FORMAT_YUV420SP },
     { OMX_COLOR_Format16bitRGB565, CameraParameters::PIXEL_FORMAT_RGB565 },
     { OMX_COLOR_FormatRawBayer10bit, TICameraParameters::PIXEL_FORMAT_RAW },
+    { OMX_COLOR_FormatYUV420SemiPlanar, CameraParameters::PIXEL_FORMAT_YUV420P },
 };
 
 const CapFramerate OMXCameraAdapter::mFramerates [] = {
@@ -982,7 +983,9 @@ status_t OMXCameraAdapter::insertDefaults(CameraProperties::Properties* params, 
     params->set(CameraProperties::AUTO_EXPOSURE_LOCK, DEFAULT_AE_LOCK);
     params->set(CameraProperties::AUTO_WHITEBALANCE_LOCK, DEFAULT_AWB_LOCK);
     params->set(CameraProperties::MAX_NUM_METERING_AREAS, DEFAULT_MAX_NUM_METERING_AREAS);
-
+    params->set(CameraProperties::FOCAL_LENGTH, DEFAULT_FOCAL_LENGTH);
+    params->set(CameraProperties::HOR_ANGLE, DEFAULT_HOR_ANGLE);
+    params->set(CameraProperties::VER_ANGLE, DEFAULT_VER_ANGLE);
     LOG_FUNCTION_NAME;
 
     return ret;

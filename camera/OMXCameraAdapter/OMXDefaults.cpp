@@ -61,7 +61,9 @@ const char OMXCameraAdapter::DEFAULT_WB[] = "auto";
 const char OMXCameraAdapter::DEFAULT_ZOOM[] = "0";
 const char OMXCameraAdapter::DEFAULT_MAX_FD_HW_FACES[] = "35";
 const char OMXCameraAdapter::DEFAULT_MAX_FD_SW_FACES[] = "0";
-
+const char OMXCameraAdapter::DEFAULT_FOCAL_LENGTH[] = "4.6";
+const char OMXCameraAdapter::DEFAULT_HOR_ANGLE[] = "54.8";
+const char OMXCameraAdapter::DEFAULT_VER_ANGLE[] = "42.5";
 const char OMXCameraAdapter::DEFAULT_AE_LOCK[] = "false";
 const char OMXCameraAdapter::DEFAULT_AWB_LOCK[] = "false";
 const char OMXCameraAdapter::DEFAULT_MAX_NUM_METERING_AREAS[] = "0";
