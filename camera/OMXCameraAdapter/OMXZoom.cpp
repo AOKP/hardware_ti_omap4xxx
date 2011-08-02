@@ -173,7 +173,6 @@ status_t OMXCameraAdapter::advanceZoom()
                 CAMHAL_LOGDB("[Goal Reached] Smooth Zoom notify currentIdx = %d, targetIdx = %d",
                              mCurrentZoomIdx,
                              mTargetZoomIdx);
-                notifyZoomSubscribers(mCurrentZoomIdx, true);
 
                 if ( NO_ERROR == ret )
                     {
@@ -190,6 +189,8 @@ status_t OMXCameraAdapter::advanceZoom()
                         }
 
                     }
+                mReturnZoomStatus = false;
+                notifyZoomSubscribers(mCurrentZoomIdx, true);
                 }
             else
                 {
@@ -234,6 +235,7 @@ status_t OMXCameraAdapter::startSmoothZoom(int targetIdx)
         {
         mTargetZoomIdx = targetIdx;
         mZoomParameterIdx = mCurrentZoomIdx;
+        mReturnZoomStatus = false;
         }
     else
         {
