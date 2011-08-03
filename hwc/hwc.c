@@ -27,12 +27,15 @@
 #include <EGL/egl.h>
 #include <utils/Timers.h>
 
+#define min(a, b) ( { typeof(a) __a = (a), __b = (b); __a < __b ? __a : __b; } )
+#define max(a, b) ( { typeof(a) __a = (a), __b = (b); __a > __b ? __a : __b; } )
+
 #include <video/dsscomp.h>
 
 #include "hal_public.h"
 
 #define MAX_HW_OVERLAYS 4
-#define MAX_SCALING_OVERLAYS 3
+#define NUM_NONSCALING_OVERLAYS 1
 #define HAL_PIXEL_FORMAT_BGRX_8888		0x1FF
 #define HAL_PIXEL_FORMAT_TI_NV12 0x100
 #define HAL_PIXEL_FORMAT_TI_NV12_PADDED 0x101
@@ -41,6 +44,15 @@
 #define MIN(a,b)		  ((a)<(b)?(a):(b))
 #define MAX(a,b)		  ((a)>(b)?(a):(b))
 #define CLAMP(x,low,high) (((x)>(high))?(high):(((x)<(low))?(low):(x)))
+
+enum {
+    EXT_ROTATION    = 3,        /* rotation while mirroring */
+    EXT_HFLIP       = (1 << 2), /* flip l-r on output (after rotation) */
+    EXT_TRANSFORM   = EXT_ROTATION | EXT_HFLIP,
+    EXT_ON          = (1 << 3), /* copy output to other display */
+    EXT_DOCK        = (1 << 4), /* docking only */
+    EXT_TV          = (1 << 5), /* using TV for mirroring */
+};
 
 struct omap4_hwc_module {
     hwc_module_t base;
@@ -57,9 +69,17 @@ struct omap4_hwc_device {
 
     buffer_handle_t *buffers;
     int use_sgx;
+    int swap_rb;
+    int use_tv;
+    int mirror;
+    unsigned int post2_layers;
+    int last_ext_ovls;
+    int last_int_ovls;
+    int ext_ovls;
 
     int flags_rgb_order;
     int flags_nv12_only;
+    int ext;
 };
 typedef struct omap4_hwc_device omap4_hwc_device_t;
 
@@ -81,19 +101,23 @@ static void dump_layer(hwc_layer_t const* l)
 
 static void dump_dsscomp(struct dsscomp_setup_dispc_data *d)
 {
-    struct dss2_mgr_info *mi = &d->mgr;
+    unsigned i;
 
-    LOGE("[%08x] set: %c%c%c(dis%d alpha=%d col=%08x ilace=%d n=%d)\n",
+    LOGD("[%08x] set: %c%c%c %d ovls\n",
          d->sync_id,
          (d->mode & DSSCOMP_SETUP_MODE_APPLY) ? 'A' : '-',
          (d->mode & DSSCOMP_SETUP_MODE_DISPLAY) ? 'D' : '-',
          (d->mode & DSSCOMP_SETUP_MODE_CAPTURE) ? 'C' : '-',
-         mi->ix,
-         mi->alpha_blending, mi->default_color,
-         mi->interlaced,
          d->num_ovls);
 
-    unsigned i;
+    for (i = 0; i < d->num_mgrs; i++) {
+        struct dss2_mgr_info *mi = d->mgrs + i;
+        LOGD(" (dis%d alpha=%d col=%08x ilace=%d)\n",
+            mi->ix,
+            mi->alpha_blending, mi->default_color,
+            mi->interlaced);
+    }
+
     for (i = 0; i < d->num_ovls; i++) {
             struct dss2_ovl_info *oi = d->ovls + i;
             struct dss2_ovl_cfg *c = &oi->cfg;
@@ -233,7 +257,7 @@ omap4_hwc_setup_layer(omap4_hwc_device_t *hwc_dev, struct dss2_ovl_info *ovl,
         oc->mirror = 1;
     if (layer->transform & HWC_TRANSFORM_FLIP_V) {
         oc->rotation = 2;
-	oc->mirror = !oc->mirror;
+        oc->mirror = !oc->mirror;
     }
     if (layer->transform & HWC_TRANSFORM_ROT_90) {
         oc->rotation += oc->mirror ? -1 : 1;
@@ -277,23 +301,111 @@ static int omap4_hwc_is_valid_layer(hwc_layer_t *layer,
     return 1;
 }
 
+struct counts {
+    unsigned int possible_overlay_layers;
+    unsigned int composited_layers;
+    unsigned int scaled_layers;
+    unsigned int RGB;
+    unsigned int BGR;
+    unsigned int NV12;
+    unsigned int displays;
+    unsigned int max_hw_overlays;
+    unsigned int max_scaling_overlays;
+};
+
+static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts *num)
+{
+    int tv = hwc_dev->ext & EXT_TV;
+    int nonscaling_ovls = NUM_NONSCALING_OVERLAYS;
+    int tform = hwc_dev->ext & EXT_TRANSFORM;
+    num->max_hw_overlays = MAX_HW_OVERLAYS;
+
+    /*
+     * We cannot atomically switch overlays from one display to another.  First, they
+     * have to be disabled, and the disabling has to take effect on the current display.
+     * We keep track of the available number of overlays here.
+     */
+    if (hwc_dev->ext & EXT_DOCK) {
+        /* some overlays may already be used by the external display, so we account for this */
+
+        /* reserve just a video pipeline for HDMI if docking */
+        hwc_dev->ext_ovls = num->NV12 ? 1 : 0;
+        num->max_hw_overlays -= max(hwc_dev->ext_ovls, hwc_dev->last_ext_ovls);
+    } else if (hwc_dev->ext) {
+        /*
+         * otherwise, manage just from half the pipelines.  NOTE: there is
+         * no danger of having used too many overlays for external display here.
+         */
+        num->max_hw_overlays >>= 1;
+        nonscaling_ovls >>= 1;
+        hwc_dev->ext_ovls = MAX_HW_OVERLAYS - num->max_hw_overlays;
+    } else {
+        num->max_hw_overlays -= hwc_dev->last_ext_ovls;
+        hwc_dev->ext_ovls = 0;
+    }
+
+    /*
+     * :TRICKY: We may not have enough overlays on the external display.  We "reserve" them
+     * here to figure out if mirroring is supported, but may not do mirroring for the first
+     * frame while the overlays required for it are cleared.
+     */
+    hwc_dev->ext_ovls = min(MAX_HW_OVERLAYS - hwc_dev->last_int_ovls, hwc_dev->ext_ovls);
+
+    /* if not docking, we may be limited by last used external overlays */
+    if (hwc_dev->ext_ovls && hwc_dev->ext && !(hwc_dev->ext & EXT_DOCK))
+         num->max_hw_overlays = hwc_dev->ext_ovls;
+
+    num->max_scaling_overlays = num->max_hw_overlays - nonscaling_ovls;
+
+    return  /* must have at least one layer if using composition bypass to get sync object */
+            num->possible_overlay_layers &&
+            num->possible_overlay_layers <= num->max_hw_overlays &&
+            num->possible_overlay_layers == num->composited_layers &&
+            num->scaled_layers <= num->max_scaling_overlays &&
+            /* we cannot clone non-NV12 transformed layers */
+            (!tform || num->NV12 == num->possible_overlay_layers) &&
+            /* HDMI cannot display BGR */
+            (num->BGR == 0 || (num->RGB == 0 && !tv) || !hwc_dev->flags_rgb_order);
+}
+
+static inline int can_dss_render_layer(omap4_hwc_device_t *hwc_dev,
+            hwc_layer_t *layer)
+{
+    IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
+
+    int tv = hwc_dev->ext & EXT_TV;
+    int tform = hwc_dev->ext & EXT_TRANSFORM;
+
+    return omap4_hwc_is_valid_layer(layer, handle) &&
+           /* skip non-NV12 layers if also using SGX (if nv12_only flag is set) */
+           (!hwc_dev->flags_nv12_only || (!hwc_dev->use_sgx || is_NV12(handle->iFormat))) &&
+           /* make sure RGB ordering is consistent (if rgb_order flag is set) */
+           (!(hwc_dev->swap_rb ? is_RGB(handle->iFormat) : is_BGR(handle->iFormat)) ||
+            !hwc_dev->flags_rgb_order) &&
+           /* TV can only render RGB */
+           !(tv && is_BGR(handle->iFormat)) &&
+           /* we can only rotate TILER2D buffers for external displays */
+           !(tform && !is_NV12(handle->iFormat));
+}
+
 static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* list)
 {
     omap4_hwc_device_t *hwc_dev = (omap4_hwc_device_t *)dev;
     struct dsscomp_setup_dispc_data *dsscomp = &hwc_dev->dsscomp_data;
-    unsigned int num_possible_overlay_layers = 0;
-    unsigned int num_composited_layers = 0;
-    unsigned int num_scaled_layers = 0;
+    struct counts num = { .composited_layers = list->numHwLayers };
     unsigned int i;
-    unsigned int num_RGB = 0;
-    unsigned int num_BGR = 0;
 
     memset(dsscomp, 0x0, sizeof(*dsscomp));
     dsscomp->sync_id = sync_id++;
 
-    /* Figure out how many layers we can support via DSS */
-    num_composited_layers = list->numHwLayers;
+    /* FIXME set up hwc_dev->ext based on mirroring needs */
+    if (!(dsscomp->sync_id & 0x1f)) {
+        char value[PROPERTY_VALUE_MAX];
+        property_get("debug.hwc.ext", value, "0");
+        hwc_dev->ext = atoi(value);
+    }
 
+    /* Figure out how many layers we can support via DSS */
     for (i = 0; i < list->numHwLayers; i++) {
         hwc_layer_t *layer = &list->hwLayers[i];
         IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
@@ -301,37 +413,38 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         layer->compositionType = HWC_FRAMEBUFFER;
 
         if (omap4_hwc_is_valid_layer(layer, handle)) {
-            num_possible_overlay_layers++;
+            num.possible_overlay_layers++;
 
             if (scaled(layer))
-                num_scaled_layers++;
+                num.scaled_layers++;
 
             if (is_BGR(handle->iFormat))
-                num_BGR++;
+                num.BGR++;
             else if (is_RGB(handle->iFormat))
-                num_RGB++;
+                num.RGB++;
+            else if (is_NV12(handle->iFormat))
+                num.NV12++;
         }
     }
 
-    /* phase 2 logic: all DSS rendering */
-    if (num_possible_overlay_layers <= MAX_HW_OVERLAYS &&
-        num_possible_overlay_layers == num_composited_layers &&
-        num_scaled_layers <= MAX_SCALING_OVERLAYS &&
-        (num_BGR == 0 || num_RGB == 0 || !hwc_dev->flags_rgb_order) &&
-        num_possible_overlay_layers) {
+    /* phase 3 logic */
+    if (can_dss_render_all(hwc_dev, &num)) {
         /* All layers can be handled by the DSS -- don't use SGX for composition */
         hwc_dev->use_sgx = 0;
-        dsscomp->mgr.swap_rb = num_BGR != 0;
+        hwc_dev->swap_rb = num.BGR != 0;
     } else {
         /* Use SGX for composition plus first 3 layers that are DSS renderable */
         hwc_dev->use_sgx = 1;
-        dsscomp->mgr.swap_rb = is_BGR(hwc_dev->fb_dev->base.format);
+        hwc_dev->swap_rb = is_BGR(hwc_dev->fb_dev->base.format);
     }
     if (debug) {
-        LOGD("prepare (%d) %d layers - %s (poss=%d/%d scaled, comp=%d, rgb=%d,bgr=%d)\n",
+        LOGD("prepare (%d) %d layers - %s (comp=%d, poss=%d/%d scaled, RGB=%d,BGR=%d,NV12=%d) (ext=%x, %dex/%dmx (last %dex,%din)\n",
          dsscomp->sync_id, list->numHwLayers,
          hwc_dev->use_sgx ? "SGX+OVL" : "all-OVL",
-         num_possible_overlay_layers, num_scaled_layers, num_composited_layers, num_RGB, num_BGR);
+         num.composited_layers,
+         num.possible_overlay_layers, num.scaled_layers,
+         num.RGB, num.BGR, num.NV12,
+         hwc_dev->ext, hwc_dev->ext_ovls, num.max_hw_overlays, hwc_dev->last_ext_ovls, hwc_dev->last_int_ovls);
     }
 
     /* setup pipes */
@@ -339,25 +452,18 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     int z = 0;
     int fb_z = -1, fb_zmax = 0;
     int scaled_gfx = 0;
+    int ix_nv12 = -1;
 
     /* set up if DSS layers */
-    for (i = 0; i < list->numHwLayers && dsscomp->num_ovls < MAX_HW_OVERLAYS; i++) {
+    for (i = 0; i < list->numHwLayers && dsscomp->num_ovls < num.max_hw_overlays; i++) {
         hwc_layer_t *layer = &list->hwLayers[i];
         IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
 
-        if (handle &&
-            omap4_hwc_is_valid_layer(layer, handle) &&
+        if (can_dss_render_layer(hwc_dev, layer) &&
             /* can't have a transparent overlay in the middle of the framebuffer stack */
-            !(is_ALPHA(handle->iFormat) && fb_z >= 0) &&
-            /* skip non-NV12 layers if also using SGX (if nv12_only flag is set) */
-            (!hwc_dev->flags_nv12_only || (!hwc_dev->use_sgx || is_NV12(handle->iFormat))) &&
-            /* make sure RGB ordering is consistent (if rgb_order flag is set) */
-            (!(dsscomp->mgr.swap_rb ? is_RGB(handle->iFormat) : is_BGR(handle->iFormat)) ||
-             !hwc_dev->flags_rgb_order)) {
+            !(is_ALPHA(handle->iFormat) && fb_z >= 0)) {
             /* render via DSS overlay */
             layer->compositionType = HWC_OVERLAY;
-            /* clear layers above DSS layer areas */
-            layer->hints |= HWC_HINT_CLEAR_FB;
             hwc_dev->buffers[dsscomp->num_ovls] = layer->handle;
 
             omap4_hwc_setup_layer(hwc_dev,
@@ -382,6 +488,10 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                 dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls;
                 scaled_gfx = 0;
             }
+
+            /* remember first NV12 layer */
+            if (is_NV12(handle->iFormat) && ix_nv12 < 0)
+                ix_nv12 = dsscomp->num_ovls;
 
             dsscomp->num_ovls++;
             z++;
@@ -424,9 +534,6 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         z++;
     }
 
-    if (z != dsscomp->num_ovls || dsscomp->num_ovls > MAX_HW_OVERLAYS)
-        LOGE("**** used %d z-layers for %d overlays\n", z, dsscomp->num_ovls);
-
     if (hwc_dev->use_sgx) {
         hwc_dev->buffers[0] = NULL;
         omap4_hwc_setup_layer_base(&dsscomp->ovls[0].cfg, fb_z,
@@ -436,10 +543,46 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         dsscomp->ovls[0].uv = (__u32) hwc_dev->buffers[0];
     }
 
-    dsscomp->mode = DSSCOMP_SETUP_DISPLAY;
-    dsscomp->mgr.ix = 0;
-    dsscomp->mgr.alpha_blending = 1;
+    /* mirror layers */
+    hwc_dev->post2_layers = dsscomp->num_ovls;
+    if (hwc_dev->ext && hwc_dev->ext_ovls) {
+        int ix_back, ix_front, ix;
+        if (hwc_dev->ext & EXT_DOCK) {
+            /* mirror only NV12 layer */
+            ix_back = ix_front = ix_nv12;
+        } else {
+            /* mirror all layers */
+            ix_back = 0;
+            ix_front = dsscomp->num_ovls - 1;
+        }
 
+        for (ix = ix_back; ix >= 0 && ix <= ix_front; ix++) {
+            memcpy(dsscomp->ovls + dsscomp->num_ovls, dsscomp->ovls + ix, sizeof(dsscomp->ovls[ix]));
+            dsscomp->ovls[dsscomp->num_ovls].cfg.zorder += hwc_dev->post2_layers;
+            /* reserve overlays at end for other display */
+            dsscomp->ovls[dsscomp->num_ovls].cfg.ix = MAX_HW_OVERLAYS - 1 - (ix - ix_back);
+            dsscomp->ovls[dsscomp->num_ovls].cfg.mgr_ix = 1;
+            dsscomp->ovls[dsscomp->num_ovls].ba = ix;
+            dsscomp->num_ovls++;
+            z++;
+        }
+    }
+
+    if (z != dsscomp->num_ovls || dsscomp->num_ovls > MAX_HW_OVERLAYS)
+        LOGE("**** used %d z-layers for %d overlays\n", z, dsscomp->num_ovls);
+
+    dsscomp->mode = DSSCOMP_SETUP_DISPLAY;
+    dsscomp->mgrs[0].ix = 0;
+    dsscomp->mgrs[0].alpha_blending = 1;
+    dsscomp->mgrs[0].swap_rb = hwc_dev->swap_rb;
+    dsscomp->num_mgrs = 1;
+
+    if (hwc_dev->ext || hwc_dev->last_ext_ovls) {
+        dsscomp->mgrs[1] = dsscomp->mgrs[0];
+        dsscomp->mgrs[1].ix = 1;
+        dsscomp->num_mgrs++;
+        hwc_dev->ext_ovls = dsscomp->num_ovls - hwc_dev->post2_layers;
+    }
     return 0;
 }
 
@@ -503,7 +646,7 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
             e -= snprintf(end - e, e, "-");
     }
     e -= snprintf(end - e, e, "} L{");
-    for (i = 0; i < dsscomp->num_ovls; i++) {
+    for (i = 0; i < hwc_dev->post2_layers; i++) {
         if (i)
             e -= snprintf(end - e, e, " ");
         e -= snprintf(end - e, e, "%p", hwc_dev->buffers[i]);
@@ -527,8 +670,11 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
 
     err = hwc_dev->fb_dev->Post2((framebuffer_device_t *)hwc_dev->fb_dev,
                                  hwc_dev->buffers,
-                                 dsscomp->num_ovls,
+                                 hwc_dev->post2_layers,
                                  dsscomp, sizeof(*dsscomp));
+
+    hwc_dev->last_ext_ovls = hwc_dev->ext_ovls;
+    hwc_dev->last_int_ovls = hwc_dev->post2_layers;
     if (err)
         LOGE("Post2 error");
 
@@ -668,6 +814,8 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     hwc_dev->flags_rgb_order = atoi(value);
     property_get("debug.hwc.nv12_only", value, "0");
     hwc_dev->flags_nv12_only = atoi(value);
+    property_get("debug.hwc.ext", value, "0");
+    hwc_dev->ext = atoi(value);
     LOGE("omap4_hwc_device_open(rgb_order=%d nv12_only=%d)",
         hwc_dev->flags_rgb_order, hwc_dev->flags_nv12_only);
 
