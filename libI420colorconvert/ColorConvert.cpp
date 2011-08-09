@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "IYV12ColorConverter.h"
+#include "II420ColorConverter.h"
 #include <OMX_IVCommon.h>
 #include <string.h>
 
@@ -22,7 +22,7 @@ static int getDecoderOutputFormat() {
     return OMX_TI_COLOR_FormatYUV420PackedSemiPlanar;
 }
 
-static int convertDecoderOutputToYV12(
+static int convertDecoderOutputToI420(
     void* srcBits, int srcWidth, int srcHeight, ARect srcRect, void* dstBits) {
 
     const uint8_t *pSrc_y = (const uint8_t *)srcBits +
@@ -62,7 +62,7 @@ static int getEncoderInputFormat() {
     return OMX_TI_COLOR_FormatYUV420PackedSemiPlanar;
 }
 
-static int convertYV12ToEncoderInput(
+static int convertI420ToEncoderInput(
     void* srcBits, int srcWidth, int srcHeight,
     int dstWidth, int dstHeight, ARect dstRect,
     void* dstBits) {
@@ -105,10 +105,10 @@ static int getEncoderInputBufferInfo(
     return 0;
 }
 
-extern "C" void getYV12ColorConverter(IYV12ColorConverter *converter) {
+extern "C" void getI420ColorConverter(II420ColorConverter *converter) {
     converter->getDecoderOutputFormat = getDecoderOutputFormat;
-    converter->convertDecoderOutputToYV12 = convertDecoderOutputToYV12;
+    converter->convertDecoderOutputToI420 = convertDecoderOutputToI420;
     converter->getEncoderInputFormat = getEncoderInputFormat;
-    converter->convertYV12ToEncoderInput = convertYV12ToEncoderInput;
+    converter->convertI420ToEncoderInput = convertI420ToEncoderInput;
     converter->getEncoderInputBufferInfo = getEncoderInputBufferInfo;
 }

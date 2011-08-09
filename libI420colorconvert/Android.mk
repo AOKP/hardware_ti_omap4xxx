@@ -14,7 +14,7 @@ LOCAL_SHARED_LIBRARIES :=       \
 
 LOCAL_MODULE_TAGS := optional
 
-LOCAL_MODULE := libyv12colorconvert
+LOCAL_MODULE := libI420colorconvert
 
 include $(BUILD_HEAPTRACKED_SHARED_LIBRARY)
 

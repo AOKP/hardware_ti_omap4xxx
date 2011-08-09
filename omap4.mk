@@ -23,7 +23,7 @@ PRODUCT_PACKAGES := \
 	libOMX.TI.DUCATI1.VIDEO.CAMERA \
 	libOMX.TI.DUCATI1.MISC.SAMPLE \
 	libstagefrighthw \
-        libyv12colorconvert \
+        libI420colorconvert \
 	libtimemmgr \
 	libtiutils \
 	libcamera \
