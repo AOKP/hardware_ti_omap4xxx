@@ -69,6 +69,13 @@ status_t OMXCameraAdapter::setFaceDetection(bool enable, OMX_U32 orientation)
         ret = -EINVAL;
         }
 
+    // TODO(XXX): temporary hack. must remove after setconfig and transition issue
+    //            with secondary camera is fixed
+    if(mWaitToSetConfig) {
+        if (enable) mFaceDetectionRunning = true;
+        return NO_ERROR;
+    }
+
     if ( NO_ERROR == ret )
         {
         if ( orientation < 0 || orientation > 270 ) {
@@ -219,7 +226,7 @@ status_t OMXCameraAdapter::detectFaces(OMX_BUFFERHEADERTYPE* pBuffHeader,
                          faceData->nPortIndex,
                          faceData->nVersion);
         } else {
-            CAMHAL_LOGEB("OMX_FACEDETECTIONTYPE size mismatch: expected = %d, received = %d",
+            CAMHAL_LOGDB("OMX_FACEDETECTIONTYPE size mismatch: expected = %d, received = %d",
                          ( unsigned int ) sizeof(OMX_FACEDETECTIONTYPE),
                          ( unsigned int ) faceData->nSize);
             return -EINVAL;
