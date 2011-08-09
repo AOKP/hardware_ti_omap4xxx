@@ -894,10 +894,12 @@ status_t OMXCameraAdapter::setExposureLock(Gen3A_settings& Gen3A)
     return ErrorUtils::omxToAndroidError(eError);
 }
 
-status_t OMXCameraAdapter::release3ALock()
+status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggle)
 {
   OMX_ERRORTYPE eError = OMX_ErrorNone;
   OMX_IMAGE_CONFIG_LOCKTYPE lock;
+  const char *param[] = {"false", "true"};
+  int index = -1;
 
   LOG_FUNCTION_NAME
 
@@ -910,8 +912,8 @@ status_t OMXCameraAdapter::release3ALock()
   OMX_INIT_STRUCT_PTR (&lock, OMX_IMAGE_CONFIG_LOCKTYPE);
   lock.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
 
-  mParameters3A.ExposureLock = OMX_FALSE;
-  mParameters3A.WhiteBalanceLock = OMX_FALSE;
+  mParameters3A.ExposureLock = toggle;
+  mParameters3A.WhiteBalanceLock = toggle;
 
   eError = OMX_GetConfig( mCameraAdapterParameters.mHandleComp,
                           (OMX_INDEXTYPE)OMX_IndexConfigImageExposureLock,
@@ -925,8 +927,8 @@ status_t OMXCameraAdapter::release3ALock()
       CAMHAL_LOGDA("Exposure Lock GetConfig successfull");
     }
 
-  /*if locked then unlock */
-  if ( lock.bLock )
+  /* Apply locks only when not applied already */
+  if ( lock.bLock  != toggle )
     {
       setExposureLock(mParameters3A);
     }
@@ -943,13 +945,17 @@ status_t OMXCameraAdapter::release3ALock()
       CAMHAL_LOGDA("WhiteBalance Lock GetConfig successfull");
     }
 
-  /*if locked then unlock */
-  if ( lock.bLock )
+  /* Apply locks only when not applied already */
+  if ( lock.bLock != toggle )
     {
       setWhiteBalanceLock(mParameters3A);
     }
 
-    return ErrorUtils::omxToAndroidError(eError);
+  index = toggle ? 1 : 0;
+  mParams.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, param[index]);
+  mParams.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, param[index]);
+
+  return ErrorUtils::omxToAndroidError(eError);
 
 }
 

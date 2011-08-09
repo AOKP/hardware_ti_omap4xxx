@@ -465,7 +465,7 @@ private:
 
     status_t setExposureLock(Gen3A_settings& Gen3A);
     status_t setWhiteBalanceLock(Gen3A_settings& Gen3A);
-    status_t release3ALock();
+    status_t set3ALock(OMX_BOOL toggle);
 
     //API to set FrameRate using VFR interface
     status_t setVFramerate(OMX_U32 minFrameRate,OMX_U32 maxFrameRate);

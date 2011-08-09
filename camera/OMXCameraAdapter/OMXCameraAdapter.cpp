@@ -646,7 +646,7 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     BaseCameraAdapter::AdapterState state;
     BaseCameraAdapter::getState(state);
-
+    const char *valstr = NULL;
     LOG_FUNCTION_NAME;
 
 #ifdef PARAM_FEEDBACK
@@ -841,6 +841,18 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
         params.set( CameraParameters::KEY_ZOOM, mCurrentZoomIdx);
         }
     }
+
+    //Populate current lock status
+    if( (valstr = mParams.get(CameraParameters::KEY_AUTO_EXPOSURE_LOCK)) != NULL )
+      {
+        CAMHAL_LOGDB("Auto Exposure Lock get %s", mParams.get(CameraParameters::KEY_AUTO_EXPOSURE_LOCK));
+        params.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, valstr);
+      }
+    if( (valstr = mParams.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK)) != NULL )
+      {
+        CAMHAL_LOGDB("Auto WhiteBalance Lock get %s", mParams.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK));
+        params.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, valstr);
+      }
 
 #endif
 
@@ -1829,7 +1841,8 @@ status_t OMXCameraAdapter::stopPreview()
         // Error, but we probably still want to continue to stop preview
     }
 
-    ret = release3ALock();
+    //Release 3A locks
+    ret = set3ALock(OMX_FALSE);
     if(ret!=NO_ERROR)
       {
         CAMHAL_LOGEB("Error Releaseing 3A locks%d", ret);
