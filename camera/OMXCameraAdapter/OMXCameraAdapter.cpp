@@ -3059,6 +3059,8 @@ OMXCameraAdapter::~OMXCameraAdapter()
 {
     LOG_FUNCTION_NAME;
 
+    Mutex::Autolock lock(gAdapterLock);
+
     //Return to OMX Loaded state
     switchToLoaded();
 
