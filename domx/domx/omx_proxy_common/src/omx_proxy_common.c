@@ -1860,6 +1860,17 @@ OMX_ERRORTYPE OMX_ProxyCommonInit(OMX_HANDLETYPE hComponent)
 
 	pCompPrv->hRemoteComp = hRemoteComp;
 
+#ifdef USE_ION
+	pCompPrv->bUseIon = OMX_TRUE;
+	pCompPrv->bMapIonBuffers = OMX_TRUE;
+
+	pCompPrv->ion_fd = ion_open();
+	if(pCompPrv->ion_fd < 0)
+	{
+		DOMX_ERROR("ion_open failed!!!");
+		return OMX_ErrorInsufficientResources;
+	}
+#endif
 
       EXIT:
 	if (eError != OMX_ErrorNone)
