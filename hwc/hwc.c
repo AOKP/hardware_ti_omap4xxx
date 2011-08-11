@@ -73,6 +73,9 @@ struct omap4_hwc_device {
     int dsscomp_fd;
     int hdmi_fb_fd;
 
+    __u16 aspect_ratio;
+    struct omap_video_timings ext_timings;
+    float m[2][3];
     IMG_framebuffer_device_public_t *fb_dev;
     struct dsscomp_setup_dispc_data dsscomp_data;
 
@@ -288,6 +291,129 @@ omap4_hwc_setup_layer(omap4_hwc_device_t *hwc_dev, struct dss2_ovl_info *ovl,
     oc->crop.h = layer->sourceCrop.bottom - layer->sourceCrop.top;
 }
 
+const float m_unit[2][3] = { { 1., 0., 0. }, { 0., 1., 0. } };
+
+static inline void m_translate(float m[2][3], int dx, int dy)
+{
+    m[0][2] += dx;
+    m[1][2] += dy;
+}
+
+static inline void m_scale1(float m[3], int from, int to)
+{
+    m[0] = m[0] * to / from;
+    m[1] = m[1] * to / from;
+    m[2] = m[2] * to / from;
+}
+
+static inline void m_scale(float m[2][3], int x_from, int x_to, int y_from, int y_to)
+{
+    m_scale1(m[0], x_from, x_to);
+    m_scale1(m[1], y_from, y_to);
+}
+
+static void m_rotate(float m[2][3], int quarter_turns)
+{
+    if (quarter_turns & 2)
+        m_scale(m, 1, -1, 1, -1);
+    if (quarter_turns & 1) {
+        int q;
+        q = m[0][0]; m[0][0] = -m[1][0]; m[1][0] = q;
+        q = m[0][1]; m[0][1] = -m[1][1]; m[1][1] = q;
+        q = m[0][2]; m[0][2] = -m[1][2]; m[1][2] = q;
+    }
+}
+
+static inline int m_round(float x)
+{
+    /* int truncates towards 0 */
+    return (int) (x < 0 ? x - 0.5 : x + 0.5);
+}
+
+static void set_ext_matrix(omap4_hwc_device_t *hwc_dev, int orig_w, int orig_h)
+{
+    /* target screen aspect ratio */
+    int target_x = hwc_dev->aspect_ratio >> 8;
+    int target_y = hwc_dev->aspect_ratio & 0xFF;
+    /* source pixel aspect ratio */
+    int source_x = 1;
+    int source_y = 1;
+
+    int target_w = hwc_dev->ext_timings.x_res;
+    int target_h = hwc_dev->ext_timings.y_res;
+    int cropped_w = target_w;
+    int cropped_h = target_h;
+    if (!target_x || !target_y) {
+        target_x = target_w;
+        target_y = target_h;
+    }
+
+    /* reorientation matrix is:
+       m = (center-from-target-center) * (scale-to-target) * (mirror) * (rotate) * (center-to-original-center) */
+
+    memcpy(hwc_dev->m, m_unit, sizeof(m_unit));
+    m_translate(hwc_dev->m, -orig_w >> 1, -orig_h >> 1);
+    m_rotate(hwc_dev->m, hwc_dev->ext & 3);
+    if (hwc_dev->ext & EXT_HFLIP)
+        m_scale(hwc_dev->m, 1, -1, 1, 1);
+
+    if (hwc_dev->ext & EXT_ROTATION & 1) {
+        int q = orig_w;
+        orig_w = orig_h;
+        orig_h = q;
+        q = source_x;
+        source_x = source_y;
+        source_y = q;
+    }
+
+    /* keep aspect ratio */
+    if (orig_w * source_x * target_y < orig_h * source_y * target_x)
+        cropped_w = orig_w * source_x * target_y * cropped_w / (orig_h * source_y * target_x);
+    else
+        cropped_h = orig_h * source_y * target_x * cropped_h / (orig_w * source_x * target_y);
+
+    m_scale(hwc_dev->m, orig_w, cropped_w, orig_h, cropped_h);
+    m_translate(hwc_dev->m, target_w >> 1, target_h >> 1);
+}
+
+static void
+omap4_hwc_create_ext_matrix(omap4_hwc_device_t *hwc_dev)
+{
+    /* use VGA external resolution as default */
+    if (!hwc_dev->ext_timings.x_res ||
+        !hwc_dev->ext_timings.y_res) {
+        hwc_dev->ext_timings.x_res = 640;
+        hwc_dev->ext_timings.y_res = 480;
+    }
+
+    /* if docking, we cannot create the matrix ahead of time as it depends on input size */
+    if (hwc_dev->ext && !(hwc_dev->ext & EXT_DOCK))
+        set_ext_matrix(hwc_dev, hwc_dev->fb_dev->base.width, hwc_dev->fb_dev->base.height);
+}
+
+static void
+omap4_hwc_adjust_ext_layer(omap4_hwc_device_t *hwc_dev, struct dss2_ovl_info *ovl)
+{
+    struct dss2_ovl_cfg *oc = &ovl->cfg;
+    float x, y, w, h;
+
+    /* display position */
+    x = hwc_dev->m[0][0] * oc->win.x + hwc_dev->m[0][1] * oc->win.y + hwc_dev->m[0][2];
+    y = hwc_dev->m[1][0] * oc->win.x + hwc_dev->m[1][1] * oc->win.y + hwc_dev->m[1][2];
+    w = hwc_dev->m[0][0] * oc->win.w + hwc_dev->m[0][1] * oc->win.h;
+    h = hwc_dev->m[1][0] * oc->win.w + hwc_dev->m[1][1] * oc->win.h;
+    oc->win.x = m_round(w > 0 ? x : x + w);
+    oc->win.y = m_round(h > 0 ? y : y + h);
+    oc->win.w = m_round(w > 0 ? w : -w);
+    oc->win.h = m_round(h > 0 ? h : -h);
+
+    /* combining transformations: F^a*R^b*F^i*R^j = F^(a+b)*R^(j+b*(-1)^i), because F*R = R^(-1)*F */
+    oc->rotation += (oc->mirror ? -1 : 1) * (hwc_dev->ext & EXT_ROTATION);
+    oc->rotation &= 3;
+    if (hwc_dev->ext & EXT_HFLIP)
+        oc->mirror = !oc->mirror;
+}
+
 static int omap4_hwc_is_valid_layer(hwc_layer_t *layer,
                                     IMG_native_handle_t *handle)
 {
@@ -386,6 +512,8 @@ static inline int can_dss_render_layer(omap4_hwc_device_t *hwc_dev,
     int tform = hwc_dev->ext & EXT_TRANSFORM;
 
     return omap4_hwc_is_valid_layer(layer, handle) &&
+           /* cannot rotate non-NV12 layers on external display */
+           (!hwc_dev->ext || (hwc_dev->ext & EXT_DOCK) || !tform || is_NV12(handle->iFormat)) &&
            /* skip non-NV12 layers if also using SGX (if nv12_only flag is set) */
            (!hwc_dev->flags_nv12_only || (!hwc_dev->use_sgx || is_NV12(handle->iFormat))) &&
            /* make sure RGB ordering is consistent (if rgb_order flag is set) */
@@ -562,10 +690,20 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         for (ix = ix_back; ix >= 0 && ix <= ix_front; ix++) {
             memcpy(dsscomp->ovls + dsscomp->num_ovls, dsscomp->ovls + ix, sizeof(dsscomp->ovls[ix]));
             dsscomp->ovls[dsscomp->num_ovls].cfg.zorder += hwc_dev->post2_layers;
+
             /* reserve overlays at end for other display */
             dsscomp->ovls[dsscomp->num_ovls].cfg.ix = MAX_HW_OVERLAYS - 1 - (ix - ix_back);
             dsscomp->ovls[dsscomp->num_ovls].cfg.mgr_ix = 1;
             dsscomp->ovls[dsscomp->num_ovls].ba = ix;
+
+            if (hwc_dev->ext & EXT_DOCK) {
+                /* full screen video */
+                dsscomp->ovls[dsscomp->num_ovls].cfg.win.x = 0;
+                dsscomp->ovls[dsscomp->num_ovls].cfg.win.y = 0;
+                set_ext_matrix(hwc_dev, dsscomp->ovls[dsscomp->num_ovls].cfg.win.w,
+                               dsscomp->ovls[dsscomp->num_ovls].cfg.win.h);
+            }
+            omap4_hwc_adjust_ext_layer(hwc_dev, dsscomp->ovls + dsscomp->num_ovls);
             dsscomp->num_ovls++;
             z++;
         }
@@ -726,7 +864,6 @@ static void omap4_hwc_dump(struct hwc_composer_device *dev, char *buff, int buff
                           cfg->win.x, cfg->win.y, cfg->win.w, cfg->win.h);
         len = dump_printf(buff, buff_len, len, "     ix: %d\n", cfg->ix);
         len = dump_printf(buff, buff_len, len, "     zorder: %d\n\n", cfg->zorder);
-
     }
 }
 
@@ -782,6 +919,8 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
         struct dsscomp_display_info dis = { .ix = 1,  };
         int ret = ioctl(hwc_dev->dsscomp_fd, DSSCOMP_QUERY_DISPLAY, &dis);
         if (!ret) {
+            hwc_dev->ext_timings = dis.timings;
+            hwc_dev->aspect_ratio = dis.s3d_info.gap;	// temp way of getting aspect ratio
             hwc_dev->ext = EXT_ON | 3;
             if (dis.channel == OMAP_DSS_CHANNEL_DIGIT)
                 hwc_dev->ext |= EXT_TV;
@@ -793,6 +932,7 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
         property_get("debug.hwc.ext", value, "0");
         hwc_dev->ext |= atoi(value) & EXT_DOCK;
     }
+    omap4_hwc_create_ext_matrix(hwc_dev);
     LOGI("external display changed (state=%d, on=%d, dock=%d, tv=%d, trform=%ddeg%s)", state,
          !!hwc_dev->ext, !!(hwc_dev->ext & EXT_DOCK),
          !!(hwc_dev->ext & EXT_TV), hwc_dev->ext & EXT_ROTATION,
