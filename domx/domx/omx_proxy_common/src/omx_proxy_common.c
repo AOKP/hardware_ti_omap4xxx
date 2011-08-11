@@ -76,6 +76,14 @@
 #include "tiler.h"
 #endif
 
+#ifdef USE_ION
+#include <unistd.h>
+#include <ion.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/eventfd.h>
+#include <fcntl.h>
+#endif
 
 #ifdef  ENABLE_GRALLOC_BUFFERS
 #include "native_handle.h"
@@ -119,7 +127,7 @@ static OMX_ERRORTYPE PROXY_UseBuffer(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_IN OMX_U32 nSizeBytes, OMX_IN OMX_U8 * pBuffer);
 #endif
 
-#define LINUX_PAGE_SIZE (4 * 1024)
+#define LINUX_PAGE_SIZE 4096
 #define MAXNAMESIZE 128
 
 #define CORE_MAX 4
@@ -168,6 +176,49 @@ char Core_Array[][MAX_CORENAME_LENGTH] =
     } \
 } while(0)
 
+#ifdef USE_ION
+
+RPC_OMX_ERRORTYPE RPC_RegisterBuffer(OMX_HANDLETYPE hRPCCtx, int fd, 
+				     struct ion_handle **handle)
+{
+	int status;
+	struct ion_fd_data data;
+	RPC_OMX_CONTEXT *pRPCCtx = (RPC_OMX_CONTEXT *) hRPCCtx;
+
+	data.fd = fd;
+	status = ioctl(pRPCCtx->fd_omx, ION_IOC_IMPORT, &data);
+	if (status < 0)
+		return RPC_OMX_ErrorInsufficientResources;
+	*handle = data.handle;
+	return RPC_OMX_ErrorNone;
+}
+
+static OMX_ERRORTYPE PROXY_AllocateBufferIonCarveout(PROXY_COMPONENT_PRIVATE *pCompPrv, 
+						 size_t len, struct ion_handle **handle)
+{
+	int fd;
+	int ret;
+	struct ion_handle *temp;
+
+	ret = ion_alloc(pCompPrv->ion_fd, len, 0, 1 << ION_HEAP_TYPE_CARVEOUT, &temp);
+	DOMX_DEBUG("ION being USED for allocation!!!!! handle = %x, ret =%x",temp,ret);
+	if (ret)
+			return OMX_ErrorInsufficientResources;
+	/*	
+	ret = ion_share(pCompPrv->ion_fd, temp, &fd);
+	if (ret) {
+		ion_free(pCompPrv->ion_fd, temp);
+		return OMX_ErrorHardware;
+	}
+	RPC_RegisterBuffer(pCompPrv->hRemoteComp, fd, handle);
+	close(fd);
+	ion_free(pCompPrv->ion_fd, temp);
+	*/
+	*handle = temp;
+	return OMX_ErrorNone;
+}
+
+#endif
 
 /* ===========================================================================*/
 /**
@@ -590,11 +641,15 @@ static OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
 	OMX_U32 currentBuffer = 0, i = 0;
 	OMX_BOOL bSlotFound = OMX_FALSE;
-
+#ifdef USE_ION
+	struct ion_handle *handle = NULL;
+#endif
 #ifdef ALLOCATE_TILER_BUFFER_IN_PROXY
 	// Do the tiler allocations in Proxy and call use buffers on Ducati.
 
-	OMX_U32 nSize = nSizeBytes, nStride = 0;
+	//Round Off the size to allocate and map to next page boundary.
+	OMX_U32 nSize = (nSizeBytes + LINUX_PAGE_SIZE - 1) & ~(LINUX_PAGE_SIZE - 1);
+	OMX_U32 nStride = 0;
 	OMX_U8* pMemptr = NULL;
 	OMX_CONFIG_RECTTYPE tParamRect;
 	OMX_PARAM_PORTDEFINITIONTYPE tParamPortDef;
@@ -643,6 +698,7 @@ static OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 			blocks[1].dim.area.width  = tParamRect.nWidth >> 1;
 			blocks[1].dim.area.height = tParamRect.nHeight >> 1;
 			blocks[1].stride = 0;
+
 		}
 		else if(eError == OMX_ErrorUnsupportedIndex)
 		{
@@ -671,7 +727,6 @@ static OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 			blocks[1].dim.area.width  = tParamPortDef.format.video.nFrameWidth >> 1;
 			blocks[1].dim.area.height = tParamPortDef.format.video.nFrameHeight >> 1;
 			blocks[1].stride = 0;
-
 		}
 		if(eError != OMX_ErrorNone)
 		{
@@ -684,6 +739,16 @@ static OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 
 		DOMX_DEBUG(" Y Buffer : Allocated Width:%d, Height:%d",blocks[0].dim.area.width, blocks[0].dim.area.height);
 	}
+#ifdef USE_ION
+	else if (nStride == 0 && pCompPrv->bUseIon == OMX_TRUE)
+	{
+		eError = PROXY_AllocateBufferIonCarveout(pCompPrv, nSize, &handle);
+		pMemptr = handle;
+		DOMX_DEBUG ("Ion handle recieved = %x",handle);
+		if (eError != OMX_ErrorNone)
+			return eError;
+	}
+#endif
 	else //Allocate 1D buffer
 	{
 		block.fmt = PIXEL_FMT_PAGE;
@@ -692,7 +757,6 @@ static OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 
     	        pMemptr = (OMX_U8*) MemMgr_Alloc(&block, 1);
                 PROXY_assert((pMemptr != NULL), OMX_ErrorInsufficientResources,"MemMgr_Alloc returns NULL, abort,");
-
     	}
 
 	/*Pick up 1st empty slot */
@@ -727,6 +791,21 @@ static OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 	else {
 		pCompPrv->tBufList[currentBuffer].pYBuffer = pMemptr;
 	}
+
+#ifdef USE_ION
+	if (nStride == 0 && pCompPrv->bUseIon == OMX_TRUE && pCompPrv->bMapIonBuffers == OMX_TRUE)
+	{
+		DOMX_DEBUG("before mapping, handle = %x, nSize = %d",handle,nSize);
+        	if (ion_map(pCompPrv->ion_fd, handle, nSize, PROT_READ | PROT_WRITE, MAP_SHARED, 0,
+                          &((*ppBufferHdr)->pBuffer),
+                                    &(pCompPrv->tBufList[currentBuffer].mmap_fd)) < 0)
+		{
+			DOMX_ERROR("userspace mapping of ION buffers returned error");
+			return OMX_ErrorInsufficientResources;
+		}
+		//ion_free(pCompPrv->ion_fd, handleToMap);
+	}
+#endif
 
 #else
 	//This code is the un-changed version of original implementation.
@@ -858,6 +937,10 @@ static OMX_ERRORTYPE PROXY_UseBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 	OMX_PTR pAuxBuf0 = pBuffer;
 	OMX_TI_PARAM_METADATABUFFERINFO tMetaDataBuffer;
 	MemAllocBlock block;
+	OMX_U32 nBufferHeight = 0;
+	OMX_CONFIG_RECTTYPE tParamRect;
+	OMX_PARAM_PORTDEFINITIONTYPE tParamPortDef;
+
 
 	PROXY_require((hComp->pComponentPrivate != NULL),
 	    OMX_ErrorBadParameter, NULL);
@@ -943,7 +1026,51 @@ static OMX_ERRORTYPE PROXY_UseBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 			((OMX_TI_PLATFORMPRIVATE *) pBufferHeader->pPlatformPrivate)->
 				pAuxBuf1 = (OMX_U8 *)(((IMG_native_handle_t*)pBuffer)->fd[1]);
 		}
+#ifdef USE_ION
+		else
+		{
+		    	tParamRect.nSize = sizeof(OMX_CONFIG_RECTTYPE);
+		    	tParamRect.nVersion.s.nVersionMajor = 1;
+		    	tParamRect.nVersion.s.nVersionMinor = 1;
+		    	tParamRect.nVersion.s.nRevision = 0;
+		    	tParamRect.nVersion.s.nStep = 0;
+			tParamRect.nPortIndex = nPortIndex;
 
+			eError = PROXY_GetParameter(hComponent, (OMX_INDEXTYPE)OMX_TI_IndexParam2DBufferAllocDimension, &tParamRect);
+			if(eError == OMX_ErrorNone)
+			{
+				nBufferHeight = tParamRect.nHeight;
+			}
+			else if(eError == OMX_ErrorUnsupportedIndex)
+			{
+				DOMX_ERROR("Component does not support OMX_TI_IndexParam2DBufferAllocDimension, \
+						reverting to OMX_PARAM_PORTDEFINITIONTYPE");
+				tParamPortDef.nSize = sizeof(OMX_PARAM_PORTDEFINITIONTYPE);
+			    	tParamPortDef.nVersion.s.nVersionMajor = 1;
+			    	tParamPortDef.nVersion.s.nVersionMinor = 1;
+			    	tParamPortDef.nVersion.s.nRevision = 0;
+			    	tParamPortDef.nVersion.s.nStep = 0;
+				tParamPortDef.nPortIndex = nPortIndex;
+
+				eError = PROXY_GetParameter(hComponent, OMX_IndexParamPortDefinition, &tParamPortDef);
+				if(eError != OMX_ErrorNone)
+				{
+					DOMX_ERROR("PROXY_GetParameter returns err %d (0x%x)", eError, eError);
+					return eError;
+				}
+
+				nBufferHeight = tParamPortDef.format.video.nFrameHeight;
+			}
+			if(eError != OMX_ErrorNone)
+			{
+				DOMX_ERROR("PROXY_GetParameter returns err %d (0x%x)", eError, eError);
+				return eError;
+			}
+
+			((OMX_TI_PLATFORMPRIVATE *) pBufferHeader->pPlatformPrivate)->
+				pAuxBuf1 = (OMX_U8*) ((OMX_U32)pBuffer + (LINUX_PAGE_SIZE*nBufferHeight));
+		}
+#endif
 		if(pCompPrv->proxyPortBuffers[nPortIndex].proxyBufferType == EncoderMetadataPointers)
 		{
 			((OMX_TI_PLATFORMPRIVATE *) pBufferHeader->pPlatformPrivate)->
@@ -1030,7 +1157,7 @@ static OMX_ERRORTYPE PROXY_FreeBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 	PROXY_COMPONENT_PRIVATE *pCompPrv = NULL;
 	RPC_OMX_ERRORTYPE eRPCError = RPC_OMX_ErrorNone, eTmpRPCError =
 	    RPC_OMX_ErrorNone;
-	OMX_U32 count = 0;
+	OMX_U32 count = 0, nStride = 0;
 	OMX_U32 pBuffer = 0;
 	OMX_PTR pMetaDataBuffer = NULL;
 
@@ -1072,6 +1199,19 @@ static OMX_ERRORTYPE PROXY_FreeBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 
 	if (pCompPrv->tBufList[count].pBufHeader)
 	{
+#ifdef USE_ION
+        		(void)RPC_UTIL_GetStride(pCompPrv->hRemoteComp, nPortIndex, &nStride);
+        		if (nStride == 0 && pCompPrv->bUseIon == OMX_TRUE)
+			{
+				if(pCompPrv->bMapIonBuffers == OMX_TRUE)
+				{
+			        	munmap(pBufferHdr->pBuffer, pBufferHdr->nSize);
+        				close(pCompPrv->tBufList[count].mmap_fd);
+				}
+				ion_free(pCompPrv->ion_fd, pCompPrv->tBufList[count].pYBuffer);
+				pCompPrv->tBufList[count].pYBuffer = NULL;
+			}
+#endif
 #ifdef ALLOCATE_TILER_BUFFER_IN_PROXY
 		if(pCompPrv->tBufList[count].pYBuffer)
 		{
@@ -1732,7 +1872,7 @@ OMX_ERRORTYPE PROXY_ComponentDeInit(OMX_HANDLETYPE hComponent)
 	    RPC_OMX_ErrorNone;
 	PROXY_COMPONENT_PRIVATE *pCompPrv;
 	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
-	OMX_U32 count = 0;
+	OMX_U32 count = 0, nStride = 0;
 
 	DOMX_ENTER("hComponent = %p", hComponent);
 
@@ -1740,6 +1880,8 @@ OMX_ERRORTYPE PROXY_ComponentDeInit(OMX_HANDLETYPE hComponent)
 	    OMX_ErrorBadParameter, NULL);
 
 	pCompPrv = (PROXY_COMPONENT_PRIVATE *) hComp->pComponentPrivate;
+
+	ion_close(pCompPrv->ion_fd);
 
 	for (count = 0; count < pCompPrv->nTotalBuffers; count++)
 	{
@@ -1865,8 +2007,8 @@ OMX_ERRORTYPE OMX_ProxyCommonInit(OMX_HANDLETYPE hComponent)
 	pCompPrv->bMapIonBuffers = OMX_TRUE;
 
 	pCompPrv->ion_fd = ion_open();
-	if(pCompPrv->ion_fd < 0)
-	{
+	if(pCompPrv->ion_fd == 0)
+	{		
 		DOMX_ERROR("ion_open failed!!!");
 		return OMX_ErrorInsufficientResources;
 	}

@@ -120,12 +120,7 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 	OMX_COMPONENTTYPE *pHandle = NULL;
 	PROXY_COMPONENT_PRIVATE *pComponentPrivate = NULL;
 	pHandle = (OMX_COMPONENTTYPE *) hComponent;
-        OMX_TI_PARAM_ENHANCEDPORTRECONFIG tParamStruct;
 
-#ifdef ANDROID_QUIRK_LOCK_BUFFER
-	OMX_U32 err;
-	hw_module_t const* module;
-#endif
 	DOMX_ENTER("");
 
 	DOMX_DEBUG("Component name provided is %s", COMPONENT_NAME);
@@ -159,6 +154,31 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 	    "Length of component name is longer than the max allowed");
 	TIMM_OSAL_Memcpy(pComponentPrivate->cCompName, COMPONENT_NAME,
 	    strlen(COMPONENT_NAME) + 1);
+
+	eError = OMX_ProxyViddecInit(hComponent);
+
+	EXIT:
+		return eError;
+}
+
+OMX_ERRORTYPE OMX_ProxyViddecInit(OMX_HANDLETYPE hComponent)
+{
+	OMX_ERRORTYPE eError = OMX_ErrorNone;
+	OMX_COMPONENTTYPE *pHandle = NULL;
+	PROXY_COMPONENT_PRIVATE *pComponentPrivate = NULL;
+	pHandle = (OMX_COMPONENTTYPE *) hComponent;
+        OMX_TI_PARAM_ENHANCEDPORTRECONFIG tParamStruct;
+
+#ifdef ANDROID_QUIRK_LOCK_BUFFER
+	OMX_U32 err;
+	hw_module_t const* module;
+#endif
+	DOMX_ENTER("");
+
+	DOMX_DEBUG("Component name provided is %s", COMPONENT_NAME);
+
+	pComponentPrivate =
+	    (PROXY_COMPONENT_PRIVATE *) pHandle->pComponentPrivate;
 
 	eError = OMX_ProxyCommonInit(hComponent);	// Calling Proxy Common Init()
 #ifdef ANDROID_QUIRCK_CHANGE_PORT_VALUES

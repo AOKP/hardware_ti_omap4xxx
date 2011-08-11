@@ -139,6 +139,9 @@ extern "C"
 		OMX_BUFFERHEADERTYPE *pBufHeader;
 		OMX_U32 pBufHeaderRemote;
 		OMX_PTR pYBuffer;
+#ifdef USE_ION
+		int mmap_fd;
+#endif
 	} PROXY_BUFFER_INFO;
 
 /*===============================================================*/
@@ -193,6 +196,11 @@ extern "C"
 
 #ifdef ANDROID_QUIRK_LOCK_BUFFER
 		gralloc_module_t const *grallocModule;
+#endif
+#ifdef USE_ION
+		int ion_fd;
+		OMX_BOOL bUseIon;
+		OMX_BOOL bMapIonBuffers;
 #endif
 	} PROXY_COMPONENT_PRIVATE;
 

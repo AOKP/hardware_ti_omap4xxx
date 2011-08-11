@@ -16,17 +16,19 @@ LOCAL_C_INCLUDES += \
     $(LOCAL_PATH)/../mm_osal/inc \
     $(HARDWARE_TI_OMAP4_BASE)/tiler/ \
     $(HARDWARE_TI_OMAP4_BASE)/hwc/ \
+    $(HARDWARE_TI_OMAP4_BASE)/ion/ \
     system/core/include/cutils \
     $(HARDWARE_TI_OMAP4_BASE)/../../libhardware/include
 
-LOCAL_CFLAGS += -D_Android -DENABLE_GRALLOC_BUFFERS -DUSE_ENHANCED_PORTRECONFIG -DANDROID_QUIRK_LOCK_BUFFER
+LOCAL_CFLAGS += -D_Android -DENABLE_GRALLOC_BUFFERS -DUSE_ENHANCED_PORTRECONFIG -DANDROID_QUIRK_LOCK_BUFFER -DUSE_ION
 
 
 LOCAL_SHARED_LIBRARIES := \
     libmm_osal \
     libc \
     liblog \
-    libtimemmgr
+    libtimemmgr \
+    libion
 
 LOCAL_MODULE:= libdomx
 LOCAL_MODULE_TAGS:= optional

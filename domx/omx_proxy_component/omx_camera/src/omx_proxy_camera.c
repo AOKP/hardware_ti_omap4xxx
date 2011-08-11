@@ -402,7 +402,7 @@ OMX_ERRORTYPE DCC_Init(OMX_HANDLETYPE hComponent)
 			PROXY_assert(dcc_dir[nIndex] != NULL,
 				OMX_ErrorInsufficientResources, "Malloc failed");
 			strcpy(dcc_dir[nIndex], DCC_PATH);
-			strcat(dcc_dir[nIndex], (OMX_STRING) param.sDCCURI);
+			strncat(dcc_dir[nIndex], (OMX_STRING) param.sDCCURI, MAX_URI_LENGTH);
 			strcat(dcc_dir[nIndex], "/");
 		}
 	}
