@@ -280,6 +280,13 @@ status_t OMXCameraAdapter::cancelAutoFocus()
     OMX_ERRORTYPE eError = OMX_ErrorNone;
 
     LOG_FUNCTION_NAME;
+    // Unlock 3A locks since they were locked by AF
+    if( set3ALock(OMX_FALSE) != NO_ERROR) {
+      CAMHAL_LOGEA("Error Unlocking 3A locks");
+    }
+    else{
+      CAMHAL_LOGDA("AE/AWB unlocked successfully");
+    }
 
     stopAutoFocus();
     //Signal a dummy AF event so that in case the callback from ducati
@@ -409,7 +416,7 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
                         }
                         else
                             {
-                            LOGE("Focus locked. Applied focus locks successfully");
+                            CAMHAL_LOGDA("Focus locked. Applied focus locks successfully");
                             }
                         break;
                         }
