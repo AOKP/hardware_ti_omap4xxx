@@ -1654,44 +1654,39 @@ status_t CameraHal::setVideoModeParameters()
         restartPreviewRequired = true;
         }
 
-    // FIXME: This check is put since currently VSTAB and VNF are functional only for Primary Camera.
-    // Remove this check once VSTAB and VNF are functional for Secondary Camera as well.
-    if(mCameraIndex == 0)
+    // Check if CAPTURE_MODE is VIDEO_MODE, since VSTAB & VNF work only in VIDEO_MODE.
+    valstr = mParameters.get(TICameraParameters::KEY_CAP_MODE);
+    if (strcmp(valstr, (const char *) TICameraParameters::VIDEO_MODE) == 0)
         {
-        // Check if CAPTURE_MODE is VIDEO_MODE, since VSTAB & VNF work only in VIDEO_MODE.
-        valstr = mParameters.get(TICameraParameters::KEY_CAP_MODE);
-        if (strcmp(valstr, (const char *) TICameraParameters::VIDEO_MODE) == 0)
+        // Enable VSTAB, if not enabled already
+        valstr = mParameters.get(TICameraParameters::KEY_VSTAB);
+        if ( (valstr == NULL) ||
+            ( (valstr != NULL) && (strcmp(valstr, "1") != 0) ) )
             {
-            // Enable VSTAB, if not enabled already
-            valstr = mParameters.get(TICameraParameters::KEY_VSTAB);
-            if ( (valstr == NULL) ||
-                ( (valstr != NULL) && (strcmp(valstr, "1") != 0) ) )
-                {
-                CAMHAL_LOGDA("Enable VSTAB");
-                mParameters.set(TICameraParameters::KEY_VSTAB, "1");
-                restartPreviewRequired = true;
-                }
+            CAMHAL_LOGDA("Enable VSTAB");
+            mParameters.set(TICameraParameters::KEY_VSTAB, "1");
+            restartPreviewRequired = true;
+            }
 
-            // Enable VNF, if not enabled already
-            valstr = mParameters.get(TICameraParameters::KEY_VNF);
-            if ( (valstr == NULL) ||
-                ( (valstr != NULL) && (strcmp(valstr, "1") != 0) ) )
-                {
-                CAMHAL_LOGDA("Enable VNF");
-                mParameters.set(TICameraParameters::KEY_VNF, "1");
-                restartPreviewRequired = true;
-                }
+        // Enable VNF, if not enabled already
+        valstr = mParameters.get(TICameraParameters::KEY_VNF);
+        if ( (valstr == NULL) ||
+            ( (valstr != NULL) && (strcmp(valstr, "1") != 0) ) )
+            {
+            CAMHAL_LOGDA("Enable VNF");
+            mParameters.set(TICameraParameters::KEY_VNF, "1");
+            restartPreviewRequired = true;
+            }
 
-            // For VSTAB alone for 1080p resolution, padded width goes > 2048, which cannot be rendered by GPU.
-            // In such case, there is support in Ducati for combination of VSTAB & VNF requiring padded width < 2048.
-            // So we are forcefully enabling VNF, if VSTAB is enabled for 1080p resolution.
-            valstr = mParameters.get(TICameraParameters::KEY_VSTAB);
-            if ((valstr != NULL) && (strcmp(valstr, "1") == 0) && (mPreviewWidth == 1920))
-                {
-                CAMHAL_LOGDA("Force Enable VNF for 1080p");
-                mParameters.set(TICameraParameters::KEY_VNF, "1");
-                restartPreviewRequired = true;
-                }
+        // For VSTAB alone for 1080p resolution, padded width goes > 2048, which cannot be rendered by GPU.
+        // In such case, there is support in Ducati for combination of VSTAB & VNF requiring padded width < 2048.
+        // So we are forcefully enabling VNF, if VSTAB is enabled for 1080p resolution.
+        valstr = mParameters.get(TICameraParameters::KEY_VSTAB);
+        if ((valstr != NULL) && (strcmp(valstr, "1") == 0) && (mPreviewWidth == 1920))
+            {
+            CAMHAL_LOGDA("Force Enable VNF for 1080p");
+            mParameters.set(TICameraParameters::KEY_VNF, "1");
+            restartPreviewRequired = true;
             }
         }
 
