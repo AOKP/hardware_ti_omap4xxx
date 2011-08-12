@@ -763,7 +763,7 @@ int createPreviewSurface(unsigned int width, unsigned int height, int32_t pixFor
     previewSurface = surfaceControl->getSurface();
 
     client->openGlobalTransaction();
-    surfaceControl->setLayer(100000);
+    surfaceControl->setLayer(0x7fffffff);
     surfaceControl->setPosition(0, 0);
     surfaceControl->setSize(previewWidth, previewHeight);
     surfaceControl->show();
