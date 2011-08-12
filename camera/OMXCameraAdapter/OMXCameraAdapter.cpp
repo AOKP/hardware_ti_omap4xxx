@@ -1939,6 +1939,10 @@ status_t OMXCameraAdapter::stopPreview()
 
     switchToLoaded();
 
+    mWaitToSetConfig = false;
+    mCommandHandler->setWait(false);
+
+
     LOG_FUNCTION_NAME_EXIT;
 
     return (ret | ErrorUtils::omxToAndroidError(eError));
