@@ -139,6 +139,7 @@ status_t OMXCameraAdapter::advanceZoom()
 
     if ( mReturnZoomStatus )
         {
+        mCurrentZoomIdx +=mZoomInc;
         mTargetZoomIdx = mCurrentZoomIdx;
         mReturnZoomStatus = false;
         ret = doZoom(mCurrentZoomIdx);
@@ -257,7 +258,15 @@ status_t OMXCameraAdapter::stopSmoothZoom()
 
     if ( mTargetZoomIdx != mCurrentZoomIdx )
         {
-        mTargetZoomIdx = mCurrentZoomIdx;
+        if ( mCurrentZoomIdx < mTargetZoomIdx )
+            {
+            mZoomInc = 1;
+            }
+        else
+            {
+            mZoomInc = -1;
+            }
+        mReturnZoomStatus = true;
         mReturnZoomStatus = true;
         CAMHAL_LOGDB("Stop smooth zoom mCurrentZoomIdx = %d, mTargetZoomIdx = %d",
                      mCurrentZoomIdx,
