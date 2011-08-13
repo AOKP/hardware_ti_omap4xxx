@@ -886,7 +886,17 @@ public:
     /**
      * Set the camera parameters specific to Video Recording.
      */
-    status_t        setVideoModeParameters();
+    bool        setVideoModeParameters();
+
+    /**
+     * Reset the camera parameters specific to Video Recording.
+     */
+    bool       resetVideoModeParameters();
+
+    /**
+     * Restart the preview with setParameter.
+     */
+    status_t        restartPreview();
 
     /**
      * Start auto focus, the notification callback routine is called
