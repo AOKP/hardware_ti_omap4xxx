@@ -263,21 +263,19 @@ int CameraHal::setParameters(const CameraParameters& params)
 
             CAMHAL_LOGDB("PreviewFormat %s", params.getPreviewFormat());
 
-            if ( !isParameterValid(params.getPreviewFormat(), mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FORMATS)))
-                {
-                CAMHAL_LOGEB("Invalid preview format %s",  mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FORMATS));
+        if ((valstr = params.getPreviewFormat()) != NULL) {
+            if ( isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FORMATS))) {
+                mParameters.setPreviewFormat(valstr);
+            } else {
+                CAMHAL_LOGEB("Invalid preview format.Supported: %s",  mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FORMATS));
                 return -EINVAL;
-                }
-            else
-              {
-                if ( (valstr = params.getPreviewFormat()) != NULL)
-                  mParameters.setPreviewFormat(valstr);
-              }
+            }
+        }
 
             params.getPreviewSize(&w, &h);
             if (w == -1 && h == -1) {
                 CAMHAL_LOGEA("Unable to get preview size");
-                return ret;
+                return -EINVAL;
               }
 
             int orientation =0;
@@ -315,19 +313,25 @@ int CameraHal::setParameters(const CameraParameters& params)
 
             CAMHAL_LOGDB("PreviewResolution by App %d x %d", w, h);
 
-            if(( (valstr = params.get(TICameraParameters::KEY_VNF)) != NULL)
-                && ((params.getInt(TICameraParameters::KEY_VNF)==0) || (params.getInt(TICameraParameters::KEY_VNF)==1)))
-                {
-                CAMHAL_LOGDB("VNF set %s", params.get(TICameraParameters::KEY_VNF));
-                mParameters.set(TICameraParameters::KEY_VNF, valstr);
+            if ((valstr = params.get(TICameraParameters::KEY_VNF)) != NULL) {
+                if ( (params.getInt(TICameraParameters::KEY_VNF)==0) || (params.getInt(TICameraParameters::KEY_VNF)==1) ) {
+                    CAMHAL_LOGDB("VNF set %s", params.get(TICameraParameters::KEY_VNF));
+                    mParameters.set(TICameraParameters::KEY_VNF, valstr);
+                } else {
+                    CAMHAL_LOGEB("ERROR: Invalid VNF: %s", valstr);
+                    ret = -EINVAL;
                 }
+            }
 
-            if(( (valstr = params.get(TICameraParameters::KEY_VSTAB)) != NULL)
-                 && ((params.getInt(TICameraParameters::KEY_VSTAB)==0) || (params.getInt(TICameraParameters::KEY_VSTAB)==1)))
-                {
-                CAMHAL_LOGDB("VSTAB set %s", params.get(TICameraParameters::KEY_VSTAB));
-                mParameters.set(TICameraParameters::KEY_VSTAB, valstr);
+            if ((valstr = params.get(TICameraParameters::KEY_VSTAB)) != NULL) {
+                if ((params.getInt(TICameraParameters::KEY_VSTAB)==0) || (params.getInt(TICameraParameters::KEY_VSTAB)==1)) {
+                    CAMHAL_LOGDB("VSTAB set %s", params.get(TICameraParameters::KEY_VSTAB));
+                    mParameters.set(TICameraParameters::KEY_VSTAB, valstr);
+                } else {
+                    CAMHAL_LOGEB("ERROR: Invalid VSTAB: %s", valstr);
+                    ret = -EINVAL;
                 }
+            }
 
             if( (valstr = params.get(TICameraParameters::KEY_CAP_MODE)) != NULL)
                 {
@@ -335,11 +339,15 @@ int CameraHal::setParameters(const CameraParameters& params)
                 mParameters.set(TICameraParameters::KEY_CAP_MODE, valstr);
                 }
 
-            if((valstr = params.get(TICameraParameters::KEY_IPP)) != NULL)
-                {
-                CAMHAL_LOGDB("IPP mode set %s", params.get(TICameraParameters::KEY_IPP));
-                mParameters.set(TICameraParameters::KEY_IPP, valstr);
+            if ((valstr = params.get(TICameraParameters::KEY_IPP)) != NULL) {
+                if (isParameterValid(valstr,mCameraProperties->get(CameraProperties::SUPPORTED_IPP_MODES))) {
+                    CAMHAL_LOGDB("IPP mode set %s", params.get(TICameraParameters::KEY_IPP));
+                    mParameters.set(TICameraParameters::KEY_IPP, valstr);
+                } else {
+                    CAMHAL_LOGEB("ERROR: Invalid IPP mode: %s", valstr);
+                    ret = -EINVAL;
                 }
+            }
 
             if((valstr = params.get(TICameraParameters::KEY_S3D2D_PREVIEW)) != NULL)
                 {
@@ -351,11 +359,6 @@ int CameraHal::setParameters(const CameraParameters& params)
                 {
                 CAMHAL_LOGDB("AutoConvergence mode is %s", params.get(TICameraParameters::KEY_AUTOCONVERGENCE));
                 mParameters.set(TICameraParameters::KEY_AUTOCONVERGENCE, valstr);
-                }
-            if((valstr = params.get(TICameraParameters::KEY_SENSOR_ORIENTATION)) != NULL)
-                {
-                CAMHAL_LOGDB("Sensor Orientation is set to %s", params.get(TICameraParameters::KEY_SENSOR_ORIENTATION));
-                mParameters.set(TICameraParameters::KEY_SENSOR_ORIENTATION, valstr);
                 }
 
             }
@@ -394,38 +397,34 @@ int CameraHal::setParameters(const CameraParameters& params)
             }
 
         ///Below parameters can be changed when the preview is running
-        if ( !isParameterValid(params.getPictureFormat(),
-                mCameraProperties->get(CameraProperties::SUPPORTED_PICTURE_FORMATS)))
-            {
-            CAMHAL_LOGEA("Invalid picture format");
-            return -EINVAL;
+        if ( (valstr = params.getPictureFormat()) != NULL ) {
+            if (isParameterValid(params.getPictureFormat(),mCameraProperties->get(CameraProperties::SUPPORTED_PICTURE_FORMATS))) {
+                mParameters.setPictureFormat(valstr);
+            } else {
+                CAMHAL_LOGEB("ERROR: Invalid picture format: %s",valstr);
+                ret = -EINVAL;
             }
-        else
-            {
-            valstr = params.getPictureFormat();
-            if (valstr)
-            mParameters.setPictureFormat(valstr);
             }
 
         params.getPictureSize(&w, &h);
-        if ( !isResolutionValid(w, h, mCameraProperties->get(CameraProperties::SUPPORTED_PICTURE_SIZES)))
-            {
-            CAMHAL_LOGEB("Invalid picture resolution %dx%d", w, h);
-            return -EINVAL;
-            }
-        else
-            {
+        if ( isResolutionValid(w, h, mCameraProperties->get(CameraProperties::SUPPORTED_PICTURE_SIZES))) {
             mParameters.setPictureSize(w, h);
-            }
+        } else {
+            CAMHAL_LOGEB("ERROR: Invalid picture resolution %dx%d", w, h);
+            ret = -EINVAL;
+        }
 
         CAMHAL_LOGDB("Picture Size by App %d x %d", w, h);
 
-        if(( (valstr = params.get(TICameraParameters::KEY_BURST)) != NULL)
-            && (params.getInt(TICameraParameters::KEY_BURST) >=0))
-            {
-            CAMHAL_LOGDB("Burst set %s", params.get(TICameraParameters::KEY_BURST));
-            mParameters.set(TICameraParameters::KEY_BURST, valstr);
+        if ((valstr = params.get(TICameraParameters::KEY_BURST)) != NULL) {
+            if (params.getInt(TICameraParameters::KEY_BURST) >=0) {
+                CAMHAL_LOGDB("Burst set %s", params.get(TICameraParameters::KEY_BURST));
+                mParameters.set(TICameraParameters::KEY_BURST, valstr);
+            } else {
+                CAMHAL_LOGEB("ERROR: Invalid Burst value: %s",valstr);
+                ret = -EINVAL;
             }
+        }
 
         framerate = params.getPreviewFrameRate();
         if ( isParameterValid(framerate, mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FRAME_RATES)))
@@ -468,8 +467,8 @@ int CameraHal::setParameters(const CameraParameters& params)
 
             if ( ( 0 > minFPS ) || ( 0 > maxFPS ) )
                 {
-                CAMHAL_LOGEA("FPS Range is negative!");
-                return -EINVAL;
+                CAMHAL_LOGEA("ERROR: FPS Range is negative!");
+                ret = -EINVAL;
                 }
 
             minFPS /= CameraHal::VFR_SCALE;
@@ -477,14 +476,14 @@ int CameraHal::setParameters(const CameraParameters& params)
 
             if ( ( 0 == minFPS ) || ( 0 == maxFPS ) )
                 {
-                CAMHAL_LOGEA("FPS Range is invalid!");
-                return -EINVAL;
+                CAMHAL_LOGEA("ERROR: FPS Range is invalid!");
+                ret = -EINVAL;
                 }
 
             if ( maxFPS < minFPS )
                 {
-                CAMHAL_LOGEA("Max FPS is smaller than Min FPS!");
-                return -EINVAL;
+                CAMHAL_LOGEA("ERROR: Max FPS is smaller than Min FPS!");
+                ret = -EINVAL;
                 }
 
             if ( maxFPS > framerate )
@@ -530,74 +529,95 @@ int CameraHal::setParameters(const CameraParameters& params)
             mParameters.set(TICameraParameters::KEY_MANUALCONVERGENCE_VALUES, valstr);
             }
 
-        if( ((valstr = params.get(TICameraParameters::KEY_EXPOSURE_MODE)) != NULL)
-            && isParameterValid(params.get(TICameraParameters::KEY_EXPOSURE_MODE),
-                    mCameraProperties->get(CameraProperties::SUPPORTED_EXPOSURE_MODES)))
-            {
-            CAMHAL_LOGDB("Exposure set = %s", params.get(TICameraParameters::KEY_EXPOSURE_MODE));
-            mParameters.set(TICameraParameters::KEY_EXPOSURE_MODE, valstr);
+        if ((valstr = params.get(TICameraParameters::KEY_EXPOSURE_MODE)) != NULL) {
+            if (isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_EXPOSURE_MODES))) {
+                CAMHAL_LOGDB("Exposure set = %s", valstr);
+                mParameters.set(TICameraParameters::KEY_EXPOSURE_MODE, valstr);
+            } else {
+                CAMHAL_LOGEB("ERROR: Invalid Exposure  = %s", valstr);
+                ret = -EINVAL;
             }
+        }
 
-        if( ((valstr = params.get(CameraParameters::KEY_WHITE_BALANCE)) != NULL)
-            && isParameterValid(params.get(CameraParameters::KEY_WHITE_BALANCE),
-                mCameraProperties->get(CameraProperties::SUPPORTED_WHITE_BALANCE)))
-            {
-            CAMHAL_LOGDB("White balance set %s", params.get(CameraParameters::KEY_WHITE_BALANCE));
-            mParameters.set(CameraParameters::KEY_WHITE_BALANCE, valstr);
+        if ((valstr = params.get(CameraParameters::KEY_WHITE_BALANCE)) != NULL) {
+           if ( isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_WHITE_BALANCE))) {
+               CAMHAL_LOGDB("White balance set %s", valstr);
+               mParameters.set(CameraParameters::KEY_WHITE_BALANCE, valstr);
+            } else {
+               CAMHAL_LOGEB("ERROR: Invalid white balance  = %s", valstr);
+               ret = -EINVAL;
             }
+        }
 
-        if( ((valstr = params.get(TICameraParameters::KEY_CONTRAST)) != NULL)
-                && (params.getInt(TICameraParameters::KEY_CONTRAST) >= 0 ))
-            {
-            CAMHAL_LOGDB("Contrast set %s", params.get(TICameraParameters::KEY_CONTRAST));
-            mParameters.set(TICameraParameters::KEY_CONTRAST, valstr);
+        if ((valstr = params.get(TICameraParameters::KEY_CONTRAST)) != NULL) {
+            if (params.getInt(TICameraParameters::KEY_CONTRAST) >= 0 ) {
+                CAMHAL_LOGDB("Contrast set %s", valstr);
+                mParameters.set(TICameraParameters::KEY_CONTRAST, valstr);
+            } else {
+                CAMHAL_LOGEB("ERROR: Invalid Contrast  = %s", valstr);
+                ret = -EINVAL;
             }
+        }
 
-        if( ((valstr =params.get(TICameraParameters::KEY_SHARPNESS)) != NULL) && params.getInt(TICameraParameters::KEY_SHARPNESS) >= 0 )
-            {
-            CAMHAL_LOGDB("Sharpness set %s", params.get(TICameraParameters::KEY_SHARPNESS));
-            mParameters.set(TICameraParameters::KEY_SHARPNESS, valstr);
+        if ((valstr =params.get(TICameraParameters::KEY_SHARPNESS)) != NULL) {
+            if (params.getInt(TICameraParameters::KEY_SHARPNESS) >= 0 ) {
+                CAMHAL_LOGDB("Sharpness set %s", valstr);
+                mParameters.set(TICameraParameters::KEY_SHARPNESS, valstr);
+            } else {
+                CAMHAL_LOGEB("ERROR: Invalid Sharpness = %s", valstr);
+                ret = -EINVAL;
             }
+        }
 
-
-        if( ((valstr = params.get(TICameraParameters::KEY_SATURATION)) != NULL)
-            && (params.getInt(TICameraParameters::KEY_SATURATION) >= 0 ) )
-            {
-            CAMHAL_LOGDB("Saturation set %s", params.get(TICameraParameters::KEY_SATURATION));
-            mParameters.set(TICameraParameters::KEY_SATURATION, valstr);
+        if ((valstr = params.get(TICameraParameters::KEY_SATURATION)) != NULL) {
+            if (params.getInt(TICameraParameters::KEY_SATURATION) >= 0 ) {
+                CAMHAL_LOGDB("Saturation set %s", valstr);
+                mParameters.set(TICameraParameters::KEY_SATURATION, valstr);
+             } else {
+                CAMHAL_LOGEB("ERROR: Invalid Saturation = %s", valstr);
+                ret = -EINVAL;
             }
+        }
 
-        if( ((valstr = params.get(TICameraParameters::KEY_BRIGHTNESS)) != NULL)
-            && (params.getInt(TICameraParameters::KEY_BRIGHTNESS) >= 0 ))
-            {
-            CAMHAL_LOGDB("Brightness set %s", params.get(TICameraParameters::KEY_BRIGHTNESS));
-            mParameters.set(TICameraParameters::KEY_BRIGHTNESS, valstr);
+        if ((valstr = params.get(TICameraParameters::KEY_BRIGHTNESS)) != NULL) {
+            if (params.getInt(TICameraParameters::KEY_BRIGHTNESS) >= 0 ) {
+                CAMHAL_LOGDB("Brightness set %s", valstr);
+                mParameters.set(TICameraParameters::KEY_BRIGHTNESS, valstr);
+            } else {
+                CAMHAL_LOGEB("ERROR: Invalid Brightness = %s", valstr);
+                ret = -EINVAL;
             }
+         }
 
+        if ((valstr = params.get(CameraParameters::KEY_ANTIBANDING)) != NULL) {
+            if (isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_ANTIBANDING))) {
+                CAMHAL_LOGDB("Antibanding set %s", valstr);
+                mParameters.set(CameraParameters::KEY_ANTIBANDING, valstr);
+             } else {
+                CAMHAL_LOGEB("ERROR: Invalid Antibanding = %s", valstr);
+                ret = -EINVAL;
+             }
+         }
 
-        if( ((valstr = params.get(CameraParameters::KEY_ANTIBANDING)) != NULL)
-            && isParameterValid(params.get(CameraParameters::KEY_ANTIBANDING),
-                    mCameraProperties->get(CameraProperties::SUPPORTED_ANTIBANDING)))
-            {
-            CAMHAL_LOGDB("Antibanding set %s", params.get(CameraParameters::KEY_ANTIBANDING));
-            mParameters.set(CameraParameters::KEY_ANTIBANDING, valstr);
+        if ((valstr = params.get(TICameraParameters::KEY_ISO)) != NULL) {
+            if (isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_ISO_VALUES))) {
+                CAMHAL_LOGDB("ISO set %s", valstr);
+                mParameters.set(TICameraParameters::KEY_ISO, valstr);
+            } else {
+                CAMHAL_LOGEB("ERROR: Invalid ISO = %s", valstr);
+                ret = -EINVAL;
             }
+        }
 
-        if( ((valstr = params.get(TICameraParameters::KEY_ISO)) != NULL)
-            && isParameterValid(params.get(TICameraParameters::KEY_ISO),
-                    mCameraProperties->get(CameraProperties::SUPPORTED_ISO_VALUES)))
-            {
-            CAMHAL_LOGDB("ISO set %s", params.get(TICameraParameters::KEY_ISO));
-            mParameters.set(TICameraParameters::KEY_ISO, valstr);
-            }
-
-        if( ((valstr = params.get(CameraParameters::KEY_FOCUS_MODE)) != NULL)
-            && isParameterValid(params.get(CameraParameters::KEY_FOCUS_MODE),
-                    mCameraProperties->get(CameraProperties::SUPPORTED_FOCUS_MODES)))
-            {
-            CAMHAL_LOGDB("Focus mode set %s", params.get(CameraParameters::KEY_FOCUS_MODE));
-            mParameters.set(CameraParameters::KEY_FOCUS_MODE, valstr);
-            }
+        if ((valstr = params.get(CameraParameters::KEY_FOCUS_MODE)) != NULL) {
+            if (isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_FOCUS_MODES))) {
+                CAMHAL_LOGDB("Focus mode set %s", params.get(CameraParameters::KEY_FOCUS_MODE));
+                mParameters.set(CameraParameters::KEY_FOCUS_MODE, valstr);
+             } else {
+                CAMHAL_LOGEB("ERROR: Invalid FOCUS mode = %s", valstr);
+                ret = -EINVAL;
+             }
+        }
 
         if( (valstr = params.get(CameraParameters::KEY_FOCUS_AREAS)) != NULL )
             {
@@ -631,29 +651,35 @@ int CameraHal::setParameters(const CameraParameters& params)
             mParameters.set(CameraParameters::KEY_EXPOSURE_COMPENSATION, valstr);
             }
 
-        if(( (valstr = params.get(CameraParameters::KEY_SCENE_MODE)) != NULL)
-            && isParameterValid(params.get(CameraParameters::KEY_SCENE_MODE),
-                    mCameraProperties->get(CameraProperties::SUPPORTED_SCENE_MODES)))
-            {
-            CAMHAL_LOGDB("Scene mode set %s", params.get(CameraParameters::KEY_SCENE_MODE));
-            mParameters.set(CameraParameters::KEY_SCENE_MODE, valstr);
+        if ((valstr = params.get(CameraParameters::KEY_SCENE_MODE)) != NULL) {
+            if (isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_SCENE_MODES))) {
+                CAMHAL_LOGDB("Scene mode set %s", valstr);
+                mParameters.set(CameraParameters::KEY_SCENE_MODE, valstr);
+            } else {
+                CAMHAL_LOGEB("ERROR: Invalid Scene mode = %s", valstr);
+                ret = -EINVAL;
             }
+        }
 
-        if(( (valstr = params.get(CameraParameters::KEY_FLASH_MODE)) != NULL)
-            && isParameterValid(params.get(CameraParameters::KEY_FLASH_MODE),
-                    mCameraProperties->get(CameraProperties::SUPPORTED_FLASH_MODES)))
-            {
-            CAMHAL_LOGDB("Flash mode set %s", params.get(CameraParameters::KEY_FLASH_MODE));
-            mParameters.set(CameraParameters::KEY_FLASH_MODE, valstr);
+        if ((valstr = params.get(CameraParameters::KEY_FLASH_MODE)) != NULL) {
+            if (isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_FLASH_MODES))) {
+                CAMHAL_LOGDB("Flash mode set %s", valstr);
+                mParameters.set(CameraParameters::KEY_FLASH_MODE, valstr);
+            } else {
+                CAMHAL_LOGEB("ERROR: Invalid Flash mode = %s", valstr);
+                ret = -EINVAL;
             }
+        }
 
-        if(( (valstr = params.get(CameraParameters::KEY_EFFECT)) != NULL)
-            && isParameterValid(params.get(CameraParameters::KEY_EFFECT),
-                    mCameraProperties->get(CameraProperties::SUPPORTED_EFFECTS)))
-            {
-            CAMHAL_LOGDB("Effect set %s", params.get(CameraParameters::KEY_EFFECT));
-            mParameters.set(CameraParameters::KEY_EFFECT, valstr);
-            }
+        if ((valstr = params.get(CameraParameters::KEY_EFFECT)) != NULL) {
+            if (isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_EFFECTS))) {
+                CAMHAL_LOGDB("Effect set %s", valstr);
+                mParameters.set(CameraParameters::KEY_EFFECT, valstr);
+             } else {
+                CAMHAL_LOGEB("ERROR: Invalid Effect = %s", valstr);
+                ret = -EINVAL;
+             }
+        }
 
         if(( (valstr = params.get(CameraParameters::KEY_ROTATION)) != NULL)
             && (params.getInt(CameraParameters::KEY_ROTATION) >=0))
@@ -776,18 +802,16 @@ int CameraHal::setParameters(const CameraParameters& params)
             mParameters.remove(TICameraParameters::KEY_EXP_BRACKETING_RANGE);
             }
 
-        if( ( (valstr = params.get(CameraParameters::KEY_ZOOM)) != NULL )
-            && (params.getInt(CameraParameters::KEY_ZOOM) >= 0 )
-            && (params.getInt(CameraParameters::KEY_ZOOM) <= mMaxZoomSupported ) )
-            {
-            CAMHAL_LOGDB("Zoom set %s", params.get(CameraParameters::KEY_ZOOM));
-            mParameters.set(CameraParameters::KEY_ZOOM, valstr);
+        if ((valstr = params.get(CameraParameters::KEY_ZOOM)) != NULL ) {
+            if ((params.getInt(CameraParameters::KEY_ZOOM) >= 0 ) &&
+                (params.getInt(CameraParameters::KEY_ZOOM) <= mMaxZoomSupported )) {
+                CAMHAL_LOGDB("Zoom set %s", valstr);
+                mParameters.set(CameraParameters::KEY_ZOOM, valstr);
+             } else {
+                CAMHAL_LOGEB("ERROR: Invalid Zoom: %s", valstr);
+                ret = -EINVAL;
             }
-        else
-            {
-            //CTS requirement: Invalid zoom values should always return an error.
-            ret = -EINVAL;
-            }
+        }
 
         if( (valstr = params.get(CameraParameters::KEY_AUTO_EXPOSURE_LOCK)) != NULL )
           {
