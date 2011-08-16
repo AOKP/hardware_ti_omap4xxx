@@ -577,6 +577,19 @@ int execute_functional_script(char *script) {
 
                 break;
 
+            case 'F':
+                if ( hardwareActive )
+                    camera->sendCommand(CAMERA_CMD_START_FACE_DETECTION, 0, 0);
+
+                break;
+
+            case 'T':
+
+                if ( hardwareActive )
+                    camera->sendCommand(CAMERA_CMD_STOP_FACE_DETECTION, 0, 0);
+
+                break;
+
             case 'u':
                 // HQ should always be in ldc-nsf
                 // if not HQ, then return the ipp to its previous state
