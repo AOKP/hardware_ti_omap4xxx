@@ -279,32 +279,82 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
     }
 
     if ( 0 < faceData->ulFaceCount ) {
+        int orient_mult;
+        int trans_left, trans_top, trans_right, trans_bot;
 
         faces = ( camera_face_t * ) malloc(sizeof(camera_face_t)*faceData->ulFaceCount);
         if ( NULL == faces ) {
             return -ENOMEM;
         }
 
+        /**
+        / * When device is 180 degrees oriented to the sensor, need to translate
+        / * the output from Ducati to what Android expects
+        / * Ducati always gives face coordinates in this form, irrespective of
+        / * rotation, i.e (l,t) always represents the point towards the left eye
+        / * and top of hair.
+        / * (l, t)
+        / *   ---------------
+        / *   -   ,,,,,,,   -
+        / *   -  |       |  -
+        / *   -  |<a   <a|  -
+        / *   - (|   ^   |) -
+        / *   -  |  -=-  |  -
+        / *   -   \_____/   -
+        / *   ---------------
+        / *               (r, b)
+        / *
+        / * However, Android expects the coords to be in respect with what the
+        / * sensor is viewing, i.e Android expects sensor to see this with (l,t)
+        / * and (r,b) like so:
+        / * (l, t)
+        / *   ---------------
+        / *   -    _____    -
+        / *   -   /     \   -
+        / *   -  |  -=-  |  -
+        / *   - (|   ^   |) -
+        / *   -  |a>   a>|  -
+        / *   -  |       |  -
+        / *   -   ,,,,,,,   -
+        / *   ---------------
+        / *               (r, b)
+          */
+        if (mDeviceOrientation == 180) {
+            orient_mult = -1;
+            trans_left = 2; // right is now left
+            trans_top = 3; // bottom is now top
+            trans_right = 0; // left is now right
+            trans_bot = 1; // top is not bottom
+        } else {
+            orient_mult = 1;
+            trans_left = 0; // left
+            trans_top = 1; // top
+            trans_right = 2; // right
+            trans_bot = 3; // bottom
+
+        }
         for ( int i = 0  ; i < faceData->ulFaceCount ; i++)
             {
 
             tmp = ( double ) faceData->tFacePosition[i].nLeft / ( double ) previewWidth;
             tmp *= hRange;
             tmp -= hRange/2;
-            faces[i].rect[0] = tmp;
+            faces[i].rect[trans_left] = tmp;
 
             tmp = ( double ) faceData->tFacePosition[i].nTop / ( double )previewHeight;
             tmp *= vRange;
             tmp -= vRange/2;
-            faces[i].rect[1] = tmp;
+            faces[i].rect[trans_top] = tmp;
 
             tmp = ( double ) faceData->tFacePosition[i].nWidth / ( double ) previewWidth;
             tmp *= hRange;
-            faces[i].rect[2] = faces[i].rect[0] + tmp;
+            tmp *= orient_mult;
+            faces[i].rect[trans_right] = faces[i].rect[trans_left] + tmp;
 
             tmp = ( double ) faceData->tFacePosition[i].nHeight / ( double ) previewHeight;
             tmp *= vRange;
-            faces[i].rect[3] = faces[i].rect[1] + tmp;
+            tmp *= orient_mult;
+            faces[i].rect[trans_bot] = faces[i].rect[trans_top] + tmp;
 
             faces[i].score = faceData->tFacePosition[i].nScore;
             faces[i].id = 0;
