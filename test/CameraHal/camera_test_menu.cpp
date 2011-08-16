@@ -294,7 +294,8 @@ audio_Codecs audioCodecs[] = {
   { AUDIO_ENCODER_AMR_WB, "AMR_WB" },
   { AUDIO_ENCODER_AAC, "AAC" },
   { AUDIO_ENCODER_AAC_PLUS, "AAC+" },
-  { AUDIO_ENCODER_EAAC_PLUS, "EAAC+" }
+  { AUDIO_ENCODER_EAAC_PLUS, "EAAC+" },
+  { AUDIO_ENCODER_LIST_END, "disabled"},
 };
 
 size_t length_audio_Codecs = ARRAY_SIZE(audioCodecs);
@@ -892,10 +893,12 @@ int configureRecorder() {
     }
 
 
-    if ( recorder->setAudioSource(AUDIO_SOURCE_MIC) < 0 ) {
-        printf("error while configuring camera audio source\n");
+    if ( AUDIO_ENCODER_LIST_END != audioCodecs[audioCodecIDX].type ) {
+        if ( recorder->setAudioSource(AUDIO_SOURCE_DEFAULT) < 0 ) {
+            printf("error while configuring camera audio source\n");
 
-        return -1;
+            return -1;
+        }
     }
 
     if ( recorder->setOutputFormat(outputFormat[outputFormatIDX].type) < 0 ) {
@@ -949,10 +952,12 @@ int configureRecorder() {
         return -1;
     }
 
-    if ( recorder->setAudioEncoder(audioCodecs[audioCodecIDX].type) < 0 ) {
-        printf("error while configuring audio codec\n");
+    if ( AUDIO_ENCODER_LIST_END != audioCodecs[audioCodecIDX].type ) {
+        if ( recorder->setAudioEncoder(audioCodecs[audioCodecIDX].type) < 0 ) {
+            printf("error while configuring audio codec\n");
 
-        return -1;
+            return -1;
+        }
     }
 
     if ( recorder->setPreviewSurface( surfaceControl->getSurface() ) < 0 ) {
@@ -1049,33 +1054,6 @@ int closeCamera() {
     return 0;
 }
 
-//Workaround for an issue seen with ICS SurfaceFlinger.
-//The last surface created is not getting rendered on screen,
-//in our case this is the preview surface. Here we artificially wait
-//for the preview to start and create a new temporary surface, which
-//gets destroyed immediately.
-int surfaceWorkaround(unsigned int width, unsigned int height, int32_t pixFormat) {
-    sleep(1);
-
-    if ( NULL == client.get() ) {
-        return NO_INIT;
-    }
-
-    sp<SurfaceControl> tmpSurface = client->createSurface(0,
-                                                          width,
-                                                          height,
-                                                          pixFormat);
-
-    if ( NULL != tmpSurface.get() ) {
-        tmpSurface->clear();
-        tmpSurface.clear();
-    } else {
-        return -ENOMEM;
-    }
-
-    return NO_ERROR;
-}
-
 int startPreview() {
     int previewWidth, previewHeight;
     if (reSizePreview) {
@@ -1114,7 +1092,6 @@ int startPreview() {
         previewRunning = true;
         reSizePreview = false;
 
-        surfaceWorkaround( previewWidth, previewHeight, pixelformat[previewFormat].pixelFormatDesc);
     }
 
     return 0;
