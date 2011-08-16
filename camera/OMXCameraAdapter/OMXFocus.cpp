@@ -85,6 +85,9 @@ status_t OMXCameraAdapter::doAutoFocus()
         return NO_INIT;
         }
 
+    // If the app calls autoFocus, the camera will stop sending face callbacks.
+    pauseFaceDetection(true);
+
     if ( NO_ERROR == ret )
         {
         if ( !mFocusAreas.isEmpty() )
@@ -288,6 +291,9 @@ status_t OMXCameraAdapter::cancelAutoFocus()
                                 OMX_IndexConfigCommonFocusStatus,
                                 NULL );
 
+    // If the apps call #cancelAutoFocus()}, the face callbacks will also resume.
+    pauseFaceDetection(false);
+
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
@@ -436,6 +442,9 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
         {
         notifyFocusSubscribers(focusStatus);
         }
+
+    // After focus, face detection will resume sending face callbacks
+    pauseFaceDetection(false);
 
     LOG_FUNCTION_NAME_EXIT;
 

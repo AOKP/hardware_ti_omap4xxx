@@ -701,6 +701,9 @@ status_t OMXCameraAdapter::startImageCapture()
         return NO_INIT;
         }
 
+    // Camera framework doesn't expect face callbacks once capture is triggered
+    pauseFaceDetection(true);
+
     //During bracketing image capture is already active
     {
     Mutex::Autolock lock(mBracketingLock);
@@ -849,6 +852,10 @@ status_t OMXCameraAdapter::stopImageCapture()
       {
         CAMHAL_LOGEB("Error Releaseing 3A locks%d", ret);
       }
+
+    // After capture, face detection should be disabled
+    // and application needs to restart face detection
+    stopFaceDetection();
 
     //Wait here for the capture to be done, in worst case timeout and proceed with cleanup
     ret = mCaptureSem.WaitTimeout(OMX_CAPTURE_TIMEOUT);

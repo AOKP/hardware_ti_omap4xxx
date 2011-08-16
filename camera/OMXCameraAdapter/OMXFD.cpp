@@ -54,6 +54,15 @@ status_t OMXCameraAdapter::stopFaceDetection()
     return setFaceDetection(false, mDeviceOrientation);
 }
 
+void OMXCameraAdapter::pauseFaceDetection(bool pause)
+{
+    Mutex::Autolock lock(mFaceDetectionLock);
+    // pausing will only take affect if fd is already running
+    if (mFaceDetectionRunning) {
+        mFaceDetectionPaused = pause;
+    }
+}
+
 status_t OMXCameraAdapter::setFaceDetection(bool enable, OMX_U32 orientation)
 {
     status_t ret = NO_ERROR;
@@ -134,6 +143,7 @@ status_t OMXCameraAdapter::setFaceDetection(bool enable, OMX_U32 orientation)
     if ( NO_ERROR == ret )
         {
         mFaceDetectionRunning = enable;
+        mFaceDetectionPaused = !enable;
         }
 
     LOG_FUNCTION_NAME_EXIT;

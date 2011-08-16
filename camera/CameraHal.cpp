@@ -3127,7 +3127,13 @@ void CameraHal::forceStopPreview()
     }
 
     if ( NULL != mCameraAdapter ) {
+        // according to javadoc...FD should be stopped in stopPreview
+        // and application needs to call startFaceDection again
+        // to restart FD
+        mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_FD);
+
         cancelAutoFocus();
+
         //Stop the source of frames
         mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_PREVIEW);
     }

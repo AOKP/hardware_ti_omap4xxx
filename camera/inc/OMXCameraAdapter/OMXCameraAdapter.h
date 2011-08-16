@@ -506,6 +506,7 @@ private:
                                    camera_frame_metadata_t **pFaces,
                                    size_t previewWidth,
                                    size_t previewHeight);
+    void pauseFaceDetection(bool pause);
 
     //3A Algorithms priority configuration
     status_t setAlgoPriority(AlgoPriority priority, Algorithm3A algo, bool enable);
@@ -727,6 +728,7 @@ private:
     mutable Mutex mFaceDetectionLock;
     //Face detection status
     bool mFaceDetectionRunning;
+    bool mFaceDetectionPaused;
 
     //Geo-tagging
     EXIFData mEXIFData;

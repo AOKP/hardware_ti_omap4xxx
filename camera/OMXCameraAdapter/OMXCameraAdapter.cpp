@@ -315,6 +315,7 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
         memset(mExposureBracketingValues, 0, EXP_BRACKET_RANGE*sizeof(int));
         mMeasurementEnabled = false;
         mFaceDetectionRunning = false;
+        mFaceDetectionPaused = false;
 
         memset(&mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex], 0, sizeof(OMXCameraPortParameters));
         memset(&mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex], 0, sizeof(OMXCameraPortParameters));
@@ -2663,7 +2664,7 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
 
             {
             Mutex::Autolock lock(mFaceDetectionLock);
-            if ( mFaceDetectionRunning ) {
+            if ( mFaceDetectionRunning && !mFaceDetectionPaused ) {
                 detectFaces(pBuffHeader, fdResult, pPortParam->mWidth, pPortParam->mHeight);
                 if ( NULL != fdResult.get() ) {
                     notifyFaceSubscribers(fdResult);
