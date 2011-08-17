@@ -148,12 +148,20 @@ public:
                                    size_t areaLength,
                                    Vector< sp<CameraArea> > &areas);
 
+    static status_t checkArea(ssize_t top,
+                              ssize_t left,
+                              ssize_t bottom,
+                              ssize_t right,
+                              ssize_t weight);
+
 private:
 
     static const ssize_t TOP = -1000;
     static const ssize_t LEFT = -1000;
     static const ssize_t BOTTOM = 1000;
     static const ssize_t RIGHT = 1000;
+    static const ssize_t WEIGHT_MIN = 1;
+    static const ssize_t WEIGHT_MAX = 1000;
 
     ssize_t mTop;
     ssize_t mLeft;

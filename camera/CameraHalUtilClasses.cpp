@@ -136,6 +136,56 @@ status_t CameraArea::transfrom(size_t width,
     return ret;
 }
 
+status_t CameraArea::checkArea(ssize_t top,
+                               ssize_t left,
+                               ssize_t bottom,
+                               ssize_t right,
+                               ssize_t weight)
+{
+
+    //Handles the invalid regin corner case.
+    if ( ( 0 == top ) && ( 0 == left ) && ( 0 == bottom ) && ( 0 == right ) && ( 0 == weight ) ) {
+        return NO_ERROR;
+    }
+
+    if ( ( CameraArea::WEIGHT_MIN > weight ) ||  ( CameraArea::WEIGHT_MAX < weight ) ) {
+        CAMHAL_LOGEB("Camera area weight is invalid %d", weight);
+        return -EINVAL;
+    }
+
+    if ( ( CameraArea::TOP > top ) || ( CameraArea::BOTTOM < top ) ) {
+        CAMHAL_LOGEB("Camera area top coordinate is invalid %d", top );
+        return -EINVAL;
+    }
+
+    if ( ( CameraArea::TOP > bottom ) || ( CameraArea::BOTTOM < bottom ) ) {
+        CAMHAL_LOGEB("Camera area bottom coordinate is invalid %d", bottom );
+        return -EINVAL;
+    }
+
+    if ( ( CameraArea::LEFT > left ) || ( CameraArea::RIGHT < left ) ) {
+        CAMHAL_LOGEB("Camera area left coordinate is invalid %d", left );
+        return -EINVAL;
+    }
+
+    if ( ( CameraArea::LEFT > right ) || ( CameraArea::RIGHT < right ) ) {
+        CAMHAL_LOGEB("Camera area right coordinate is invalid %d", right );
+        return -EINVAL;
+    }
+
+    if ( left >= right ) {
+        CAMHAL_LOGEA("Camera area left larger than right");
+        return -EINVAL;
+    }
+
+    if ( top >= bottom ) {
+        CAMHAL_LOGEA("Camera area top larger than bottom");
+        return -EINVAL;
+    }
+
+    return NO_ERROR;
+}
+
 status_t CameraArea::parseFocusArea(const char *area,
                                size_t areaLength,
                                Vector< sp<CameraArea> > &areas)
@@ -236,13 +286,18 @@ status_t CameraArea::parseFocusArea(const char *area,
             break;
             }
 
+        ret = checkArea(top, left, bottom, right, weight);
+        if ( NO_ERROR != ret ) {
+            break;
+        }
+
         currentArea = new CameraArea(top, left, bottom, right, weight);
         CAMHAL_LOGDB("Area parsed [%dx%d, %dx%d] %d",
                      ( int ) top,
                      ( int ) left,
                      ( int ) bottom,
                      ( int ) right,
-                     ( int )weight);
+                     ( int ) weight);
         if ( NULL != currentArea.get() )
             {
             areas.add(currentArea);

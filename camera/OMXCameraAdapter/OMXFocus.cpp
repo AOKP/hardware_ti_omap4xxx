@@ -44,10 +44,18 @@ status_t OMXCameraAdapter::setParametersFocus(const CameraParameters &params,
 
     str = params.get(CameraParameters::KEY_FOCUS_AREAS);
     mFocusAreas.clear();
-    if ( NULL != str )
-        {
-        CameraArea::parseFocusArea(str, strlen(str), mFocusAreas);
+    if ( NULL != str ) {
+        ret = CameraArea::parseFocusArea(str, strlen(str), mFocusAreas);
+    }
+
+    if ( NO_ERROR == ret ) {
+        if ( MAX_FOCUS_AREAS < mFocusAreas.size() ) {
+            CAMHAL_LOGEB("Focus areas supported %d, focus areas set %d",
+                         MAX_FOCUS_AREAS,
+                         mFocusAreas.size());
+            ret = -EINVAL;
         }
+    }
 
     LOG_FUNCTION_NAME;
 
@@ -174,7 +182,6 @@ status_t OMXCameraAdapter::doAutoFocus()
     if ( ( mParameters3A.Focus != OMX_IMAGE_FocusControlAuto )  &&
          ( mParameters3A.Focus != OMX_IMAGE_FocusControlAutoInfinity ) )
         {
-
         ret = mDoAFSem.WaitTimeout(AF_CALLBACK_TIMEOUT);
         //Disable auto focus callback from Ducati
         setFocusCallback(false);

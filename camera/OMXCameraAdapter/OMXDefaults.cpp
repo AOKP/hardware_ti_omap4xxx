@@ -69,5 +69,7 @@ const char OMXCameraAdapter::DEFAULT_AWB_LOCK[] = "false";
 const char OMXCameraAdapter::DEFAULT_MAX_NUM_METERING_AREAS[] = "0";
 const char OMXCameraAdapter::DEFAULT_LOCK_SUPPORTED[] = "true";
 const char OMXCameraAdapter::DEFAULT_LOCK_UNSUPPORTED[] = "false";
+
+const size_t OMXCameraAdapter::MAX_FOCUS_AREAS = 1;
 };
 

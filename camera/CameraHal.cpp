@@ -252,6 +252,7 @@ int CameraHal::setParameters(const CameraParameters& params)
     status_t ret = NO_ERROR;
     // Needed for KEY_RECORDING_HINT
     bool restartPreviewRequired = false;
+    CameraParameters oldParams = mParameters;
 
     {
         Mutex::Autolock lock(mLock);
@@ -924,6 +925,11 @@ int CameraHal::setParameters(const CameraParameters& params)
         CAMHAL_LOGEA("Failed to restart Preview");
         return ret;
         }
+
+    //On fail restore old parameters
+    if ( NO_ERROR != ret ) {
+        mParameters = oldParams;
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 

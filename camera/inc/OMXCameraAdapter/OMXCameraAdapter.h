@@ -717,6 +717,7 @@ private:
     static const char DEFAULT_FOCAL_LENGTH[];
     static const char DEFAULT_HOR_ANGLE[];
     static const char DEFAULT_VER_ANGLE[];
+    static const size_t MAX_FOCUS_AREAS;
 
     OMX_VERSIONTYPE mCompRevision;
 
