@@ -242,7 +242,6 @@ int CameraHal::setParameters(const CameraParameters& params)
     int w, h;
     int w_orig, h_orig;
     int framerate,minframerate;
-    bool framerateUpdated = true;
     int maxFPS, minFPS;
     int error;
     int base;
@@ -427,40 +426,13 @@ int CameraHal::setParameters(const CameraParameters& params)
         }
 
         framerate = params.getPreviewFrameRate();
-        if ( isParameterValid(framerate, mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FRAME_RATES)))
-            {
-            if ( mLastPreviewFramerate != framerate )
-                {
-                mLastPreviewFramerate = framerate;
-                mParameters.setPreviewFrameRate(framerate);
-                framerateUpdated = true;
-                }
-            else
-                {
-                framerateUpdated = false;
-                }
-            }
-        else
-            {
-            framerateUpdated = false;
-            }
-
         CAMHAL_LOGDB("FRAMERATE %d", framerate);
 
-        //If client uses fixed framerate than
-        //give it a higher piority than VFR.
-        if ( framerateUpdated )
-            {
-
-            minFPS = framerate;
-            maxFPS = framerate;
-
-            CAMHAL_LOGDB("FPS Range [%d, %d]", minFPS, maxFPS);
-            mParameters.set(TICameraParameters::KEY_MINFRAMERATE, minFPS);
-            mParameters.set(TICameraParameters::KEY_MAXFRAMERATE, maxFPS);
-            mParameters.set(CameraParameters::KEY_PREVIEW_FPS_RANGE, params.get(CameraParameters::KEY_PREVIEW_FPS_RANGE));
-            }
-        else if ( ( valstr = params.get(CameraParameters::KEY_PREVIEW_FPS_RANGE) ) != NULL )
+        // Variable framerate ranges have higher priority over
+        // deprecated constant FPS. "KEY_PREVIEW_FPS_RANGE" should
+        // be cleared by the client in order for constant FPS to get
+        // applied.
+        if ( ( valstr = params.get(CameraParameters::KEY_PREVIEW_FPS_RANGE) ) != NULL )
             {
             CAMHAL_LOGDB("FPS Range = %s", valstr);
             params.getPreviewFpsRange(&minFPS, &maxFPS);
@@ -497,6 +469,23 @@ int CameraHal::setParameters(const CameraParameters& params)
             mParameters.set(TICameraParameters::KEY_MAXFRAMERATE, maxFPS);
             mParameters.set(CameraParameters::KEY_PREVIEW_FPS_RANGE, valstr);
             }
+        else if ( isParameterValid(framerate,
+                         mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FRAME_RATES)) )
+            {
+            minFPS = framerate;
+            maxFPS = framerate;
+            mParameters.setPreviewFrameRate(framerate);
+
+            CAMHAL_LOGDB("FPS Range [%d, %d]", minFPS, maxFPS);
+            mParameters.set(TICameraParameters::KEY_MINFRAMERATE, minFPS);
+            mParameters.set(TICameraParameters::KEY_MAXFRAMERATE, maxFPS);
+            mParameters.set(CameraParameters::KEY_PREVIEW_FPS_RANGE,
+                            params.get(CameraParameters::KEY_PREVIEW_FPS_RANGE));
+            }
+        else
+            {
+            return -EINVAL;
+            }
 
         if( ( valstr = params.get(TICameraParameters::KEY_GBCE) ) != NULL )
             {
@@ -515,7 +504,7 @@ int CameraHal::setParameters(const CameraParameters& params)
             {
             CAMHAL_LOGDB("AutoConvergence Mode is set = %s", params.get(TICameraParameters::KEY_AUTOCONVERGENCE));
             mParameters.set(TICameraParameters::KEY_AUTOCONVERGENCE, valstr);
-           }
+            }
 
     //    if(params.get(TICameraParameters::KEY_AUTOCONVERGENCE_MODE)!=NULL)
     //        {
@@ -2653,8 +2642,6 @@ status_t CameraHal::initialize(CameraProperties::Properties* properties)
     LOG_FUNCTION_NAME;
 
     int sensor_index = 0;
-
-    mLastPreviewFramerate = 0;
 
     ///Initialize the event mask used for registering an event provider for AppCallbackNotifier
     ///Currently, registering all events as to be coming from CameraAdapter

@@ -44,7 +44,7 @@ namespace android {
 #define ARRAY_SIZE(array) (sizeof((array)) / sizeof((array)[0]))
 #define FPS_MIN 5
 #define FPS_STEP 5
-#define FPS_RANGE_STEP 10
+#define FPS_RANGE_STEP 5
 
 static const char PARAM_SEP[] = ",";
 static const int PARAM_SEP_CHAR = ',';
@@ -327,7 +327,7 @@ status_t OMXCameraAdapter::encodeVFramerateCap(OMX_TI_CAPTYPE &caps,
 
     memset(tmpBuffer, '\0', MAX_PROP_VALUE_LENGTH);
     min = max = 0;
-    for (unsigned int i = minVFR; i <= maxVFR; i += FPS_STEP) {
+    for (unsigned int i = minVFR; i < maxVFR; i += FPS_STEP) {
 
         min = i * CameraHal::VFR_SCALE;
         max = (i + FPS_RANGE_STEP) * CameraHal::VFR_SCALE;

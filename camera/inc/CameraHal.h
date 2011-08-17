@@ -1127,8 +1127,6 @@ private:
     int mVideoFd;
     int mVideoLength;
 
-    int32_t mLastPreviewFramerate;
-
     int mBracketRangePositive;
     int mBracketRangeNegative;
 
