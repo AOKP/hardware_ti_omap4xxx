@@ -105,10 +105,6 @@ typedef struct
 	/* The HWC was loaded. post() is no longer responsible for presents */
 	int bBypassPost;
 
-	/* Custom-blit components in lieu of overlay hardware */
-	int (*Blit)(framebuffer_device_t *device, buffer_handle_t src,
-				buffer_handle_t dest, int w, int h, int x, int y);
-
 	/* HWC path for present posts */
 	int (*Post2)(framebuffer_device_t *fb, buffer_handle_t *buffers,
 				 int num_buffers, void *data, int data_length);
@@ -128,6 +124,15 @@ typedef struct IMG_gralloc_module_public_t
 	int (*GetPhyAddrs)(struct IMG_gralloc_module_public_t const* module,
 					   buffer_handle_t handle,
 					   unsigned int auiPhyAddr[MAX_SUB_ALLOCS]);
+
+	/* Custom-blit components in lieu of overlay hardware */
+	int (*Blit)(struct IMG_gralloc_module_public_t const *module,
+				buffer_handle_t src,
+				void *dest[MAX_SUB_ALLOCS], int format);
+
+	int (*Blit2)(struct IMG_gralloc_module_public_t const *module,
+				 buffer_handle_t src, buffer_handle_t dest,
+				 int w, int h, int x, int y);
 }
 IMG_gralloc_module_public_t;
 
