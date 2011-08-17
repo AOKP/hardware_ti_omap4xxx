@@ -55,8 +55,6 @@ namespace android {
 
 #define FOCUS_THRESHOLD             5 //[s.]
 
-#define NUM_SKIP_FRAMES             99
-
 #define MIN_JPEG_QUALITY            1
 #define MAX_JPEG_QUALITY            100
 #define EXP_BRACKET_RANGE           10
@@ -589,7 +587,7 @@ private:
     class CommandHandler : public Thread {
         public:
             CommandHandler(OMXCameraAdapter* ca)
-                : Thread(false), mCameraAdapter(ca), mWaitToSetConfig(false), mForceQuit(false) { }
+                : Thread(false), mCameraAdapter(ca) { }
 
             virtual bool threadLoop() {
                 bool ret;
@@ -607,27 +605,10 @@ private:
                 CAMERA_PERFORM_AUTOFOCUS
             };
 
-            // TODO(XXX): temporary hack. must remove after setconfig and transition issue
-            //            with secondary camera is fixed
-            void setWait(bool wait) {
-                mWaitToSetConfig = wait;
-            }
-
-            // TODO(XXX): temporary hack. must remove after setconfig and transition issue
-            //            with secondary camera is fixed
-            void setForceQuit() {
-                mForceQuit = true;
-            }
-
         private:
             bool Handler();
             TIUTILS::MessageQueue mCommandMsgQ;
             OMXCameraAdapter* mCameraAdapter;
-
-            // TODO(XXX): temporary hack. must remove after setconfig and transition issue
-            //            with secondary camera is fixed
-            bool mWaitToSetConfig;
-            bool mForceQuit;
     };
     sp<CommandHandler> mCommandHandler;
 
@@ -736,10 +717,6 @@ private:
     CaptureMode mCapMode;
     size_t mBurstFrames;
     size_t mCapturedFrames;
-
-    // TODO(XXX): temporary hack. must remove after setconfig and transition issue
-    //            with secondary camera is fixed
-    bool mWaitToSetConfig;
 
     bool mMeasurementEnabled;
 

@@ -318,10 +318,6 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
 
         memset(&mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex], 0, sizeof(OMXCameraPortParameters));
         memset(&mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex], 0, sizeof(OMXCameraPortParameters));
-
-        // TODO(XXX): temporary hack. must remove after setconfig and transition issue
-        //            with secondary camera is fixed
-        mWaitToSetConfig = false;
     }
     LOG_FUNCTION_NAME_EXIT;
     return ErrorUtils::omxToAndroidError(eError);
@@ -573,27 +569,22 @@ status_t OMXCameraAdapter::setParameters(const CameraParameters &params)
         mMeasurementEnabled = false;
         }
 
-    // TODO(XXX): temporary hack. must remove after setconfig and transition issue
-    //            with secondary camera is fixed
-    if (!mWaitToSetConfig) {
-        ret |= setParametersCapture(params, state);
+    ret |= setParametersCapture(params, state);
 
-        ret |= setParameters3A(params, state);
+    ret |= setParameters3A(params, state);
 
-        ret |= setParametersAlgo(params, state);
+    ret |= setParametersAlgo(params, state);
 
-        ret |= setParametersFocus(params, state);
+    ret |= setParametersFocus(params, state);
 
-        ret |= setParametersFD(params, state);
+    ret |= setParametersFD(params, state);
 
-        ret |= setParametersZoom(params, state);
+    ret |= setParametersZoom(params, state);
 
-        ret |= setParametersEXIF(params, state);
-
-        mFirstTimeInit = false;
-    }
+    ret |= setParametersEXIF(params, state);
 
     mParams = params;
+    mFirstTimeInit = false;
 
     LOG_FUNCTION_NAME_EXIT;
     return ret;
@@ -1697,10 +1688,6 @@ status_t OMXCameraAdapter::startPreview()
     mPreviewData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex];
     measurementData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mMeasurementPortIndex];
 
-
-    if ( mPending3Asettings )
-        apply3Asettings(mParameters3A);
-
     if( OMX_StateIdle == mComponentState )
         {
         ///Register for EXECUTING state transition.
@@ -1780,6 +1767,9 @@ status_t OMXCameraAdapter::startPreview()
 
         }
 
+    if ( mPending3Asettings )
+        apply3Asettings(mParameters3A);
+
     //Query current focus distance after
     //starting the preview
     updateFocusDistances(mParameters);
@@ -1791,13 +1781,6 @@ status_t OMXCameraAdapter::startPreview()
     mLastFrameCount = 0;
     mIter = 1;
     mLastFPSTime = systemTime();
-
-    // TODO(XXX): temporary hack. must remove after setconfig and transition issue
-    //            with secondary camera is fixed
-    if (mSensorIndex == 1) {
-        mWaitToSetConfig = true;
-        mCommandHandler->setWait(true);
-    }
 
     LOG_FUNCTION_NAME_EXIT;
 
@@ -2739,15 +2722,6 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
                 }
             }
 
-        // TODO(XXX): temporary hack. must remove after setconfig and transition issue
-        //            with secondary camera is fixed
-        if (mWaitToSetConfig && mFrameCount == NUM_SKIP_FRAMES) {
-            mWaitToSetConfig = false;
-            if (mFaceDetectionRunning) startFaceDetection();
-            setParameters(mParams);
-            mCommandHandler->setWait(false);
-        }
-
         res2 = sendFrame(cameraFramePreview);
 
         stat |= ( ( NO_ERROR == res1 ) || ( NO_ERROR == res2 ) ) ? ( ( int ) NO_ERROR ) : ( -1 );
@@ -2948,49 +2922,40 @@ bool OMXCameraAdapter::CommandHandler::Handler()
     LOG_FUNCTION_NAME;
 
     while ( forever )
-    {
+        {
         stat = NO_ERROR;
         CAMHAL_LOGDA("Handler: waiting for messsage...");
         TIUTILS::MessageQueue::waitForMsg(&mCommandMsgQ, NULL, NULL, -1);
-
-        // TODO(XXX): temporary hack. must remove after setconfig and transition issue
-        //            with secondary camera is fixed
-        if (!mWaitToSetConfig && !mForceQuit) {
-            mCommandMsgQ.get(&msg);
-            CAMHAL_LOGDB("msg.command = %d", msg.command);
-            switch ( msg.command ) {
-                case CommandHandler::CAMERA_START_IMAGE_CAPTURE:
-                {
-                    stat = mCameraAdapter->startImageCapture();
-                    break;
-                }
-                case CommandHandler::CAMERA_PERFORM_AUTOFOCUS:
-                {
-                    stat = mCameraAdapter->doAutoFocus();
-                    break;
-                }
-                case CommandHandler::COMMAND_EXIT:
-                {
-                    CAMHAL_LOGEA("Exiting command handler");
-                    forever = 0;
-                    break;
-               }
-            }
-
-            if ( NO_ERROR != stat )
+        mCommandMsgQ.get(&msg);
+        CAMHAL_LOGDB("msg.command = %d", msg.command);
+        switch ( msg.command ) {
+            case CommandHandler::CAMERA_START_IMAGE_CAPTURE:
             {
-                errorNotify = ( ErrorNotifier * ) msg.arg1;
-                if ( NULL != errorNotify )
+                stat = mCameraAdapter->startImageCapture();
+                break;
+            }
+            case CommandHandler::CAMERA_PERFORM_AUTOFOCUS:
+            {
+                stat = mCameraAdapter->doAutoFocus();
+                break;
+            }
+            case CommandHandler::COMMAND_EXIT:
+            {
+                CAMHAL_LOGEA("Exiting command handler");
+                forever = 0;
+                break;
+            }
+        }
+
+        if ( NO_ERROR != stat )
+            {
+            errorNotify = ( ErrorNotifier * ) msg.arg1;
+            if ( NULL != errorNotify )
                 {
-                    errorNotify->errorNotify(CAMERA_ERROR_UNKNOWN);
+                errorNotify->errorNotify(CAMERA_ERROR_UNKNOWN);
                 }
             }
-        } else if (mForceQuit) {
-            forever = 0;
-        } else {
-            usleep(1000 * NUM_SKIP_FRAMES); // sleep thread for X amount of ms.
         }
-    }
 
     LOG_FUNCTION_NAME_EXIT;
 
@@ -3083,11 +3048,6 @@ OMXCameraAdapter::~OMXCameraAdapter()
         msg.command = CommandHandler::COMMAND_EXIT;
         msg.arg1 = mErrorNotifier;
         mCommandHandler->put(&msg);
-
-        // TODO(XXX): temporary hack. must remove after setconfig and transition issue
-        //            with secondary camera is fixed
-        if(mWaitToSetConfig) mCommandHandler->setForceQuit();
-
         mCommandHandler->requestExitAndWait();
         mCommandHandler.clear();
     }
