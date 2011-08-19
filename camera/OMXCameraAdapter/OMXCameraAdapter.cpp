@@ -2335,8 +2335,10 @@ void OMXCameraAdapter::onOrientationEvent(uint32_t orientation, uint32_t tilt)
     }
 
     // calculate device orientation relative to the sensor orientation
-    // front camera display is mirrored
-    if (facing_direction && !strcmp(facing_direction, TICameraParameters::FACING_FRONT)) {
+    // front camera display is mirrored...needs to be accounted for when orientation
+    // is 90 or 270...since this will result in a flip on orientation otherwise
+    if (facing_direction && !strcmp(facing_direction, TICameraParameters::FACING_FRONT) &&
+        (orientation == 90 || orientation == 270)) {
         device_orientation = (orientation - mount_orientation + 360) % 360;
     } else {  // back-facing camera
         device_orientation = (orientation + mount_orientation) % 360;
