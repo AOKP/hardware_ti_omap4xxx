@@ -207,6 +207,14 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 		{
 			pPortDef->format.video.eColorFormat = OMX_TI_COLOR_FormatYUV420PackedSemiPlanar;
 		}
+
+		if(pPortDef->nPortIndex == OMX_H264E_INPUT_PORT)
+		{
+			if(pCompPrv->proxyPortBuffers[OMX_H264E_INPUT_PORT].proxyBufferType == EncoderMetadataPointers)
+			{
+				pPortDef->nBufferSize = sizeof(video_metadata_t);
+			}
+		}
 	}
 	else if ( nParamIndex == OMX_IndexParamVideoPortFormat)
 	{

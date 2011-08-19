@@ -677,7 +677,8 @@ static OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 	PROXY_assert(eError == OMX_ErrorNone, eError,
 	    "Failed to get stride of component");
 
-	if (nStride == LINUX_PAGE_SIZE) //Allocate 2D buffer
+	if (nStride == LINUX_PAGE_SIZE && \
+			pCompPrv->proxyPortBuffers[nPortIndex].proxyBufferType != EncoderMetadataPointers) //Allocate 2D buffer
 	{
 	    	tParamRect.nSize = sizeof(OMX_CONFIG_RECTTYPE);
 	    	tParamRect.nVersion.s.nVersionMajor = 1;
