@@ -516,8 +516,7 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
     int undequeued = 0;
 
     // Set gralloc usage bits for window.
-    err = mANativeWindow->set_usage(mANativeWindow, GRALLOC_USAGE_SW_READ_NEVER | GRALLOC_USAGE_SW_WRITE_OFTEN
-            | GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP);
+    err = mANativeWindow->set_usage(mANativeWindow, GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP);
     if (err != 0) {
         LOGE("native_window_set_usage failed: %s (%d)", strerror(-err), -err);
         return NULL;
