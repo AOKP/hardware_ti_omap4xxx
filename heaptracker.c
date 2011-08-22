@@ -96,10 +96,17 @@ static struct hdr *backlog_first;
 static struct hdr *backlog_last;
 static pthread_rwlock_t backlog_lock = PTHREAD_RWLOCK_INITIALIZER;
 
-static void print_backtrace(const intptr_t *bt, int depth)
+void print_backtrace(const intptr_t *bt, int depth)
 {
     mapinfo *mi;
     int cnt, rel_pc;
+    intptr_t self_bt[MAX_BACKTRACE_DEPTH];
+
+    if (!bt) {
+        depth = heaptracker_stacktrace(self_bt, MAX_BACKTRACE_DEPTH);
+        bt = self_bt;
+    }
+
     malloc_log("*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***\n");
     for (cnt = 0; cnt < depth && cnt < MAX_BACKTRACE_DEPTH; cnt++) {
         mi = pc_to_mapinfo(milist, bt[cnt], &rel_pc);
