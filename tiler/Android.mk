@@ -7,7 +7,7 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES := memmgr.c tilermgr.c
 LOCAL_MODULE := libtimemmgr
 LOCAL_MODULE_TAGS := optional tests
-include $(BUILD_SHARED_LIBRARY)
+include $(BUILD_HEAPTRACKED_SHARED_LIBRARY)
 
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := memmgr_test.c testlib.c
