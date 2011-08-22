@@ -634,12 +634,12 @@ static OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 		eError = PROXY_GetParameter(hComponent, (OMX_INDEXTYPE)OMX_TI_IndexParam2DBufferAllocDimension, &tParamRect);
 		if(eError == OMX_ErrorNone)
 		{
-			blocks[0].pixelFormat = PIXEL_FMT_8BIT;
+			blocks[0].fmt = PIXEL_FMT_8BIT;
 			blocks[0].dim.area.width  = tParamRect.nWidth;
 			blocks[0].dim.area.height = tParamRect.nHeight;
 			blocks[0].stride = 0;
 
-			blocks[1].pixelFormat = PIXEL_FMT_16BIT;
+			blocks[1].fmt = PIXEL_FMT_16BIT;
 			blocks[1].dim.area.width  = tParamRect.nWidth >> 1;
 			blocks[1].dim.area.height = tParamRect.nHeight >> 1;
 			blocks[1].stride = 0;
@@ -662,12 +662,12 @@ static OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 				return eError;
 			}
 
-			blocks[0].pixelFormat = PIXEL_FMT_8BIT;
+			blocks[0].fmt = PIXEL_FMT_8BIT;
 			blocks[0].dim.area.width  = tParamPortDef.format.video.nFrameWidth;
 			blocks[0].dim.area.height = tParamPortDef.format.video.nFrameHeight;
 			blocks[0].stride = 0;
 
-			blocks[1].pixelFormat = PIXEL_FMT_16BIT;
+			blocks[1].fmt = PIXEL_FMT_16BIT;
 			blocks[1].dim.area.width  = tParamPortDef.format.video.nFrameWidth >> 1;
 			blocks[1].dim.area.height = tParamPortDef.format.video.nFrameHeight >> 1;
 			blocks[1].stride = 0;
@@ -686,7 +686,7 @@ static OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 	}
 	else //Allocate 1D buffer
 	{
-		block.pixelFormat = PIXEL_FMT_PAGE;
+		block.fmt = PIXEL_FMT_PAGE;
     		block.dim.len = nSize;
     	        block.stride = 0;
 
@@ -966,7 +966,7 @@ static OMX_ERRORTYPE PROXY_UseBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 
 	if(tMetaDataBuffer.bIsMetaDataEnabledOnPort)
 	{
-		block.pixelFormat = PIXEL_FMT_PAGE;
+		block.fmt = PIXEL_FMT_PAGE;
 		block.dim.len = tMetaDataBuffer.nMetaDataSize;
 		((OMX_TI_PLATFORMPRIVATE *)pBufferHeader->
 			pPlatformPrivate)->pMetaDataBuffer = MemMgr_Alloc(&block, 1);
@@ -2240,7 +2240,7 @@ OMX_ERRORTYPE RPC_MapBuffer_Ducati(OMX_U8 * pBuf, OMX_U32 nBufLineSize,
 	{
 		DOMX_DEBUG
 		    ("Buffer is not mapped: Mapping as 1D buffer now..");
-		block.pixelFormat = PIXEL_FMT_PAGE;
+		block.fmt = PIXEL_FMT_PAGE;
 		block.ptr = (OMX_PTR) (((OMX_U32) pBuf / LINUX_PAGE_SIZE) *
 		    LINUX_PAGE_SIZE);
 		block.dim.len = (OMX_U32) ((((OMX_U32) pBuf + nBufLineSize +

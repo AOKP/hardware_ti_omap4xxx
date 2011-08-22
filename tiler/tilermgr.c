@@ -70,7 +70,7 @@ int TilerMgr_Open()
     return TILERMGR_ERR_NONE;
 }
 
-SSPtr TilerMgr_Alloc(enum pixel_fmt_t pixfmt, pixels_t width, pixels_t height)
+SSPtr TilerMgr_Alloc(pixel_fmt_t pixfmt, pixels_t width, pixels_t height)
 {
     int ret = -1;
     struct tiler_block_info block = {0};

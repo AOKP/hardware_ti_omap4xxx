@@ -43,7 +43,7 @@
 
 int TilerMgr_Open();
 int TilerMgr_Close();
-SSPtr TilerMgr_Alloc(enum pixel_fmt_t pixfmt, pixels_t width, pixels_t height);
+SSPtr TilerMgr_Alloc(pixel_fmt_t pixfmt, pixels_t width, pixels_t height);
 int TilerMgr_Free(SSPtr ssptr);
 SSPtr TilerMgr_PageModeAlloc(bytes_t length);
 int TilerMgr_PageModeFree(SSPtr ssptr);

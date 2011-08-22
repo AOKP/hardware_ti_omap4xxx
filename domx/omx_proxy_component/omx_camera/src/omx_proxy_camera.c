@@ -425,7 +425,7 @@ OMX_ERRORTYPE DCC_Init(OMX_HANDLETYPE hComponent)
 	    OMX_ErrorInsufficientResources, "Malloc failed");
 
 	/* Allocate 1D Tiler buffer for 'N'DCC files  */
-	MemReqDescTiler[0].pixelFormat = PIXEL_FMT_PAGE;
+	MemReqDescTiler[0].fmt = PIXEL_FMT_PAGE;
 	MemReqDescTiler[0].dim.len = dccbuf_size;
 	MemReqDescTiler[0].stride = 0;
 	TilerAddr = MemMgr_Alloc(MemReqDescTiler, 1);

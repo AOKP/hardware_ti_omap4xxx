@@ -196,14 +196,14 @@ static bytes_t def_stride(bytes_t width)
  *
  * @author a0194118 (9/4/2009)
  *
- * @param pixelFormat   Pixelformat
+ * @param.fmt   Pixelformat
  *
  * @return Bytes per pixel
  */
-static bytes_t def_bpp(pixel_fmt_t pixelFormat)
+static bytes_t def_bpp(pixel_fmt_t fmt)
 {
-    return (pixelFormat == PIXEL_FMT_32BIT ? 4 :
-            pixelFormat == PIXEL_FMT_16BIT ? 2 : 1);
+    return fmt == PIXEL_FMT_32BIT ? 4 :
+           (fmt == PIXEL_FMT_16BIT ? 2 : 1);
 }
 
 /**
@@ -229,7 +229,7 @@ void fill_mem(uint16_t start, MemAllocBlock *block)
     IN;
     uint16_t *ptr = (uint16_t *)block->ptr, delta = 1, step = 1;
     bytes_t height, width, stride, i;
-    if (block->pixelFormat == PIXEL_FMT_PAGE)
+    if (block->fmt == PIXEL_FMT_PAGE)
     {
         height = 1;
         stride = width = block->dim.len;
@@ -240,7 +240,7 @@ void fill_mem(uint16_t start, MemAllocBlock *block)
         width = block->dim.area.width;
         stride = block->stride;
     }
-    width *= def_bpp(block->pixelFormat);
+    width *= def_bpp(block->fmt);
     bytes_t size = height * stride;
 
     P("(%p,0x%x*0x%x,s=0x%x)=0x%x", block->ptr, width, height, stride, start);
@@ -249,7 +249,7 @@ void fill_mem(uint16_t start, MemAllocBlock *block)
     uint32_t *ptr32 = (uint32_t *)ptr;
     while (height--)
     {
-        if (block->pixelFormat == PIXEL_FMT_32BIT)
+        if (block->fmt == PIXEL_FMT_32BIT)
         {
             for (i = 0; i < width; i += sizeof(uint32_t))
             {
@@ -296,7 +296,7 @@ void fill_mem(uint16_t start, MemAllocBlock *block)
 
         }
     }
-    CHK_P((block->pixelFormat == PIXEL_FMT_32BIT ? (void *)ptr32 : (void *)ptr),==,
+    CHK_P((block->fmt == PIXEL_FMT_32BIT ? (void *)ptr32 : (void *)ptr),==,
           (block->ptr + size));
     OUT;
 }
@@ -317,7 +317,7 @@ int check_mem(uint16_t start, MemAllocBlock *block)
     IN;
     uint16_t *ptr = (uint16_t *)block->ptr, delta = 1, step = 1;
     bytes_t height, width, stride, r, i;
-    if (block->pixelFormat == PIXEL_FMT_PAGE)
+    if (block->fmt == PIXEL_FMT_PAGE)
     {
         height = 1;
         stride = width = block->dim.len;
@@ -328,13 +328,13 @@ int check_mem(uint16_t start, MemAllocBlock *block)
         width = block->dim.area.width;
         stride = block->stride;
     }
-    width *= def_bpp(block->pixelFormat);
+    width *= def_bpp(block->fmt);
 
     CHK_I(width,<=,stride);
     uint32_t *ptr32 = (uint32_t *)ptr;
     for (r = 0; r < height; r++)
     {
-        if (block->pixelFormat == PIXEL_FMT_32BIT)
+        if (block->fmt == PIXEL_FMT_32BIT)
         {
             for (i = 0; i < width; i += sizeof(uint32_t))
             {
@@ -420,7 +420,7 @@ void *alloc_1D(bytes_t length, bytes_t stride, uint16_t val)
     MemAllocBlock block;
     memset(&block, 0, sizeof(block));
 
-    block.pixelFormat = PIXEL_FMT_PAGE;
+    block.fmt = PIXEL_FMT_PAGE;
     block.dim.len = length;
     block.stride = stride;
 
@@ -431,9 +431,9 @@ void *alloc_1D(bytes_t length, bytes_t stride, uint16_t val)
             NOT_I(MemMgr_Is1DBlock(bufPtr),!=,0) ||
             NOT_I(MemMgr_Is2DBlock(bufPtr),==,0) ||
             NOT_I(MemMgr_GetStride(bufPtr),==,block.stride) ||
-            NOT_P(TilerMem_VirtToPhys(bufPtr),==,block.reserved) ||
+            NOT_P(TilerMem_VirtToPhys(bufPtr),==,block.ssptr) ||
             NOT_I(TilerMem_GetStride(TilerMem_VirtToPhys(bufPtr)),==,PAGE_SIZE) ||
-            NOT_L((PAGE_SIZE - 1) & (long)bufPtr,==,(PAGE_SIZE - 1) & block.reserved))
+            NOT_L((PAGE_SIZE - 1) & (long)bufPtr,==,(PAGE_SIZE - 1) & block.ssptr))
         {
             MemMgr_Free(bufPtr);
             return NULL;
@@ -463,7 +463,7 @@ int free_1D(bytes_t length, bytes_t stride, uint16_t val, void *bufPtr)
     MemAllocBlock block;
     memset(&block, 0, sizeof(block));
 
-    block.pixelFormat = PIXEL_FMT_PAGE;
+    block.fmt = PIXEL_FMT_PAGE;
     block.dim.len = length;
     block.stride = stride;
     block.ptr = bufPtr;
@@ -501,7 +501,7 @@ void *alloc_2D(pixels_t width, pixels_t height, pixel_fmt_t fmt, bytes_t stride,
     MemAllocBlock block;
     memset(&block, 0, sizeof(block));
 
-    block.pixelFormat = fmt;
+    block.fmt = fmt;
     block.dim.area.width  = width;
     block.dim.area.height = height;
     block.stride = stride;
@@ -518,9 +518,9 @@ void *alloc_2D(pixels_t width, pixels_t height, pixel_fmt_t fmt, bytes_t stride,
             NOT_I(MemMgr_Is2DBlock(bufPtr),!=,0) ||
             NOT_I(block.stride,!=,0) ||
             NOT_I(MemMgr_GetStride(bufPtr),==,block.stride) ||
-            NOT_P(TilerMem_VirtToPhys(bufPtr),==,block.reserved) ||
+            NOT_P(TilerMem_VirtToPhys(bufPtr),==,block.ssptr) ||
             NOT_I(TilerMem_GetStride(TilerMem_VirtToPhys(bufPtr)),==,cstride) ||
-            NOT_L((PAGE_SIZE - 1) & (long)bufPtr,==,(PAGE_SIZE - 1) & block.reserved))
+            NOT_L((PAGE_SIZE - 1) & (long)bufPtr,==,(PAGE_SIZE - 1) & block.ssptr))
         {
             MemMgr_Free(bufPtr);
             return NULL;
@@ -553,7 +553,7 @@ int free_2D(pixels_t width, pixels_t height, pixel_fmt_t fmt, bytes_t stride,
     MemAllocBlock block;
     memset(&block, 0, sizeof(block));
 
-    block.pixelFormat = fmt;
+    block.fmt = fmt;
     block.dim.area.width  = width;
     block.dim.area.height = height;
     block.stride = def_stride(width * def_bpp(fmt));
@@ -589,10 +589,10 @@ void *alloc_NV12(pixels_t width, pixels_t height, uint16_t val)
     MemAllocBlock blocks[2];
     ZERO(blocks);
 
-    blocks[0].pixelFormat = PIXEL_FMT_8BIT;
+    blocks[0].fmt = PIXEL_FMT_8BIT;
     blocks[0].dim.area.width  = width;
     blocks[0].dim.area.height = height;
-    blocks[1].pixelFormat = PIXEL_FMT_16BIT;
+    blocks[1].fmt = PIXEL_FMT_16BIT;
     blocks[1].dim.area.width  = width >> 1;
     blocks[1].dim.area.height = height >> 1;
 
@@ -611,12 +611,12 @@ void *alloc_NV12(pixels_t width, pixels_t height, uint16_t val)
             NOT_I(blocks[1].stride,!=,0) ||
             NOT_I(MemMgr_GetStride(bufPtr),==,blocks[0].stride) ||
             NOT_I(MemMgr_GetStride(buf2),==,blocks[1].stride) ||
-            NOT_P(TilerMem_VirtToPhys(bufPtr),==,blocks[0].reserved) ||
-            NOT_P(TilerMem_VirtToPhys(buf2),==,blocks[1].reserved) ||
+            NOT_P(TilerMem_VirtToPhys(bufPtr),==,blocks[0].ssptr) ||
+            NOT_P(TilerMem_VirtToPhys(buf2),==,blocks[1].ssptr) ||
             NOT_I(TilerMem_GetStride(TilerMem_VirtToPhys(bufPtr)),==,TILER_STRIDE_8BIT) ||
             NOT_I(TilerMem_GetStride(TilerMem_VirtToPhys(buf2)),==,TILER_STRIDE_16BIT) ||
-            NOT_L((PAGE_SIZE - 1) & (long)blocks[0].ptr,==,(PAGE_SIZE - 1) & blocks[0].reserved) ||
-            NOT_L((PAGE_SIZE - 1) & (long)blocks[1].ptr,==,(PAGE_SIZE - 1) & blocks[1].reserved))
+            NOT_L((PAGE_SIZE - 1) & (long)blocks[0].ptr,==,(PAGE_SIZE - 1) & blocks[0].ssptr) ||
+            NOT_L((PAGE_SIZE - 1) & (long)blocks[1].ptr,==,(PAGE_SIZE - 1) & blocks[1].ssptr))
         {
             MemMgr_Free(bufPtr);
             return NULL;
@@ -651,12 +651,12 @@ int free_NV12(pixels_t width, pixels_t height, uint16_t val, void *bufPtr)
     MemAllocBlock blocks[2];
     memset(blocks, 0, sizeof(blocks));
 
-    blocks[0].pixelFormat = PIXEL_FMT_8BIT;
+    blocks[0].fmt = PIXEL_FMT_8BIT;
     blocks[0].dim.area.width  = width;
     blocks[0].dim.area.height = height;
     blocks[0].stride = def_stride(width);
     blocks[0].ptr = bufPtr;
-    blocks[1].pixelFormat = PIXEL_FMT_16BIT;
+    blocks[1].fmt = PIXEL_FMT_16BIT;
     blocks[1].dim.area.width  = width >> 1;
     blocks[1].dim.area.height = height >> 1;
     blocks[1].stride = def_stride(width);
@@ -697,7 +697,7 @@ void *map_1D(void *dataPtr, bytes_t length, bytes_t stride, uint16_t val)
     MemAllocBlock block;
     memset(&block, 0, sizeof(block));
 
-    block.pixelFormat = PIXEL_FMT_PAGE;
+    block.fmt = PIXEL_FMT_PAGE;
     block.dim.len = length;
     block.stride = stride;
     block.ptr    = dataPtr;
@@ -710,10 +710,10 @@ void *map_1D(void *dataPtr, bytes_t length, bytes_t stride, uint16_t val)
             NOT_I(MemMgr_Is1DBlock(bufPtr),!=,0) ||
             NOT_I(MemMgr_Is2DBlock(bufPtr),==,0) ||
             NOT_I(MemMgr_GetStride(bufPtr),==,block.stride) ||
-            NOT_P(TilerMem_VirtToPhys(bufPtr),==,block.reserved) ||
+            NOT_P(TilerMem_VirtToPhys(bufPtr),==,block.ssptr) ||
             NOT_I(TilerMem_GetStride(TilerMem_VirtToPhys(bufPtr)),==,PAGE_SIZE) ||
             NOT_L((PAGE_SIZE - 1) & (long)bufPtr,==,0) ||
-            NOT_L((PAGE_SIZE - 1) & block.reserved,==,0))
+            NOT_L((PAGE_SIZE - 1) & block.ssptr,==,0))
         {
             MemMgr_UnMap(bufPtr);
             return NULL;
@@ -747,7 +747,7 @@ int unmap_1D(void *dataPtr, bytes_t length, bytes_t stride, uint16_t val, void *
     MemAllocBlock block;
     memset(&block, 0, sizeof(block));
 
-    block.pixelFormat = PIXEL_FMT_PAGE;
+    block.fmt = PIXEL_FMT_PAGE;
     block.dim.len = length;
     block.stride = stride;
     block.ptr = dataPtr;
@@ -1205,30 +1205,30 @@ int star_test(uint32_t num_ops, uint16_t num_slots)
                     switch (mem[ix].op)
                     {
                     case 0: case 1:
-                        blk.pixelFormat = PIXEL_FMT_PAGE;
+                        blk.fmt = PIXEL_FMT_PAGE;
                         blk.dim.len = mem[ix].length;
                         break;
                     case 5:
-                        blk.pixelFormat = PIXEL_FMT_16BIT;
+                        blk.fmt = PIXEL_FMT_16BIT;
                         blk.dim.area.width = mem[ix].width >> 1;
                         blk.dim.area.height = mem[ix].height >> 1;
                         blk.stride = def_stride(mem[ix].width);  /* same for Y and UV */
                         blk.ptr = mem[ix].bufPtr + mem[ix].height * blk.stride;
                         check_mem(mem[ix].val, &blk);
                     case 2:
-                        blk.pixelFormat = PIXEL_FMT_8BIT;
+                        blk.fmt = PIXEL_FMT_8BIT;
                         blk.dim.area.width = mem[ix].width;
                         blk.dim.area.height = mem[ix].height;
                         blk.stride = def_stride(mem[ix].width);
                         break;
                     case 3:
-                        blk.pixelFormat = PIXEL_FMT_16BIT;
+                        blk.fmt = PIXEL_FMT_16BIT;
                         blk.dim.area.width = mem[ix].width;
                         blk.dim.area.height = mem[ix].height;
                         blk.stride = def_stride(mem[ix].width * 2);
                         break;
                     case 4:
-                        blk.pixelFormat = PIXEL_FMT_32BIT;
+                        blk.fmt = PIXEL_FMT_32BIT;
                         blk.dim.area.width = mem[ix].width;
                         blk.dim.area.height = mem[ix].height;
                         blk.stride = def_stride(mem[ix].width * 4);
@@ -1406,14 +1406,14 @@ int neg_alloc_tests()
         blk = block + num_blocks - 1;
 
         P("/* bad pixel format */");
-        blk->pixelFormat = PIXEL_FMT_MIN - 1;
+        blk->fmt = -1;
         blk->dim.len = PAGE_SIZE;
         ret |= NEGA(MemMgr_Alloc(block, num_blocks));
-        blk->pixelFormat = PIXEL_FMT_MAX + 1;
+        blk->fmt = PIXEL_FMT_MAX + 1;
         ret |= NEGA(MemMgr_Alloc(block, num_blocks));
 
         P("/* bad 1D stride */");
-        blk->pixelFormat = PIXEL_FMT_PAGE;
+        blk->fmt = PIXEL_FMT_PAGE;
         blk->stride = PAGE_SIZE - 1;
         ret |= NEGA(MemMgr_Alloc(block, num_blocks));
 
@@ -1422,7 +1422,7 @@ int neg_alloc_tests()
         ret |= NEGA(MemMgr_Alloc(block, num_blocks));
 
         P("/* bad 2D stride */");
-        blk->pixelFormat = PIXEL_FMT_8BIT;
+        blk->fmt = PIXEL_FMT_8BIT;
         blk->dim.area.width = PAGE_SIZE - 1;
         blk->stride = PAGE_SIZE - 1;
         blk->dim.area.height = 16;
@@ -1441,7 +1441,7 @@ int neg_alloc_tests()
         blk->dim.area.height = 16;
     }
 
-    block[0].pixelFormat = block[1].pixelFormat = PIXEL_FMT_8BIT;
+    block[0].fmt = block[1].fmt = PIXEL_FMT_8BIT;
     block[0].dim.area.width = 16384;
     block[0].dim.area.height = block[1].dim.area.width = 16;
     block[1].dim.area.height = 8192;
@@ -1509,14 +1509,14 @@ int neg_map_tests()
         blk = block + num_blocks - 1;
 
         P("/* bad pixel format */");
-        blk->pixelFormat = PIXEL_FMT_MIN - 1;
+        blk->fmt = -1;
         blk->dim.len = PAGE_SIZE;
         ret |= NEGM(MemMgr_Map(block, num_blocks));
-        blk->pixelFormat = PIXEL_FMT_MAX + 1;
+        blk->fmt = PIXEL_FMT_MAX + 1;
         ret |= NEGM(MemMgr_Map(block, num_blocks));
 
         P("/* bad 1D stride */");
-        blk->pixelFormat = PIXEL_FMT_PAGE;
+        blk->fmt = PIXEL_FMT_PAGE;
         blk->stride = PAGE_SIZE - 1;
         ret |= NEGM(MemMgr_Map(block, num_blocks));
 
@@ -1525,7 +1525,7 @@ int neg_map_tests()
         ret |= NEGM(MemMgr_Map(block, num_blocks));
 
         P("/* bad 2D stride */");
-        blk->pixelFormat = PIXEL_FMT_8BIT;
+        blk->fmt = PIXEL_FMT_8BIT;
         blk->dim.area.width = PAGE_SIZE - 1;
         blk->stride = PAGE_SIZE - 1;
         blk->dim.area.height = 16;
@@ -1551,7 +1551,7 @@ int neg_map_tests()
     ret |= NEGM(MemMgr_Map(block, 1));
 
     P("/* 1 1D buffer with no address */");
-    block[0].pixelFormat = PIXEL_FMT_PAGE;
+    block[0].fmt = PIXEL_FMT_PAGE;
     block[0].dim.len = 2 * PAGE_SIZE;
     block[0].ptr = NULL;
     ret |= NEGM(MemMgr_Map(block, 1));

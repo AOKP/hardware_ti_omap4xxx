@@ -39,6 +39,7 @@
 /* for bool definition */
 #include <stdbool.h>
 #include <stdint.h>
+#include <tiler.h>
 
 /** ---------------------------------------------------------------------------
  * Type definitions
@@ -59,18 +60,16 @@ typedef uint16_t pixels_t;
  * Pixel format
  *
  * Page mode is encoded in the pixel format to handle different
- * set of buffers uniformly
+ * set of buffers uniformly.
  */
-enum pixel_fmt_t {
-    PIXEL_FMT_MIN   = 0,
-    PIXEL_FMT_8BIT  = 0,
-    PIXEL_FMT_16BIT = 1,
-    PIXEL_FMT_32BIT = 2,
-    PIXEL_FMT_PAGE  = 3,
-    PIXEL_FMT_MAX   = 3
-};
 
-typedef enum pixel_fmt_t pixel_fmt_t;
+#define PIXEL_FMT_8BIT  TILFMT_8BIT
+#define PIXEL_FMT_16BIT TILFMT_16BIT
+#define PIXEL_FMT_32BIT TILFMT_32BIT
+#define PIXEL_FMT_PAGE  TILFMT_PAGE
+#define PIXEL_FMT_MAX   TILFMT_MAX
+
+typedef enum tiler_fmt pixel_fmt_t;
 
 /**
  * Ducati Space Virtual Address Pointer

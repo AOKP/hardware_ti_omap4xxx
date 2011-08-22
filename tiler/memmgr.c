@@ -48,6 +48,7 @@
 #define BUF_MAPPED  2
 #define BUF_ANY     ~0
 
+#include <mem_types.h>
 #include <tiler.h>
 
 typedef struct tiler_block_info tiler_block_info;
@@ -65,6 +66,12 @@ typedef struct tiler_block_info tiler_block_info;
 #include "tilermem.h"
 #include "tilermem_utils.h"
 #include "memmgr.h"
+
+#ifdef HEAPTRACKER
+extern void print_backtrace(const intptr_t *bt, int depth);
+#else
+static void print_backtrace(const intptr_t *bt, int depth) {}
+#endif
 
 /* list of allocations */
 struct _AllocData {
@@ -510,11 +517,16 @@ static void *tiler_mmap(struct tiler_block_info *blks, int num_blocks,
     /* register buffer with tiler */
     struct tiler_buf_info buf;
     buf.num_blocks = num_blocks;
+
+    if (num_blocks > TILER_MAX_NUM_BLOCKS)
+        return NULL;
+
     /* work on copy in buf */
     memcpy(buf.blocks, blks, sizeof(tiler_block_info) * num_blocks);
 #ifndef STUB_TILER
     dump_buf(&buf, "==(RBUF)=>");
     int ret = ioctl(td, TILIOC_RBUF, &buf);
+    print_backtrace(NULL, 0);
     dump_buf(&buf, "<=(RBUF)==");
     if (NOT_I(ret,==,0)) return NULL;
     size = buf.length;
@@ -573,6 +585,7 @@ static void *tiler_mmap(struct tiler_block_info *blks, int num_blocks,
         NOT_I(buf_cache_add(&buf, buf_type),==,0))
     {
 #ifndef STUB_TILER
+        print_backtrace(NULL, 0);
         A_I(ioctl(td, TILIOC_URBUF, &buf),==,0);
 #else
         FREE(buf_c);
@@ -600,12 +613,10 @@ static void *tiler_mmap(struct tiler_block_info *blks, int num_blocks,
  *                       sized (fit on whole pages).
  * @return 0 on success, non-0 error value on failure.
  */
-static int check_block(tiler_block_info *blk, bool is_page_sized)
+static int check_block(const tiler_block_info *blk, bool is_page_sized)
 {
     /* check pixelformat */
-    if (NOT_I(blk->fmt,>=,PIXEL_FMT_MIN) ||
-        NOT_I(blk->fmt,<=,PIXEL_FMT_MAX)) return MEMMGR_ERR_GENERIC;
-
+    if (NOT_I(blk->fmt,<=,PIXEL_FMT_MAX)) return MEMMGR_ERR_GENERIC;
 
     if (blk->fmt == PIXEL_FMT_PAGE)
     {   /* check 1D buffers */
@@ -649,7 +660,7 @@ static int check_block(tiler_block_info *blk, bool is_page_sized)
  *
  * @return 0 on success, non-0 error value on failure.
  */
-static int check_blocks(struct tiler_block_info *blks, int num_blocks,
+static int check_blocks(const struct tiler_block_info *blks, int num_blocks,
                  int num_pagesize_blocks)
 {
     /* check arguments */
@@ -660,7 +671,7 @@ static int check_blocks(struct tiler_block_info *blks, int num_blocks,
     int ix;
     for (ix = 0; ix < num_blocks; ix++)
     {
-        struct tiler_block_info *blk = blks + ix;
+        const struct tiler_block_info *blk = blks + ix;
         CHK_I(blk->ssptr,==,0);
         CHK_I(blk->id,==,0);
         int ret = check_block(blk, ix < num_pagesize_blocks);
@@ -714,7 +725,7 @@ void *MemMgr_Alloc(MemAllocBlock blocks[], int num_blocks)
     void *bufPtr = NULL;
 
     /* need to access ssptrs */
-    struct tiler_block_info *blks = (tiler_block_info *) blocks;
+    struct tiler_block_info *blks = blocks;
 
     /* check block allocation params, and state */
     if (NOT_I(check_blocks(blks, num_blocks, num_blocks - 1),==,0) ||
@@ -769,6 +780,7 @@ int MemMgr_Free(void *bufPtr)
     {
 #ifndef STUB_TILER
         dump_buf(&buf, "==(URBUF)=>");
+        print_backtrace(NULL, 0);
         ret = A_I(ioctl(td, TILIOC_URBUF, &buf),==,0);
         dump_buf(&buf, "<=(URBUF)==");
 
@@ -808,7 +820,7 @@ void *MemMgr_Map(MemAllocBlock blocks[], int num_blocks)
 
     /* we only map 1 page aligned 1D buffer for now */
     if (NOT_I(num_blocks,==,1) ||
-        NOT_I(blocks[0].pixelFormat,==,PIXEL_FMT_PAGE) ||
+        NOT_I(blocks[0].fmt,==,PIXEL_FMT_PAGE) ||
         NOT_I(blocks[0].dim.len & (PAGE_SIZE - 1),==,0) ||
 #ifdef STUB_TILER
         NOT_I(MemMgr_IsMapped(blocks[0].ptr),==,0) ||
@@ -867,6 +879,7 @@ int MemMgr_UnMap(void *bufPtr)
     {
 #ifndef STUB_TILER
         dump_buf(&buf, "==(URBUF)=>");
+        print_backtrace(NULL, 0);
         ret = A_I(ioctl(td, TILIOC_URBUF, &buf),==,0);
         dump_buf(&buf, "<=(URBUF)==");
 

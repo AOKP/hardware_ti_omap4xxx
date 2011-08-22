@@ -41,9 +41,6 @@ namespace android {
 #define ALLOCATION_2D 2
 
 ///Utility Macro Declarations
-#define ZERO_OUT_ARR(a,b) { for(unsigned int i=0;i<b;i++) a[i]=NULL;}
-
-#define ZERO_OUT_STRUCT(a, b) memset(a, 0, sizeof(b));
 
 /*--------------------MemoryManager Class STARTS here-----------------------------*/
 void* MemoryManager::allocateBuffer(int width, int height, const char* format, int &bytes, int numBufs)
@@ -53,11 +50,11 @@ void* MemoryManager::allocateBuffer(int width, int height, const char* format, i
     ///the buffers
     const uint numArrayEntriesC = (uint)(numBufs+1);
 
-    MemAllocBlock *tMemBlock;
-
+    MemAllocBlock tMemBlock[ALLOCATION_2D];
+    memset(tMemBlock, 0, sizeof(MemAllocBlock));
 
     ///Allocate a buffer array
-    uint32_t *bufsArr = new uint32_t[numArrayEntriesC];
+    uint32_t *bufsArr = new uint32_t [numArrayEntriesC];
     if(!bufsArr)
         {
         CAMHAL_LOGEB("Allocation failed when creating buffers array of %d uint32_t elements", numArrayEntriesC);
@@ -67,27 +64,16 @@ void* MemoryManager::allocateBuffer(int width, int height, const char* format, i
 
     ///Initialize the array with zeros - this will help us while freeing the array in case of error
     ///If a value of an array element is NULL, it means we didnt allocate it
-    ZERO_OUT_ARR(bufsArr, numArrayEntriesC);
+    memset(bufsArr, 0, sizeof(*bufsArr) * numArrayEntriesC);
 
     ///If the bytes field is not zero, it means it is a 1-D tiler buffer request (possibly for image capture bit stream buffer)
     if(bytes!=0)
         {
-        ///MemAllocBlock is the structure that describes the buffer alloc request to MemMgr
-        tMemBlock = (MemAllocBlock*)malloc(sizeof(MemAllocBlock));
-
-        if(!tMemBlock)
-            {
-            delete [] bufsArr;
-            return NULL;
-            }
-
-        ZERO_OUT_STRUCT(tMemBlock, MemAllocBlock );
-
         ///1D buffers
         for (int i = 0; i < numBufs; i++)
             {
             tMemBlock->dim.len = bytes;
-            tMemBlock->pixelFormat = PIXEL_FMT_PAGE;
+            tMemBlock->fmt = PIXEL_FMT_PAGE;
             tMemBlock->stride = 0;
             CAMHAL_LOGDB("requested bytes = %d", bytes);
             CAMHAL_LOGDB("tMemBlock.dim.len = %d", tMemBlock->dim.len);
@@ -107,16 +93,6 @@ void* MemoryManager::allocateBuffer(int width, int height, const char* format, i
     else ///If bytes is not zero, then it is a 2-D tiler buffer request
         {
         ///2D buffers
-        ///MemAllocBlock is the structure that describes the buffer alloc request to MemMgr
-        tMemBlock = (MemAllocBlock*)malloc(sizeof(MemAllocBlock)*ALLOCATION_2D);
-
-        if(!tMemBlock)
-            {
-            delete [] bufsArr;
-            return NULL;
-            }
-
-        memset(tMemBlock, 0, sizeof(MemAllocBlock)*ALLOCATION_2D);
 
         for (int i = 0; i < numBufs; i++)
             {
@@ -129,7 +105,6 @@ void* MemoryManager::allocateBuffer(int width, int height, const char* format, i
                 ///YUV422I format
                 pixelFormat[0] = PIXEL_FMT_16BIT;
                 stride[0] = STRIDE_16BIT;
-                numAllocs = 1;
                 }
             else if(!strcmp(format,(const char *) CameraParameters::PIXEL_FORMAT_YUV420SP))
                 {
@@ -145,14 +120,12 @@ void* MemoryManager::allocateBuffer(int width, int height, const char* format, i
                 ///RGB 565 format
                 pixelFormat[0] = PIXEL_FMT_16BIT;
                 stride[0] = STRIDE_16BIT;
-                numAllocs = 1;
                 }
             else if(!strcmp(format,(const char *) TICameraParameters::PIXEL_FORMAT_RAW))
                 {
                 ///RAW format
                 pixelFormat[0] = PIXEL_FMT_16BIT;
                 stride[0] = STRIDE_16BIT;
-                numAllocs = 1;
                 }
             else
                 {
@@ -167,7 +140,7 @@ void* MemoryManager::allocateBuffer(int width, int height, const char* format, i
 
             for(int index=0;index<numAllocs;index++)
                 {
-                tMemBlock[index].pixelFormat = pixelFormat[index];
+                tMemBlock[index].fmt = pixelFormat[index];
                 tMemBlock[index].stride = stride[index];
                 tMemBlock[index].dim.area.width=  width;/*width*/
                 tMemBlock[index].dim.area.height=  height;/*height*/
@@ -184,14 +157,9 @@ void* MemoryManager::allocateBuffer(int width, int height, const char* format, i
                 CAMHAL_LOGDB("Allocated Tiler PAGED mode buffer address[%x]", bufsArr[i]);
                 }
             }
-
         }
 
         LOG_FUNCTION_NAME_EXIT;
-
-
-        ///Free the request structure before returning from the function
-        free(tMemBlock);
 
         return (void*)bufsArr;
 

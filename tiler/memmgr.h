@@ -83,27 +83,10 @@
  *
  * @author a0194118 (9/1/2009)
  */
-struct MemAllocBlock {
-    pixel_fmt_t pixelFormat; /* pixel format */
-    union {
-        struct {
-            pixels_t width;  /* width of 2D buffer */
-            pixels_t height; /* height of 2D buffer */
-        } area;
-        bytes_t  len;        /* length of 1D buffer.  Must be multiple of
-                                stride if stride is not 0. */
-    } dim;
-    uint32_t stride;    /* must be multiple of page size.  Can be 0 only
-                           if pixelFormat is PIXEL_FMT_PAGE. */
-    void    *ptr;       /* pointer to beginning of buffer */
-    uint32_t id;        /* buffer ID - received at allocation */
-    uint32_t key;       /* buffer key - given at allocation */
-    uint32_t group_id;  /* group ID */
-    /* alignment requirements for ssptr: ssptr & (align - 1) == offs */
-    uint32_t reserved;  /* system space address (used internally) */
-};
 
-typedef struct MemAllocBlock MemAllocBlock;
+#include <tiler.h>
+
+typedef struct tiler_block_info MemAllocBlock;
 
 /**
  * Returns the page size.  This is required for allocating 1D

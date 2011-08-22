@@ -9,6 +9,7 @@ LOCAL_MODULE := libtimemmgr
 LOCAL_MODULE_TAGS := optional tests
 include $(BUILD_HEAPTRACKED_SHARED_LIBRARY)
 
+ifeq (0,1)
 include $(CLEAR_VARS)
 LOCAL_SRC_FILES := memmgr_test.c testlib.c
 LOCAL_SHARED_LIBRARIES := libtimemmgr
@@ -29,5 +30,6 @@ LOCAL_SHARED_LIBRARIES := libtimemmgr
 LOCAL_MODULE    := tiler_ptest
 LOCAL_MODULE_TAGS:= tests
 include $(BUILD_HEAPTRACKED_EXECUTABLE)
+endif
 
 endif
