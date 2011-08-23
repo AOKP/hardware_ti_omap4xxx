@@ -329,7 +329,9 @@ static void copy2Dto1D(void *dst,
     bounds.bottom = height;
 
     // get the y & uv pointers from the gralloc handle;
-    mapper.lock((buffer_handle_t)src, GRALLOC_USAGE_SW_READ_OFTEN, bounds, y_uv);
+    mapper.lock((buffer_handle_t)src,
+                GRALLOC_USAGE_SW_READ_RARELY | GRALLOC_USAGE_SW_WRITE_NEVER,
+                bounds, y_uv);
 
     CAMHAL_LOGDB("copy2Dto1D() y= %p ; uv=%p.",y_uv[0],y_uv[1]);
     CAMHAL_LOGDB("pixelFormat,= %d; offset=%d",*pixelFormat,offset);
