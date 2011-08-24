@@ -223,7 +223,8 @@ typedef enum OMX_TI_INDEXTYPE {
     OMX_TI_IndexParamZslHistoryLen,                     /**< reference: OMX_TI_PARAM_ZSLHISTORYLENTYPE */
     OMX_TI_IndexConfigZslDelay,                          /**< reference: OMX_TI_CONFIG_ZSLDELAYTYPE */
     OMX_TI_IndexParamMetaDataBufferInfo,                  /***< reference: OMX_TI_PARAM_METADATABUFFERINFO */
-    OMX_TI_IndexConfigZslFrameSelectMethod              /**< reference: OMX_TI_CONFIG_ZSLFRAMESELECTMETHODTYPE */
+    OMX_TI_IndexConfigZslFrameSelectMethod,              /**< reference: OMX_TI_CONFIG_ZSLFRAMESELECTMETHODTYPE */
+    OMX_TI_IndexAndroidNativeBufferUsage          /**< reference: OMX_TI_IndexAndroidNativeBufferUsage */
 } OMX_TI_INDEXTYPE;
 
 

@@ -103,8 +103,10 @@ extern "C"
                   OMX_ErrorBadParameter, "Incorrect nSize"); \
     PROXY_require(((((_sName_ *)_pStruct_)->nVersion.s.nVersionMajor == \
                   OMX_VER_MAJOR) && \
+                  ((((_sName_ *)_pStruct_)->nVersion.s.nVersionMinor == \
+                  OMX_VER_MINOR) || \
                   (((_sName_ *)_pStruct_)->nVersion.s.nVersionMinor == \
-                  OMX_VER_MINOR)), \
+                  0))), \
                   OMX_ErrorVersionMismatch, NULL); \
     } while(0)
 

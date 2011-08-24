@@ -91,6 +91,9 @@ OMX_ERRORTYPE PROXY_VIDDEC_EventHandler(OMX_HANDLETYPE hComponent,
 
 #endif //SET_STRIDE_PADDING_FROM_PROXY
 
+OMX_ERRORTYPE PROXY_VIDDEC_GetExtensionIndex(OMX_IN OMX_HANDLETYPE hComponent,
+    OMX_IN OMX_STRING cParameterName, OMX_OUT OMX_INDEXTYPE * pIndexType);
+
 #ifdef ANDROID_QUIRK_CHANGE_PORT_VALUES
 
 OMX_ERRORTYPE PROXY_VIDDEC_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
@@ -185,6 +188,8 @@ OMX_ERRORTYPE OMX_ProxyViddecInit(OMX_HANDLETYPE hComponent)
 	pHandle->SetParameter = PROXY_VIDDEC_SetParameter;		
         pHandle->GetParameter = PROXY_VIDDEC_GetParameter;
 #endif
+	pHandle->GetExtensionIndex = PROXY_VIDDEC_GetExtensionIndex;
+
 #ifdef  SET_STRIDE_PADDING_FROM_PROXY
         pHandle->SendCommand = PROXY_VIDDEC_SendCommand;
 	pComponentPrivate->proxyEventHandler = PROXY_VIDDEC_EventHandler;
@@ -244,6 +249,53 @@ OMX_ERRORTYPE OMX_ProxyViddecInit(OMX_HANDLETYPE hComponent)
 	return eError;
 }
 
+/* ===========================================================================*/
+/**
+ * @name PROXY_VIDDEC_GetExtensionIndex()
+ * @brief
+ * @param void
+ * @return OMX_ErrorNone = Successful
+ * @sa TBD
+ *
+ */
+/* ===========================================================================*/
+OMX_ERRORTYPE PROXY_VIDDEC_GetExtensionIndex(OMX_IN OMX_HANDLETYPE hComponent,
+		OMX_IN OMX_STRING cParameterName, OMX_OUT OMX_INDEXTYPE * pIndexType)
+{
+	OMX_ERRORTYPE eError = OMX_ErrorNone;
+	PROXY_COMPONENT_PRIVATE *pCompPrv = NULL;
+	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
+
+	PROXY_require((hComp->pComponentPrivate != NULL), OMX_ErrorBadParameter, NULL);
+	PROXY_require(cParameterName != NULL, OMX_ErrorBadParameter, NULL);
+	PROXY_require(pIndexType != NULL, OMX_ErrorBadParameter, NULL);
+
+	DOMX_ENTER("hComponent = %p, cParameterName = %p", hComponent, cParameterName);
+
+#ifdef ENABLE_GRALLOC_BUFFERS
+	// Ensure that String length is not greater than Max allowed length
+	PROXY_require(strlen(cParameterName) <= 127, OMX_ErrorBadParameter, NULL);
+
+	if (strcmp(cParameterName, "OMX.google.android.index.getAndroidNativeBufferUsage") == 0)
+	{
+		*pIndexType = (OMX_INDEXTYPE) OMX_TI_IndexAndroidNativeBufferUsage;
+	}
+	else
+	{
+		eError = PROXY_GetExtensionIndex(hComponent, cParameterName, pIndexType);
+		PROXY_assert(eError == OMX_ErrorNone,
+		    eError," Error in PROXY_GetExtensionIndex");
+	}
+#else
+	eError = PROXY_GetExtensionIndex(hComponent, cParameterName, pIndexType);
+	PROXY_assert(eError == OMX_ErrorNone,
+		eError," Error in PROXY_GetExtensionIndex");
+#endif
+	EXIT:
+	DOMX_EXIT("eError: %d", eError);
+	return eError;
+}
+
 #ifdef  ANDROID_QUIRK_CHANGE_PORT_VALUES
 
 /* ===========================================================================*/
@@ -262,8 +314,9 @@ OMX_ERRORTYPE PROXY_VIDDEC_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 	OMX_ERRORTYPE eError = OMX_ErrorNone;
 	PROXY_COMPONENT_PRIVATE *pCompPrv = NULL;
 	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
-	OMX_PARAM_PORTDEFINITIONTYPE* pPortDef = (OMX_PARAM_PORTDEFINITIONTYPE *)pParamStruct;
-	OMX_VIDEO_PARAM_PORTFORMATTYPE* pPortParam = (OMX_VIDEO_PARAM_PORTFORMATTYPE *)pParamStruct;
+	OMX_PARAM_PORTDEFINITIONTYPE* pPortDef = NULL;
+	OMX_VIDEO_PARAM_PORTFORMATTYPE* pPortParam = NULL;
+	OMX_TI_PARAMNATIVEBUFFERUSAGE *pUsage = NULL;
 
 	PROXY_require((pParamStruct != NULL), OMX_ErrorBadParameter, NULL);
 	PROXY_assert((hComp->pComponentPrivate != NULL),
@@ -275,12 +328,26 @@ OMX_ERRORTYPE PROXY_VIDDEC_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 	    ("hComponent = %p, pCompPrv = %p, nParamIndex = %d, pParamStruct = %p",
 	    hComponent, pCompPrv, nParamIndex, pParamStruct);
 
+#ifdef ENABLE_GRALLOC_BUFFERS
+	if( nParamIndex == OMX_TI_IndexAndroidNativeBufferUsage)
+	{
+		pUsage = (OMX_TI_PARAMNATIVEBUFFERUSAGE*)pParamStruct;
+		if(pCompPrv->proxyPortBuffers[pUsage->nPortIndex].proxyBufferType == GrallocPointers)
+		{
+			PROXY_CHK_VERSION(pParamStruct, OMX_TI_PARAMNATIVEBUFFERUSAGE);
+			pUsage->nUsage = GRALLOC_USAGE_HW_RENDER;
+			goto EXIT;
+		}
+	}
+#endif
 	eError = PROXY_GetParameter(hComponent,nParamIndex, pParamStruct);
 	PROXY_assert(eError == OMX_ErrorNone,
 		    eError," Error in Proxy GetParameter");
 
 	if( nParamIndex == OMX_IndexParamPortDefinition)
 	{
+		PROXY_CHK_VERSION(pParamStruct, OMX_PARAM_PORTDEFINITIONTYPE);
+		pPortDef = (OMX_PARAM_PORTDEFINITIONTYPE *)pParamStruct;
 		if(pPortDef->format.video.eColorFormat == OMX_COLOR_FormatYUV420PackedSemiPlanar)
 		{
 			if(pCompPrv->proxyPortBuffers[pPortDef->nPortIndex].proxyBufferType == GrallocPointers)
@@ -295,9 +362,11 @@ OMX_ERRORTYPE PROXY_VIDDEC_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 	}
 	else if ( nParamIndex == OMX_IndexParamVideoPortFormat)
 	{
+		PROXY_CHK_VERSION(pParamStruct, OMX_VIDEO_PARAM_PORTFORMATTYPE);
+		pPortParam = (OMX_VIDEO_PARAM_PORTFORMATTYPE *)pParamStruct;
 		if(pPortParam->eColorFormat == OMX_COLOR_FormatYUV420PackedSemiPlanar)
-            {
-			if(pCompPrv->proxyPortBuffers[pPortDef->nPortIndex].proxyBufferType == GrallocPointers)
+		{
+			if(pCompPrv->proxyPortBuffers[pPortParam->nPortIndex].proxyBufferType == GrallocPointers)
 			{
 				pPortParam->eColorFormat = HAL_NV12_PADDED_PIXEL_FORMAT;
 			}
@@ -305,7 +374,7 @@ OMX_ERRORTYPE PROXY_VIDDEC_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 			{
 				pPortParam->eColorFormat = OMX_TI_COLOR_FormatYUV420PackedSemiPlanar;
 			}
-            }
+		}
 	}
 
       EXIT:

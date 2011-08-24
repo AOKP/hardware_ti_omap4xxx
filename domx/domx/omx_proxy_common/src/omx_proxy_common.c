@@ -1342,8 +1342,8 @@ OMX_ERRORTYPE PROXY_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
  */
 /* ===========================================================================*/
 OMX_ERRORTYPE __PROXY_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
-	OMX_IN OMX_INDEXTYPE nParamIndex, OMX_INOUT OMX_PTR pParamStruct,
-	OMX_PTR pLocBufNeedMap)
+		OMX_IN OMX_INDEXTYPE nParamIndex, OMX_INOUT OMX_PTR pParamStruct,
+		OMX_PTR pLocBufNeedMap)
 {
 	OMX_ERRORTYPE eError = OMX_ErrorNone, eCompReturn = OMX_ErrorNone;
 	RPC_OMX_ERRORTYPE eRPCError = RPC_OMX_ErrorNone;
@@ -1352,21 +1352,21 @@ OMX_ERRORTYPE __PROXY_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 
 	PROXY_require((pParamStruct != NULL), OMX_ErrorBadParameter, NULL);
 	PROXY_assert((hComp->pComponentPrivate != NULL),
-	    OMX_ErrorBadParameter, NULL);
+			OMX_ErrorBadParameter, NULL);
 
 	pCompPrv = (PROXY_COMPONENT_PRIVATE *) hComp->pComponentPrivate;
 
 	DOMX_ENTER
-	    ("hComponent = %p, pCompPrv = %p, nParamIndex = %d, pParamStruct = %p",
-	    hComponent, pCompPrv, nParamIndex, pParamStruct);
+		("hComponent = %p, pCompPrv = %p, nParamIndex = %d, pParamStruct = %p",
+		 hComponent, pCompPrv, nParamIndex, pParamStruct);
 
 	eRPCError =
 		RPC_GetParameter(pCompPrv->hRemoteComp, nParamIndex, pParamStruct,
-			pLocBufNeedMap, &eCompReturn);
+				pLocBufNeedMap, &eCompReturn);
 
 	PROXY_checkRpcError();
 
-      EXIT:
+EXIT:
 	DOMX_EXIT("eError: %d index: 0x%x", eError, nParamIndex);
 	return eError;
 }
