@@ -74,6 +74,9 @@ namespace android {
 #define EXIF_MAKE_SIZE              100
 #define EXIF_DATE_TIME_SIZE         20
 
+#define GPS_MIN_DIV                 60
+#define GPS_SEC_DIV                 60
+#define GPS_SEC_ACCURACY            1000
 #define GPS_TIMESTAMP_SIZE          6
 #define GPS_DATESTAMP_SIZE          11
 #define GPS_REF_SIZE                2
@@ -255,10 +258,10 @@ public:
     class GPSData
     {
         public:
-                int mLongDeg, mLongMin, mLongSec;
+                int mLongDeg, mLongMin, mLongSec, mLongSecDiv;
                 char mLongRef[GPS_REF_SIZE];
                 bool mLongValid;
-                int mLatDeg, mLatMin, mLatSec;
+                int mLatDeg, mLatMin, mLatSec, mLatSecDiv;
                 char mLatRef[GPS_REF_SIZE];
                 bool mLatValid;
                 int mAltitude;
@@ -415,7 +418,7 @@ private:
     //EXIF
     status_t setParametersEXIF(const CameraParameters &params,
                                BaseCameraAdapter::AdapterState state);
-    status_t convertGPSCoord(double coord, int *deg, int *min, int *sec);
+    status_t convertGPSCoord(double coord, int &deg, int &min, int &sec, int &secDivisor);
     status_t setupEXIF();
 
     //Focus functionality

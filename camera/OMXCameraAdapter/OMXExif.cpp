@@ -46,9 +46,11 @@ status_t OMXCameraAdapter::setParametersEXIF(const CameraParameters &params,
         {
         gpsPos = strtod(valstr, NULL);
 
-        if ( convertGPSCoord( gpsPos, &mEXIFData.mGPSData.mLatDeg,
-                                        &mEXIFData.mGPSData.mLatMin,
-                                        &mEXIFData.mGPSData.mLatSec ) == NO_ERROR )
+        if ( convertGPSCoord(gpsPos,
+                             mEXIFData.mGPSData.mLatDeg,
+                             mEXIFData.mGPSData.mLatMin,
+                             mEXIFData.mGPSData.mLatSec,
+                             mEXIFData.mGPSData.mLatSecDiv ) == NO_ERROR )
             {
 
             if ( 0 < gpsPos )
@@ -76,9 +78,11 @@ status_t OMXCameraAdapter::setParametersEXIF(const CameraParameters &params,
         {
         gpsPos = strtod(valstr, NULL);
 
-        if ( convertGPSCoord( gpsPos, &mEXIFData.mGPSData.mLongDeg,
-                                        &mEXIFData.mGPSData.mLongMin,
-                                        &mEXIFData.mGPSData.mLongSec ) == NO_ERROR )
+        if ( convertGPSCoord(gpsPos,
+                             mEXIFData.mGPSData.mLongDeg,
+                             mEXIFData.mGPSData.mLongMin,
+                             mEXIFData.mGPSData.mLongSec,
+                             mEXIFData.mGPSData.mLongSecDiv) == NO_ERROR )
             {
 
             if ( 0 < gpsPos )
@@ -406,7 +410,7 @@ status_t OMXCameraAdapter::setupEXIF()
             exifTags->ulGpsLatitude[4] = abs(mEXIFData.mGPSData.mLatSec);
             exifTags->ulGpsLatitude[1] = 1;
             exifTags->ulGpsLatitude[3] = 1;
-            exifTags->ulGpsLatitude[5] = 1;
+            exifTags->ulGpsLatitude[5] = abs(mEXIFData.mGPSData.mLatSecDiv);
             exifTags->eStatusGpsLatitude = OMX_TI_TagUpdated;
             }
 
@@ -426,7 +430,7 @@ status_t OMXCameraAdapter::setupEXIF()
             exifTags->ulGpsLongitude[4] = abs(mEXIFData.mGPSData.mLongSec);
             exifTags->ulGpsLongitude[1] = 1;
             exifTags->ulGpsLongitude[3] = 1;
-            exifTags->ulGpsLongitude[5] = 1;
+            exifTags->ulGpsLongitude[5] = abs(mEXIFData.mGPSData.mLongSecDiv);
             exifTags->eStatusGpsLongitude = OMX_TI_TagUpdated;
             }
 
@@ -531,7 +535,11 @@ status_t OMXCameraAdapter::setupEXIF()
     return ret;
 }
 
-status_t OMXCameraAdapter::convertGPSCoord(double coord, int *deg, int *min, int *sec)
+status_t OMXCameraAdapter::convertGPSCoord(double coord,
+                                           int &deg,
+                                           int &min,
+                                           int &sec,
+                                           int &secDivisor)
 {
     double tmp;
 
@@ -544,20 +552,21 @@ status_t OMXCameraAdapter::convertGPSCoord(double coord, int *deg, int *min, int
         return -EINVAL;
     }
 
-    *deg = (int) floor(fabs(coord));
-    tmp = ( fabs(coord) - floor(fabs(coord)) )*60;
-    *min = (int) floor(tmp);
-    tmp = ( tmp - floor(tmp) )*60;
-    *sec = (int) floor(tmp);
+    deg = (int) floor(fabs(coord));
+    tmp = ( fabs(coord) - floor(fabs(coord)) ) * GPS_MIN_DIV;
+    min = (int) floor(tmp);
+    tmp = ( tmp - floor(tmp) ) * ( GPS_SEC_DIV * GPS_SEC_ACCURACY );
+    sec = (int) floor(tmp);
+    secDivisor = GPS_SEC_ACCURACY;
 
-    if( *sec >= 60 ) {
-        *sec = 0;
-        *min += 1;
+    if( sec >= ( GPS_SEC_DIV * GPS_SEC_ACCURACY ) ) {
+        sec = 0;
+        min += 1;
     }
 
-    if( *min >= 60 ) {
-        *min = 0;
-        *deg += 1;
+    if( min >= 60 ) {
+        min = 0;
+        deg += 1;
     }
 
     LOG_FUNCTION_NAME_EXIT;
