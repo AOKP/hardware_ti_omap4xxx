@@ -212,7 +212,7 @@ status_t OMXCameraAdapter::doAutoFocus()
         {
         if ( NO_ERROR == ret )
             {
-            ret = returnFocusStatus(true);
+            ret = returnFocusStatus(false);
             }
         }
 
@@ -389,9 +389,14 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
             {
             focusStatus = false;
             }
+        ///FIXME: The ducati seems to return focus as false always if continuous focus is enabled
+        ///So, return focus as locked always until this is fixed.
+        else if(mParameters3A.Focus == OMX_IMAGE_FocusControlAuto )
+            {
+            focusStatus = true;
+            }
         else
             {
-
             switch (eFocusStatus.eFocusStatus)
                 {
                     case OMX_FocusStatusReached:

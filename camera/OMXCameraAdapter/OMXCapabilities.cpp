@@ -897,6 +897,8 @@ status_t OMXCameraAdapter::insertFocusModes(CameraProperties::Properties* params
         // Focus is supported but these modes are not supported by the
         // capability feature. Apply manually
         strncat(supported, TICameraParameters::FOCUS_MODE_FACE, MAX_PROP_NAME_LENGTH);
+        strncat(supported, PARAM_SEP, 1);
+        strncat(supported, CameraParameters::FOCUS_MODE_CONTINUOUS_PICTURE, MAX_PROP_NAME_LENGTH);
     }
 
     params->set(CameraProperties::SUPPORTED_FOCUS_MODES, supported);

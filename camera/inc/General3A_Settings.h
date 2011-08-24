@@ -129,6 +129,7 @@ const userToOMX_LUT focus_UserToOMX [] = {
     { TICameraParameters::FOCUS_MODE_PORTRAIT, OMX_IMAGE_FocusControlPortrait },
     { TICameraParameters::FOCUS_MODE_EXTENDED, OMX_IMAGE_FocusControlExtended },
     { CameraParameters::FOCUS_MODE_CONTINUOUS_VIDEO, OMX_IMAGE_FocusControlAuto },
+    { CameraParameters::FOCUS_MODE_CONTINUOUS_PICTURE, OMX_IMAGE_FocusControlAuto },
     { TICameraParameters::FOCUS_MODE_FACE , FOCUS_FACE_PRIORITY },
 
 };

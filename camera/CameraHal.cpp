@@ -1251,6 +1251,41 @@ status_t CameraHal::startPreview()
 
     LOG_FUNCTION_NAME;
 
+    if ( mPreviewEnabled )
+    {
+    CAMHAL_LOGDA("Preview already running");
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return ALREADY_EXISTS;
+    }
+
+    if ( NULL != mCameraAdapter ) {
+
+        CameraParameters adapterParams = mParameters;
+
+        //If the app has not set the capture mode, set the capture resolution as preview resolution
+        //so that black bars are not displayed in preview.
+        //Later in takePicture we will configure the correct picture size
+        if(mParameters.get(TICameraParameters::KEY_CAP_MODE) == NULL)
+            {
+            int w,h;
+            CAMHAL_LOGDA("Capture mode not set by app, setting picture res to preview res");
+            mParameters.getPreviewSize(&w, &h);
+            adapterParams.setPictureSize(w,h);
+            }
+
+        ret = mCameraAdapter->setParameters(adapterParams);
+    }
+
+    ///If we don't have the preview callback enabled and display adapter,
+    if(!mSetPreviewWindowCalled || (mDisplayAdapter.get() == NULL))
+    {
+        CAMHAL_LOGEA("Preview not started. Preview in progress flag set");
+        mPreviewStartInProgress = true;
+        return NO_ERROR;
+    }
+
     if( (mDisplayAdapter.get() != NULL) && ( !mPreviewEnabled ) && ( mDisplayPaused ) )
         {
         CAMHAL_LOGDA("Preview is in paused state");
@@ -1274,40 +1309,6 @@ status_t CameraHal::startPreview()
         return ret;
 
         }
-    else if ( mPreviewEnabled )
-        {
-        CAMHAL_LOGDA("Preview already running");
-
-        LOG_FUNCTION_NAME_EXIT;
-
-        return ALREADY_EXISTS;
-        }
-
-    ///If we don't have the preview callback enabled and display adapter,
-    if(!mSetPreviewWindowCalled || (mDisplayAdapter.get() == NULL))
-    {
-        CAMHAL_LOGEA("Preview not started. Preview in progress flag set");
-        mPreviewStartInProgress = true;
-        return NO_ERROR;
-    }
-
-    if ( NULL != mCameraAdapter ) {
-
-        CameraParameters adapterParams = mParameters;
-
-        //If the app has not set the capture mode, set the capture resolution as preview resolution
-        //so that black bars are not displayed in preview.
-        //Later in takePicture we will configure the correct picture size
-        if(mParameters.get(TICameraParameters::KEY_CAP_MODE) == NULL)
-            {
-            int w,h;
-            CAMHAL_LOGDA("Capture mode not set by app, setting picture res to preview res");
-            mParameters.getPreviewSize(&w, &h);
-            adapterParams.setPictureSize(w,h);
-            }
-
-        ret = mCameraAdapter->setParameters(adapterParams);
-    }
 
     /// Ensure that buffers for preview are allocated before we start the camera
     ///Get the updated size from Camera Adapter, to account for padding etc
@@ -1850,7 +1851,7 @@ status_t CameraHal::restartPreview()
             return -EINVAL;
             }
 
-        strncpy(tmpvalstr, valstr, sizeof(tmpvalstr)); 
+        strncpy(tmpvalstr, valstr, sizeof(tmpvalstr));
         tmpvalstr[sizeof(tmpvalstr)-1] = 0;
         }
 
