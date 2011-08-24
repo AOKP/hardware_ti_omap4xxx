@@ -18,6 +18,9 @@
 #include <malloc.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/fb.h>
 
 #include <cutils/properties.h>
 #include <cutils/log.h>
@@ -26,6 +29,7 @@
 #include <hardware/hwcomposer.h>
 #include <EGL/egl.h>
 #include <utils/Timers.h>
+#include <hardware_legacy/uevent.h>
 
 #define min(a, b) ( { typeof(a) __a = (a), __b = (b); __a < __b ? __a : __b; } )
 #define max(a, b) ( { typeof(a) __a = (a), __b = (b); __a > __b ? __a : __b; } )
@@ -63,6 +67,11 @@ typedef struct omap4_hwc_module omap4_hwc_module_t;
 
 struct omap4_hwc_device {
     hwc_composer_device_t base;
+    hwc_procs_t *procs;
+    pthread_t hdmi_thread;
+    pthread_mutex_t lock;
+    int dsscomp_fd;
+    int hdmi_fb_fd;
 
     IMG_framebuffer_device_public_t *fb_dev;
     struct dsscomp_setup_dispc_data dsscomp_data;
@@ -395,15 +404,9 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     struct counts num = { .composited_layers = list->numHwLayers };
     unsigned int i;
 
+    pthread_mutex_lock(&hwc_dev->lock);
     memset(dsscomp, 0x0, sizeof(*dsscomp));
     dsscomp->sync_id = sync_id++;
-
-    /* FIXME set up hwc_dev->ext based on mirroring needs */
-    if (!(dsscomp->sync_id & 0x1f)) {
-        char value[PROPERTY_VALUE_MAX];
-        property_get("debug.hwc.ext", value, "0");
-        hwc_dev->ext = atoi(value);
-    }
 
     /* Figure out how many layers we can support via DSS */
     for (i = 0; i < list->numHwLayers; i++) {
@@ -583,6 +586,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         dsscomp->num_mgrs++;
         hwc_dev->ext_ovls = dsscomp->num_ovls - hwc_dev->post2_layers;
     }
+    pthread_mutex_unlock(&hwc_dev->lock);
     return 0;
 }
 
@@ -599,6 +603,7 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
         return 0;
     }
 
+    pthread_mutex_lock(&hwc_dev->lock);
     char big_log[1024];
     int e = sizeof(big_log);
     char *end = big_log + e;
@@ -679,6 +684,7 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
         LOGE("Post2 error");
 
 err_out:
+    pthread_mutex_unlock(&hwc_dev->lock);
     return err;
 }
 
@@ -729,8 +735,15 @@ static int omap4_hwc_device_close(hw_device_t* device)
 {
     omap4_hwc_device_t *hwc_dev = (omap4_hwc_device_t *) device;;
 
-    if (hwc_dev)
+    if (hwc_dev) {
+        if (hwc_dev->dsscomp_fd >= 0)
+            close(hwc_dev->dsscomp_fd);
+        if (hwc_dev->hdmi_fb_fd >= 0)
+            close(hwc_dev->hdmi_fb_fd);
+        /* pthread will get killed when parent process exits */
+        pthread_mutex_destroy(&hwc_dev->lock);
         free(hwc_dev);
+    }
 
     return 0;
 }
@@ -761,12 +774,86 @@ err_out:
     return err;
 }
 
+static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
+{
+    pthread_mutex_lock(&hwc_dev->lock);
+    hwc_dev->ext = 0;
+    if (state) {
+        struct dsscomp_display_info dis = { .ix = 1,  };
+        int ret = ioctl(hwc_dev->dsscomp_fd, DSSCOMP_QUERY_DISPLAY, &dis);
+        if (!ret) {
+            hwc_dev->ext = EXT_ON | 3;
+            if (dis.channel == OMAP_DSS_CHANNEL_DIGIT)
+                hwc_dev->ext |= EXT_TV;
+            ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
+        }
+
+        /* FIXME set up hwc_dev->ext based on mirroring needs */
+        char value[PROPERTY_VALUE_MAX];
+        property_get("debug.hwc.ext", value, "0");
+        hwc_dev->ext |= atoi(value) & EXT_DOCK;
+    }
+    LOGI("external display changed (state=%d, on=%d, dock=%d, tv=%d, trform=%ddeg%s)", state,
+         !!hwc_dev->ext, !!(hwc_dev->ext & EXT_DOCK),
+         !!(hwc_dev->ext & EXT_TV), hwc_dev->ext & EXT_ROTATION,
+         (hwc_dev->ext & EXT_HFLIP) ? "+hflip" : "");
+    pthread_mutex_unlock(&hwc_dev->lock);
+
+    if (hwc_dev->procs && hwc_dev->procs->invalidate) {
+            hwc_dev->procs->invalidate(hwc_dev->procs);
+            usleep(30000);
+            hwc_dev->procs->invalidate(hwc_dev->procs);
+    }
+}
+
+static void handle_uevents(omap4_hwc_device_t *hwc_dev, const char *s)
+{
+    if (strcmp(s, "change@/devices/virtual/switch/hdmi"))
+        return;
+
+    s += strlen(s) + 1;
+
+    while(*s) {
+        if (!strncmp(s, "SWITCH_STATE=", strlen("SWITCH_STATE="))) {
+            int state = atoi(s + strlen("SWITCH_STATE="));
+            handle_hotplug(hwc_dev, state);
+        }
+
+        s += strlen(s) + 1;
+    }
+}
+
+static void *omap4_hwc_hdmi_thread(void *data)
+{
+    omap4_hwc_device_t *hwc_dev = data;
+    static char uevent_desc[4096];
+    uevent_init();
+
+    memset(uevent_desc, 0, sizeof(uevent_desc));
+
+    do {
+        /* keep last 2 zeroes to ensure double 0 termination */
+        uevent_next_event(uevent_desc, sizeof(uevent_desc) - 2);
+        handle_uevents(hwc_dev, uevent_desc);
+    } while (1);
+
+    return NULL;
+}
+
+static void omap4_hwc_registerProcs(struct hwc_composer_device* dev,
+                                    hwc_procs_t const* procs)
+{
+        omap4_hwc_device_t *hwc_dev = (omap4_hwc_device_t *) dev;
+
+        hwc_dev->procs = (typeof(hwc_dev->procs)) procs;
+}
+
 static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
                 hw_device_t** device)
 {
     omap4_hwc_module_t *hwc_mod = (omap4_hwc_module_t *)module;
     omap4_hwc_device_t *hwc_dev;
-    int err;
+    int err = 0;
 
     if (strcmp(name, HWC_HARDWARE_COMPOSER)) {
         return -EINVAL;
@@ -797,13 +884,30 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     hwc_dev->base.prepare = omap4_hwc_prepare;
     hwc_dev->base.set = omap4_hwc_set;
     hwc_dev->base.dump = omap4_hwc_dump;
+    hwc_dev->base.registerProcs = omap4_hwc_registerProcs;
     hwc_dev->fb_dev = hwc_mod->fb_dev;
     *device = &hwc_dev->base.common;
 
+    hwc_dev->dsscomp_fd = open("/dev/dsscomp", O_RDWR);
+
+    hwc_dev->hdmi_fb_fd = open("/dev/graphics/fb1", O_RDWR);
+
     hwc_dev->buffers = malloc(sizeof(buffer_handle_t) * MAX_HW_OVERLAYS);
     if (!hwc_dev->buffers) {
-        free(hwc_dev);
-        return -ENOMEM;
+        err = -ENOMEM;
+        goto done;
+    }
+
+    if (pthread_mutex_init(&hwc_dev->lock, NULL)) {
+            LOGE("failed to create mutex (%d): %m", errno);
+            err = -errno;
+            goto done;
+    }
+    if (pthread_create(&hwc_dev->hdmi_thread, NULL, omap4_hwc_hdmi_thread, hwc_dev))
+    {
+            LOGE("failed to create HDMI listening thread (%d): %m", errno);
+            err = -errno;
+            goto done;
     }
 
     /* get debug properties */
@@ -814,12 +918,33 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     hwc_dev->flags_rgb_order = atoi(value);
     property_get("debug.hwc.nv12_only", value, "0");
     hwc_dev->flags_nv12_only = atoi(value);
-    property_get("debug.hwc.ext", value, "0");
-    hwc_dev->ext = atoi(value);
+
+    /* read switch state */
+    int sw_fd = open("/sys/class/switch/hdmi/state", O_RDONLY);
+    int hpd = 0;
+    if (sw_fd >= 0) {
+        char value;
+        if (read(sw_fd, &value, 1) == 1)
+            hpd = value == '1';
+        close(sw_fd);
+    }
+    handle_hotplug(hwc_dev, hpd);
+
     LOGE("omap4_hwc_device_open(rgb_order=%d nv12_only=%d)",
         hwc_dev->flags_rgb_order, hwc_dev->flags_nv12_only);
 
-    return 0;
+done:
+    if (err && hwc_dev) {
+        if (hwc_dev->dsscomp_fd >= 0)
+            close(hwc_dev->dsscomp_fd);
+        if (hwc_dev->hdmi_fb_fd >= 0)
+            close(hwc_dev->hdmi_fb_fd);
+        pthread_mutex_destroy(&hwc_dev->lock);
+        free(hwc_dev->buffers);
+        free(hwc_dev);
+    }
+
+    return err;
 }
 
 static struct hw_module_methods_t omap4_hwc_module_methods = {
