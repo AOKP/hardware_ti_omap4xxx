@@ -3162,7 +3162,7 @@ void CameraHal::deinitialize()
 {
     LOG_FUNCTION_NAME;
 
-    if ( mPreviewEnabled ) {
+    if ( mPreviewEnabled || mDisplayPaused ) {
         forceStopPreview();
     }
 
