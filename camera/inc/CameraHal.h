@@ -181,7 +181,14 @@ public:
         if ( ( NULL != mFaceData ) && ( NULL != mFaceData->faces ) ) {
             free(mFaceData->faces);
             free(mFaceData);
+            mFaceData=NULL;
         }
+
+        if(( NULL != mFaceData ))
+            {
+            free(mFaceData);
+            mFaceData = NULL;
+            }
     }
 
     camera_frame_metadata_t *getFaceResult() { return mFaceData; };
