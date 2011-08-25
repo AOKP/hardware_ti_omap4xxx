@@ -29,6 +29,10 @@
 #include "OMXCameraAdapter.h"
 #include "ErrorUtils.h"
 
+
+#define TRUE "true"
+#define FALSE "false"
+
 namespace android {
 
 status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
@@ -42,7 +46,7 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
 
     str = params.get(TICameraParameters::KEY_EXPOSURE_MODE);
     mode = getLUTvalue_HALtoOMX( str, ExpLUT);
-    if ( ( str != NULL ) && ( mParameters3A.Exposure != mode ) && !mFaceDetectionRunning)
+    if ( ( str != NULL ) && ( mParameters3A.Exposure != mode ))
         {
         mParameters3A.Exposure = mode;
         CAMHAL_LOGDB("Exposure mode %d", mode);
@@ -54,8 +58,7 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
 
     str = params.get(CameraParameters::KEY_WHITE_BALANCE);
     mode = getLUTvalue_HALtoOMX( str, WBalLUT);
-    if ((mFirstTimeInit || ((str != NULL) && (mode != mParameters3A.WhiteBallance))) &&
-        !mFaceDetectionRunning)
+    if (mFirstTimeInit || ((str != NULL) && (mode != mParameters3A.WhiteBallance)))
         {
         mParameters3A.WhiteBallance = mode;
         CAMHAL_LOGDB("Whitebalance mode %d", mode);
@@ -140,8 +143,7 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
 
     str = params.get(CameraParameters::KEY_FOCUS_MODE);
     mode = getLUTvalue_HALtoOMX(str, FocusLUT);
-    if ( (mFirstTimeInit || ((str != NULL) && (mParameters3A.Focus != mode))) &&
-         !mFaceDetectionRunning )
+    if ( (mFirstTimeInit || ((str != NULL) && (mParameters3A.Focus != mode))))
         {
         //Apply focus mode immediatly only if  CAF  or Inifinity are selected
         if ( ( mode == OMX_IMAGE_FocusControlAuto ) ||
@@ -150,7 +152,7 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
             mPending3Asettings |= SetFocus;
             mParameters3A.Focus = mode;
             }
-        else if ( mParameters3A.Focus == OMX_IMAGE_FocusControlAuto )
+        else
             {
             //If we switch from CAF to something else, then disable CAF
             mPending3Asettings |= SetFocus;
@@ -308,20 +310,21 @@ status_t OMXCameraAdapter::setExposureMode(Gen3A_settings& Gen3A)
     exp.nPortIndex = OMX_ALL;
     exp.eExposureControl = (OMX_EXPOSURECONTROLTYPE)Gen3A.Exposure;
 
-    if ( EXPOSURE_FACE_PRIORITY == Gen3A.Exposure )
+///FIXME: Face priority exposure metering is not stable because of varying face sizes
+///coming from the FD module. So disabling it for now.
+#if 0
+    if ( mFaceDetectionRunning )
         {
         //Disable Region priority and enable Face priority
         setAlgoPriority(REGION_PRIORITY, EXPOSURE_ALGO, false);
         setAlgoPriority(FACE_PRIORITY, EXPOSURE_ALGO, true);
-
-        //Then set the mode to auto
-        exp.eExposureControl = OMX_ExposureControlAuto;
         }
     else
+#endif
         {
-        //Disable Face and Region priority
-        setAlgoPriority(FACE_PRIORITY, EXPOSURE_ALGO, false);
+        //Disable Region priority and Face priority
         setAlgoPriority(REGION_PRIORITY, EXPOSURE_ALGO, false);
+        setAlgoPriority(FACE_PRIORITY, EXPOSURE_ALGO, false);
         }
 
     eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
@@ -382,6 +385,8 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
     status_t ret = NO_ERROR;
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focus;
+    size_t top, left, width, height, weight;
+    sp<CameraArea> focusArea = NULL;
 
     LOG_FUNCTION_NAME;
 
@@ -391,15 +396,69 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
         return NO_INIT;
         }
 
-    //First Disable Face and Region priority
-    ret |= setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO, false);
-    ret |= setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, false);
+    if ( !mFocusAreas.isEmpty() )
+        {
+        focusArea = mFocusAreas.itemAt(0);
+        }
+
+
+    ///Face detection takes precedence over touch AF
+    if ( mFaceDetectionRunning )
+        {
+        //Disable region priority first
+        setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, false);
+
+        //Enable face algorithm priority for focus
+        setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO , true);
+
+        //Do normal focus afterwards
+        ////FIXME: Check if the extended focus control is needed? this overrides caf
+        //focusControl.eFocusControl = ( OMX_IMAGE_FOCUSCONTROLTYPE ) OMX_IMAGE_FocusControlExtended;
+        }
+    else if ( ( NULL != focusArea.get() ) && ( focusArea->isValid() ) )
+        {
+
+        //Disable face priority first
+        setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO, false);
+
+        //Enable region algorithm priority
+        setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, true);
+
+        //Set position
+        OMXCameraPortParameters * mPreviewData = NULL;
+        mPreviewData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex];
+        focusArea->transfrom(mPreviewData->mWidth,
+                             mPreviewData->mHeight,
+                             top,
+                             left,
+                             width,
+                             height);
+        setTouchFocus(left,
+                      top,
+                      width,
+                      height,
+                      mPreviewData->mWidth,
+                      mPreviewData->mHeight);
+
+        //Do normal focus afterwards
+        //FIXME: Check if the extended focus control is needed? this overrides caf
+        //focus.eFocusControl = ( OMX_IMAGE_FOCUSCONTROLTYPE ) OMX_IMAGE_FocusControlExtended;
+
+        }
+    else
+        {
+
+        //Disable both region and face priority
+        setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, false);
+
+        setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO, false);
+
+        }
 
     if ( NO_ERROR == ret )
         {
         OMX_INIT_STRUCT_PTR (&focus, OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE);
         focus.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
-
         focus.eFocusControl = (OMX_IMAGE_FOCUSCONTROLTYPE)Gen3A.Focus;
 
         CAMHAL_LOGDB("Configuring focus mode 0x%x", focus.eFocusControl);
@@ -900,8 +959,7 @@ status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggle)
 {
   OMX_ERRORTYPE eError = OMX_ErrorNone;
   OMX_IMAGE_CONFIG_LOCKTYPE lock;
-  const char *param[] = {"false", "true"};
-  int index = -1;
+  char* index = FALSE;
 
   LOG_FUNCTION_NAME
 
@@ -953,9 +1011,9 @@ status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggle)
       setWhiteBalanceLock(mParameters3A);
     }
 
-  index = toggle ? 1 : 0;
-  mParams.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, param[index]);
-  mParams.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, param[index]);
+  const char *lock_state = toggle ? TRUE : FALSE;
+  mParams.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, lock_state);
+  mParams.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, lock_state);
 
   return ErrorUtils::omxToAndroidError(eError);
 

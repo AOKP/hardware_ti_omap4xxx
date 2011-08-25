@@ -845,6 +845,7 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
         CAMHAL_LOGDB("Auto Exposure Lock get %s", mParams.get(CameraParameters::KEY_AUTO_EXPOSURE_LOCK));
         params.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, valstr);
       }
+
     if( (valstr = mParams.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK)) != NULL )
       {
         CAMHAL_LOGDB("Auto WhiteBalance Lock get %s", mParams.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK));
@@ -1927,6 +1928,9 @@ status_t OMXCameraAdapter::stopPreview()
         }
 
     switchToLoaded();
+
+
+    mFirstTimeInit = true;
 
     LOG_FUNCTION_NAME_EXIT;
 

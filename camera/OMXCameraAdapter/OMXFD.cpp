@@ -53,12 +53,6 @@ status_t OMXCameraAdapter::startFaceDetection()
         goto out;
     }
 
-    // Overwrite 3A settings with face priority versions
-    mParameters3A.Exposure = EXPOSURE_FACE_PRIORITY;
-    mParameters3A.WhiteBallance = WB_FACE_PRIORITY;
-    mParameters3A.Focus = FOCUS_FACE_PRIORITY;
-
-
     // Set 3A modes to face priority
     ret = setExposureMode(mParameters3A);
     if (ret != NO_ERROR) {
@@ -66,10 +60,10 @@ status_t OMXCameraAdapter::startFaceDetection()
     }
 
 
-    ret = setWBMode(mParameters3A);
-    if (ret != NO_ERROR) {
-        goto out;
-    }
+    //Note: White balance will not be face prioritized, since
+    //the algorithm needs full frame statistics, and not face
+    //regions alone.
+
 
  out:
     return ret;

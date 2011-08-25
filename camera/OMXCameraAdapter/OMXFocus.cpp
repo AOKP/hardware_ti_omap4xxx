@@ -68,8 +68,6 @@ status_t OMXCameraAdapter::doAutoFocus()
     status_t ret = NO_ERROR;
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focusControl;
-    size_t top, left, width, height, weight;
-    sp<CameraArea> focusArea = NULL;
 
     LOG_FUNCTION_NAME;
 
@@ -91,65 +89,8 @@ status_t OMXCameraAdapter::doAutoFocus()
 
     if ( NO_ERROR == ret )
         {
-        if ( !mFocusAreas.isEmpty() )
-            {
-            focusArea = mFocusAreas.itemAt(0);
-            }
-
         OMX_INIT_STRUCT_PTR (&focusControl, OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE);
         focusControl.eFocusControl = ( OMX_IMAGE_FOCUSCONTROLTYPE ) mParameters3A.Focus;
-
-        //If touch AF is set, then necessary configuration first
-        if ( ( NULL != focusArea.get() ) && ( focusArea->isValid() ) )
-            {
-
-            //Disable face priority first
-            setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO, false);
-
-            //Enable region algorithm priority
-            setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, true);
-
-            //Set position
-            OMXCameraPortParameters * mPreviewData = NULL;
-            mPreviewData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex];
-            focusArea->transfrom(mPreviewData->mWidth,
-                                 mPreviewData->mHeight,
-                                 top,
-                                 left,
-                                 width,
-                                 height);
-            setTouchFocus(left,
-                          top,
-                          width,
-                          height,
-                          mPreviewData->mWidth,
-                          mPreviewData->mHeight);
-
-            //Do normal focus afterwards
-            focusControl.eFocusControl = ( OMX_IMAGE_FOCUSCONTROLTYPE ) OMX_IMAGE_FocusControlExtended;
-
-            }
-        else if ( FOCUS_FACE_PRIORITY == focusControl.eFocusControl )
-            {
-            //Disable region priority first
-            setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, false);
-
-            //Enable face algorithm priority
-            setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO, true);
-
-            //Do normal focus afterwards
-            focusControl.eFocusControl = ( OMX_IMAGE_FOCUSCONTROLTYPE ) OMX_IMAGE_FocusControlExtended;
-
-            }
-        else
-            {
-
-            //Disable both region and face priority
-            setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, false);
-
-            setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO, false);
-
-            }
 
         if ( ( mParameters3A.Focus != OMX_IMAGE_FocusControlAuto )  &&
              ( mParameters3A.Focus != OMX_IMAGE_FocusControlAutoInfinity ) )
@@ -165,6 +106,7 @@ status_t OMXCameraAdapter::doAutoFocus()
                 {
                 ret = setFocusCallback(true);
                 }
+
             }
 
         eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
@@ -283,15 +225,20 @@ status_t OMXCameraAdapter::cancelAutoFocus()
       CAMHAL_LOGDA("AE/AWB unlocked successfully");
     }
 
-    stopAutoFocus();
-    //Signal a dummy AF event so that in case the callback from ducati
-    //does come then it doesnt crash after
-    //exiting this function since eventSem will go out of scope.
-    ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
-                                (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
-                                OMX_ALL,
-                                OMX_IndexConfigCommonFocusStatus,
-                                NULL );
+    //Stop the AF only for modes other than CAF  or Inifinity
+    if ( ( mParameters3A.Focus != OMX_IMAGE_FocusControlAuto ) ||
+         ( mParameters3A.Focus != OMX_IMAGE_FocusControlAutoInfinity ) )
+        {
+        stopAutoFocus();
+        //Signal a dummy AF event so that in case the callback from ducati
+        //does come then it doesnt crash after
+        //exiting this function since eventSem will go out of scope.
+        ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+                                    (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
+                                    OMX_ALL,
+                                    OMX_IndexConfigCommonFocusStatus,
+                                    NULL );
+        }
 
     // If the apps call #cancelAutoFocus()}, the face callbacks will also resume.
     pauseFaceDetection(false);
@@ -429,20 +376,14 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
             }
         }
 
+    ret =  BaseCameraAdapter::setState(CAMERA_CANCEL_AUTOFOCUS);
     if ( NO_ERROR == ret )
         {
-
-        ret =  BaseCameraAdapter::setState(CAMERA_CANCEL_AUTOFOCUS);
-
-        if ( NO_ERROR == ret )
-            {
-            ret = BaseCameraAdapter::commitState();
-            }
-        else
-            {
-            ret |= BaseCameraAdapter::rollbackState();
-            }
-
+        ret = BaseCameraAdapter::commitState();
+        }
+    else
+        {
+        ret |= BaseCameraAdapter::rollbackState();
         }
 
     if ( NO_ERROR == ret )
