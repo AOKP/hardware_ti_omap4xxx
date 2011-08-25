@@ -252,7 +252,7 @@ int CameraHal::setParameters(const CameraParameters& params)
     status_t ret = NO_ERROR;
     // Needed for KEY_RECORDING_HINT
     bool restartPreviewRequired = false;
-    CameraParameters oldParams = mParameters;
+    CameraParameters oldParams(mParameters.flatten());
 
     {
         Mutex::Autolock lock(mLock);
@@ -913,6 +913,11 @@ int CameraHal::setParameters(const CameraParameters& params)
 
     }
 
+    //On fail restore old parameters
+    if ( NO_ERROR != ret ) {
+        mParameters.unflatten(oldParams.flatten());
+    }
+
     // Restart Preview if needed by KEY_RECODING_HINT only if preview is already running.
     // If preview is not started yet, Video Mode parameters will take effect on next startPreview()
     if(restartPreviewRequired && previewEnabled())
@@ -925,11 +930,6 @@ int CameraHal::setParameters(const CameraParameters& params)
         CAMHAL_LOGEA("Failed to restart Preview");
         return ret;
         }
-
-    //On fail restore old parameters
-    if ( NO_ERROR != ret ) {
-        mParameters = oldParams;
-    }
 
     LOG_FUNCTION_NAME_EXIT;
 
