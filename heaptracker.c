@@ -353,7 +353,7 @@ void* __wrap_malloc(size_t size)
         hdr->bt_depth = heaptracker_stacktrace(
                             hdr->bt, MAX_BACKTRACE_DEPTH);
         add(hdr, size);
-        return hdr+1;
+        return user(hdr);
     }
     return NULL;
 }
@@ -448,7 +448,7 @@ void *__wrap_realloc(void *ptr, size_t size)
         }
     }
  
-    hdr = __real_realloc(hdr, sizeof(struct hdr) + size);
+    hdr = __real_realloc(hdr, sizeof(struct hdr) + size + sizeof(struct ftr));
     if (hdr) {
         hdr->bt_depth = heaptracker_stacktrace(hdr->bt, MAX_BACKTRACE_DEPTH);
         add(hdr, size);
@@ -463,7 +463,7 @@ void *__wrap_calloc(int nmemb, size_t size)
 //  malloc_tracker_log("%s: %s\n", __FILE__, __FUNCTION__);
     struct hdr *hdr;
     size_t __size = nmemb * size;
-    hdr = __real_calloc(1, sizeof(struct hdr) + __size);
+    hdr = __real_calloc(1, sizeof(struct hdr) + __size + sizeof(struct ftr));
     if (hdr) {
         hdr->bt_depth = heaptracker_stacktrace(
                             hdr->bt, MAX_BACKTRACE_DEPTH);
