@@ -363,7 +363,7 @@ static void copy2Dto1D(void *dst,
                 }
             }
 
-            bufferSrc_UV = ( uint16_t * ) y_uv[1] + (stride/2)*yOff + xOff;
+            bufferSrc_UV = ( uint16_t * ) ((uint8_t*)y_uv[1] + (stride/2)*yOff + xOff);
 
             if (strcmp(pixelFormat, CameraParameters::PIXEL_FORMAT_YUV420SP) == 0) {
                  uint16_t *bufferDst_UV;
