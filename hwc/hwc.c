@@ -43,7 +43,7 @@
 #define HAL_PIXEL_FORMAT_BGRX_8888		0x1FF
 #define HAL_PIXEL_FORMAT_TI_NV12 0x100
 #define HAL_PIXEL_FORMAT_TI_NV12_PADDED 0x101
-#define MAX_TILER_SLOT (4 << 20)
+#define MAX_TILER_SLOT (16 << 20)
 
 #define MIN(a,b)		  ((a)<(b)?(a):(b))
 #define MAX(a,b)		  ((a)>(b)?(a):(b))
@@ -182,6 +182,16 @@ static int sync_id = 0;
 #define is_RGB(format) ((format) == HAL_PIXEL_FORMAT_BGRA_8888 || (format) == HAL_PIXEL_FORMAT_RGB_565 || (format) == HAL_PIXEL_FORMAT_BGRX_8888)
 #define is_BGR(format) ((format) == HAL_PIXEL_FORMAT_RGBX_8888 || (format) == HAL_PIXEL_FORMAT_RGBA_8888)
 #define is_NV12(format) ((format) == HAL_PIXEL_FORMAT_TI_NV12 || (format) == HAL_PIXEL_FORMAT_TI_NV12_PADDED)
+
+static unsigned int mem1d(IMG_native_handle_t *handle)
+{
+    if (handle == NULL)
+            return 0;
+
+    int bpp = is_NV12(handle->iFormat) ? 0 : (handle->iFormat == HAL_PIXEL_FORMAT_RGB_565 ? 2 : 4);
+    int stride = ALIGN(handle->iWidth, HW_ALIGN) * bpp;
+    return stride * handle->iHeight;
+}
 
 static void
 omap4_hwc_setup_layer_base(struct dss2_ovl_cfg *oc, int index, int format, int width, int height)
@@ -428,9 +438,7 @@ static int omap4_hwc_is_valid_layer(hwc_layer_t *layer,
     if (!is_NV12(handle->iFormat)) {
         if (layer->transform)
             return 0;
-        int bpp = (handle->iFormat == HAL_PIXEL_FORMAT_RGB_565 ? 2 : 4);
-        int stride = ALIGN(handle->iWidth, HW_ALIGN) * bpp;
-        if (stride * handle->iHeight > MAX_TILER_SLOT)
+        if (mem1d(handle) > MAX_TILER_SLOT)
             return 0;
     }
     return 1;
@@ -446,6 +454,7 @@ struct counts {
     unsigned int displays;
     unsigned int max_hw_overlays;
     unsigned int max_scaling_overlays;
+    unsigned int mem;
 };
 
 static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts *num)
@@ -497,6 +506,8 @@ static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts 
             num->possible_overlay_layers <= num->max_hw_overlays &&
             num->possible_overlay_layers == num->composited_layers &&
             num->scaled_layers <= num->max_scaling_overlays &&
+            /* fits into TILER slot */
+            num->mem <= MAX_TILER_SLOT &&
             /* we cannot clone non-NV12 transformed layers */
             (!tform || num->NV12 == num->possible_overlay_layers) &&
             /* HDMI cannot display BGR */
@@ -555,6 +566,8 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                 num.RGB++;
             else if (is_NV12(handle->iFormat))
                 num.NV12++;
+
+            num.mem += mem1d(handle);
         }
     }
 
@@ -586,14 +599,17 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     int ix_nv12 = -1;
 
     /* set up if DSS layers */
+    unsigned int mem_used = 0;
     for (i = 0; i < list->numHwLayers && dsscomp->num_ovls < num.max_hw_overlays; i++) {
         hwc_layer_t *layer = &list->hwLayers[i];
         IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
 
         if (can_dss_render_layer(hwc_dev, layer) &&
+            mem_used + mem1d(handle) < MAX_TILER_SLOT &&
             /* can't have a transparent overlay in the middle of the framebuffer stack */
             !(is_ALPHA(handle->iFormat) && fb_z >= 0)) {
             /* render via DSS overlay */
+            mem_used += mem1d(handle);
             layer->compositionType = HWC_OVERLAY;
             hwc_dev->buffers[dsscomp->num_ovls] = layer->handle;
 
