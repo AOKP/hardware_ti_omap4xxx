@@ -62,6 +62,7 @@ int AutoConvergenceModeIDX = 0;
 int ManualConvergenceValuesIDX = 0;
 int ManualConvergenceDefaultValueIDX = 2;
 int gbceIDX = 0;
+int glbceIDX = 0;
 int rotation = 0;
 bool reSizePreview = true;
 bool hardwareActive = false;
@@ -1137,6 +1138,7 @@ void initDefaults() {
     zoomIDX = 0;
     videoCodecIDX = 0;
     gbceIDX = 0;
+    glbceIDX = 0;
 #ifdef TARGET_OMAP4
     ///Temporary fix until OMAP3 and OMAP4 3A values are synced
     contrast = 90;
@@ -1169,6 +1171,7 @@ void initDefaults() {
     params.set(KEY_CAF, caf_mode);
     params.set(KEY_ISO, iso_mode);
     params.set(KEY_GBCE, gbce[gbceIDX]);
+    params.set(KEY_GLBCE, gbce[glbceIDX]);
     params.set(KEY_SHARPNESS, sharpness);
     params.set(KEY_CONTRAST, contrast);
     params.set(CameraParameters::KEY_ZOOM, zoom[zoomIDX].idx);
@@ -1179,7 +1182,7 @@ void initDefaults() {
     params.setPreviewFrameRate(frameRate[ARRAY_SIZE(frameRate) - 1].fps);
     params.set(params.KEY_ANTIBANDING, antibanding[antibanding_mode]);
     params.set(params.KEY_FOCUS_MODE, focus[focus_mode]);
-    params.set(KEY_IPP, ippIDX);
+    params.set(KEY_IPP, ipp_mode[ippIDX]);
     params.set(CameraParameters::KEY_JPEG_QUALITY, jpegQuality);
     params.setPreviewFormat(pixelformat[previewFormat].pixformat);
     params.setPictureFormat(codingformat[pictureFormat]);
@@ -1322,6 +1325,7 @@ int functional_menu() {
         printf("   u. Capture Mode:   %s\n", capture[capture_mode]);
         printf("   k. IPP Mode:       %s\n", ipp_mode[ippIDX]);
         printf("   K. GBCE: %s\n", gbce[gbceIDX]);
+        printf("   O. GLBCE %s\n", gbce[glbceIDX]);
         printf("   o. Jpeg Quality:   %d\n", jpegQuality);
         printf("   #. Burst Images:  %3d\n", burst);
         printf("   :. Thumbnail Size:  %4d x %4d - %s\n",previewSize[thumbSizeIDX].width, previewSize[thumbSizeIDX].height, previewSize[thumbSizeIDX].desc);
@@ -1482,10 +1486,12 @@ int functional_menu() {
         case '4':
             previewSizeIDX += 1;
             previewSizeIDX %= ARRAY_SIZE(previewSize);
-            if ( strcmp(params.get(KEY_STEREO_CAMERA), "false") == 0 ) {
-                params.setPreviewSize(previewSize[previewSizeIDX].width, previewSize[previewSizeIDX].height);
-            } else {
-                params.setPreviewSize(previewSize[previewSizeIDX].width, previewSize[previewSizeIDX].height*2);
+            if ( NULL != params.get(KEY_STEREO_CAMERA) ) {
+                if ( strcmp(params.get(KEY_STEREO_CAMERA), "false") == 0 ) {
+                    params.setPreviewSize(previewSize[previewSizeIDX].width, previewSize[previewSizeIDX].height);
+                } else {
+                    params.setPreviewSize(previewSize[previewSizeIDX].width, previewSize[previewSizeIDX].height*2);
+                }
             }
             reSizePreview = true;
 
@@ -1593,8 +1599,10 @@ int functional_menu() {
             break;
         case '$':
             pictureFormat += 1;
-            if ( strcmp(params.get(KEY_STEREO_CAMERA), "false") == 0 && pictureFormat > 4 )
-                pictureFormat = 0;
+            if ( NULL != params.get(KEY_STEREO_CAMERA) ) {
+                if ( strcmp(params.get(KEY_STEREO_CAMERA), "false") == 0 && pictureFormat > 4 )
+                    pictureFormat = 0;
+            }
             pictureFormat %= ARRAY_SIZE(codingformat);
             params.setPictureFormat(codingformat[pictureFormat]);
             if ( hardwareActive )
@@ -1693,11 +1701,7 @@ int functional_menu() {
             ippIDX %= ARRAY_SIZE(ipp_mode);
             ippIDX_old = ippIDX;
 
-#if defined(OMAP_ENHANCEMENT) && defined(TARGET_OMAP3)
             params.set(KEY_IPP, ipp_mode[ippIDX]);
-#else
-            params.set(KEY_IPP, ippIDX);
-#endif
 
             if ( hardwareActive )
                 camera->setParameters(params.flatten());
@@ -1708,6 +1712,15 @@ int functional_menu() {
             gbceIDX+= 1;
             gbceIDX %= ARRAY_SIZE(gbce);
             params.set(KEY_GBCE, gbce[gbceIDX]);
+
+            if ( hardwareActive )
+                camera->setParameters(params.flatten());
+            break;
+
+        case 'O':
+            glbceIDX+= 1;
+            glbceIDX %= ARRAY_SIZE(gbce);
+            params.set(KEY_GLBCE, gbce[glbceIDX]);
 
             if ( hardwareActive )
                 camera->setParameters(params.flatten());

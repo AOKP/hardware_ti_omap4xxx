@@ -4,7 +4,8 @@
 #define PRINTOVER(arg...)     LOGD(#arg)
 #define LOG_FUNCTION_NAME         LOGD("%d: %s() ENTER", __LINE__, __FUNCTION__);
 #define LOG_FUNCTION_NAME_EXIT    LOGD("%d: %s() EXIT", __LINE__, __FUNCTION__);
-#define KEY_GBCE   "gbce"
+#define KEY_GBCE            "gbce"
+#define KEY_GLBCE           "glbce"
 #define KEY_CAMERA          "camera-index"
 #define KEY_SATURATION      "saturation"
 #define KEY_BRIGHTNESS      "brightness"
@@ -19,11 +20,7 @@
 #define KEY_VSTAB           "vstab"
 #define KEY_COMPENSATION    "exposure-compensation"
 
-#if defined(OMAP_ENHANCEMENT) && defined(TARGET_OMAP3)
-#define KEY_IPP             "ippMode"
-#else
 #define KEY_IPP             "ipp"
-#endif
 
 #define KEY_BUFF_STARV      "buff-starvation"
 #define KEY_METERING_MODE   "meter-mode"

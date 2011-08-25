@@ -293,9 +293,12 @@ int execute_functional_script(char *script) {
                     height = atoi(res);
                 }
 
-                if ( strcmp(params.get(KEY_STEREO_CAMERA), "true") == 0 ) {
-                    height *=2;
+                if ( NULL != params.get(KEY_STEREO_CAMERA) ) {
+                    if ( strcmp(params.get(KEY_STEREO_CAMERA), "true") == 0 ) {
+                        height *=2;
+                    }
                 }
+
                 printf("Resolution: %d x %d\n", width, height);
                 params.setPreviewSize(width, height);
                 reSizePreview = true;
@@ -587,6 +590,11 @@ int execute_functional_script(char *script) {
 
                 if ( hardwareActive )
                     camera->sendCommand(CAMERA_CMD_STOP_FACE_DETECTION, 0, 0);
+
+            case 'O':
+                params.set(KEY_GLBCE, (cmd+1));
+                if ( hardwareActive )
+                    camera->setParameters(params.flatten());
 
                 break;
 
