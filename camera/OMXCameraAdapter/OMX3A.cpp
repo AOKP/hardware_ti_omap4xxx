@@ -42,7 +42,7 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
 
     str = params.get(TICameraParameters::KEY_EXPOSURE_MODE);
     mode = getLUTvalue_HALtoOMX( str, ExpLUT);
-    if ( ( str != NULL ) && ( mParameters3A.Exposure != mode ) )
+    if ( ( str != NULL ) && ( mParameters3A.Exposure != mode ) && !mFaceDetectionRunning)
         {
         mParameters3A.Exposure = mode;
         CAMHAL_LOGDB("Exposure mode %d", mode);
@@ -54,7 +54,8 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
 
     str = params.get(CameraParameters::KEY_WHITE_BALANCE);
     mode = getLUTvalue_HALtoOMX( str, WBalLUT);
-    if ( ( mFirstTimeInit || ( str != NULL ) ) && ( mode != mParameters3A.WhiteBallance ) )
+    if ((mFirstTimeInit || ((str != NULL) && (mode != mParameters3A.WhiteBallance))) &&
+        !mFaceDetectionRunning)
         {
         mParameters3A.WhiteBallance = mode;
         CAMHAL_LOGDB("Whitebalance mode %d", mode);
@@ -139,7 +140,8 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
 
     str = params.get(CameraParameters::KEY_FOCUS_MODE);
     mode = getLUTvalue_HALtoOMX(str, FocusLUT);
-    if ( mFirstTimeInit || ( ( str != NULL ) && ( mParameters3A.Focus != mode ) ) )
+    if ( (mFirstTimeInit || ((str != NULL) && (mParameters3A.Focus != mode))) &&
+         !mFaceDetectionRunning )
         {
         //Apply focus mode immediatly only if  CAF  or Inifinity are selected
         if ( ( mode == OMX_IMAGE_FocusControlAuto ) ||

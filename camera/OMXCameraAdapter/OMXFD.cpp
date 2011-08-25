@@ -44,14 +44,63 @@ status_t OMXCameraAdapter::setParametersFD(const CameraParameters &params,
 
 status_t OMXCameraAdapter::startFaceDetection()
 {
+    status_t ret = NO_ERROR;
+
     Mutex::Autolock lock(mFaceDetectionLock);
-    return setFaceDetection(true, mDeviceOrientation);
+
+    ret = setFaceDetection(true, mDeviceOrientation);
+    if (ret != NO_ERROR) {
+        goto out;
+    }
+
+    // Overwrite 3A settings with face priority versions
+    mParameters3A.Exposure = EXPOSURE_FACE_PRIORITY;
+    mParameters3A.WhiteBallance = WB_FACE_PRIORITY;
+    mParameters3A.Focus = FOCUS_FACE_PRIORITY;
+
+
+    // Set 3A modes to face priority
+    ret = setExposureMode(mParameters3A);
+    if (ret != NO_ERROR) {
+        goto out;
+    }
+
+
+    ret = setWBMode(mParameters3A);
+    if (ret != NO_ERROR) {
+        goto out;
+    }
+
+ out:
+    return ret;
 }
 
 status_t OMXCameraAdapter::stopFaceDetection()
 {
+    status_t ret = NO_ERROR;
+    const char *str = NULL;
+    BaseCameraAdapter::AdapterState state;
+    BaseCameraAdapter::getState(state);
+
     Mutex::Autolock lock(mFaceDetectionLock);
-    return setFaceDetection(false, mDeviceOrientation);
+
+    ret = setFaceDetection(false, mDeviceOrientation);
+    if (ret != NO_ERROR) {
+        goto out;
+    }
+
+    // Reset 3A settings
+    ret = setParameters3A(mParams, state);
+    if (ret != NO_ERROR) {
+        goto out;
+    }
+
+    if (mPending3Asettings) {
+        apply3Asettings(mParameters3A);
+    }
+
+ out:
+    return ret;
 }
 
 void OMXCameraAdapter::pauseFaceDetection(bool pause)
