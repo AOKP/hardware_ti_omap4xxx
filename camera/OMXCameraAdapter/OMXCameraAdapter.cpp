@@ -308,6 +308,11 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
                 }
             }
 
+        OMX_INIT_STRUCT_PTR (&mRegionPriority, OMX_TI_CONFIG_3A_REGION_PRIORITY);
+        OMX_INIT_STRUCT_PTR (&mFacePriority, OMX_TI_CONFIG_3A_FACE_PRIORITY);
+        mRegionPriority.nPortIndex = OMX_ALL;
+        mFacePriority.nPortIndex = OMX_ALL;
+
         //Setting this flag will that the first setParameter call will apply all 3A settings
         //and will not conditionally apply based on current values.
         mFirstTimeInit = true;

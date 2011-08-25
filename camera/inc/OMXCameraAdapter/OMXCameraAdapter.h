@@ -770,6 +770,9 @@ private:
     unsigned int mPending3Asettings;
     Gen3A_settings mParameters3A;
 
+    OMX_TI_CONFIG_3A_FACE_PRIORITY mFacePriority;
+    OMX_TI_CONFIG_3A_REGION_PRIORITY mRegionPriority;
+
     CameraParameters mParams;
     CameraProperties::Properties* mCapabilities;
     unsigned int mPictureRotation;

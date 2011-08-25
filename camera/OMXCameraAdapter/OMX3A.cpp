@@ -304,6 +304,10 @@ status_t OMXCameraAdapter::setExposureMode(Gen3A_settings& Gen3A)
         return NO_INIT;
         }
 
+    OMX_INIT_STRUCT_PTR (&exp, OMX_CONFIG_EXPOSURECONTROLTYPE);
+    exp.nPortIndex = OMX_ALL;
+    exp.eExposureControl = (OMX_EXPOSURECONTROLTYPE)Gen3A.Exposure;
+
     if ( EXPOSURE_FACE_PRIORITY == Gen3A.Exposure )
         {
         //Disable Region priority and enable Face priority
@@ -311,7 +315,7 @@ status_t OMXCameraAdapter::setExposureMode(Gen3A_settings& Gen3A)
         setAlgoPriority(FACE_PRIORITY, EXPOSURE_ALGO, true);
 
         //Then set the mode to auto
-        Gen3A.WhiteBallance = OMX_ExposureControlAuto;
+        exp.eExposureControl = OMX_ExposureControlAuto;
         }
     else
         {
@@ -319,10 +323,6 @@ status_t OMXCameraAdapter::setExposureMode(Gen3A_settings& Gen3A)
         setAlgoPriority(FACE_PRIORITY, EXPOSURE_ALGO, false);
         setAlgoPriority(REGION_PRIORITY, EXPOSURE_ALGO, false);
         }
-
-    OMX_INIT_STRUCT_PTR (&exp, OMX_CONFIG_EXPOSURECONTROLTYPE);
-    exp.nPortIndex = OMX_ALL;
-    exp.eExposureControl = (OMX_EXPOSURECONTROLTYPE)Gen3A.Exposure;
 
     eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
                             OMX_IndexConfigCommonExposure,
@@ -522,7 +522,7 @@ status_t OMXCameraAdapter::setWBMode(Gen3A_settings& Gen3A)
         setAlgoPriority(FACE_PRIORITY, WHITE_BALANCE_ALGO, true);
 
         //Then set the mode to auto
-        Gen3A.WhiteBallance = OMX_WhiteBalControlAuto;
+        wb.eWhiteBalControl = OMX_WhiteBalControlAuto;
         }
     else
         {

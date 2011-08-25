@@ -27,6 +27,7 @@
 
 #include "CameraHal.h"
 #include "OMXCameraAdapter.h"
+#include "ErrorUtils.h"
 
 namespace android {
 
@@ -883,137 +884,96 @@ status_t OMXCameraAdapter::setAlgoPriority(AlgoPriority priority,
                                            Algorithm3A algo,
                                            bool enable)
 {
-    status_t ret = NO_ERROR;
     OMX_ERRORTYPE eError = OMX_ErrorNone;
-    OMX_TI_CONFIG_3A_REGION_PRIORITY regionPriority;
-    OMX_TI_CONFIG_3A_FACE_PRIORITY facePriority;
 
     LOG_FUNCTION_NAME;
 
-    if ( OMX_StateInvalid == mComponentState )
-        {
+    if ( OMX_StateInvalid == mComponentState ) {
         CAMHAL_LOGEA("OMX component is in invalid state");
-        ret = -1;
+        return NO_INIT;
+    }
+
+    if ( FACE_PRIORITY == priority ) {
+
+        if ( algo & WHITE_BALANCE_ALGO ) {
+            if ( enable ) {
+                mFacePriority.bAwbFaceEnable =  OMX_TRUE;
+            } else {
+                mFacePriority.bAwbFaceEnable =  OMX_FALSE;
+            }
         }
 
-    if ( NO_ERROR == ret )
-        {
-
-        if ( FACE_PRIORITY == priority )
-            {
-            OMX_INIT_STRUCT_PTR (&facePriority, OMX_TI_CONFIG_3A_FACE_PRIORITY);
-            facePriority.nPortIndex = mCameraAdapterParameters.mImagePortIndex;
-
-            if ( algo & WHITE_BALANCE_ALGO )
-                {
-                if ( enable )
-                    {
-                    facePriority.bAwbFaceEnable = OMX_TRUE;
-                    }
-                else
-                    {
-                    facePriority.bAwbFaceEnable = OMX_FALSE;
-                    }
-                }
-
-            if ( algo & EXPOSURE_ALGO )
-                {
-                if ( enable )
-                    {
-                    facePriority.bAeFaceEnable = OMX_TRUE;
-                    }
-                else
-                    {
-                    facePriority.bAeFaceEnable = OMX_FALSE;
-                    }
-                }
-
-            if ( algo & FOCUS_ALGO )
-                {
-                if ( enable )
-                    {
-                    facePriority.bAfFaceEnable= OMX_TRUE;
-                    }
-                else
-                    {
-                    facePriority.bAfFaceEnable = OMX_FALSE;
-                    }
-                }
-
-            eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
-                                    ( OMX_INDEXTYPE ) OMX_TI_IndexConfigFacePriority3a,
-                                    &facePriority);
-            if ( OMX_ErrorNone != eError )
-                {
-                CAMHAL_LOGEB("Error while configuring face priority 0x%x", eError);
-                }
-            else
-                {
-                CAMHAL_LOGDA("Face priority for algorithms set successfully");
-                }
-
+        if ( algo & EXPOSURE_ALGO ) {
+            if ( enable ) {
+                mFacePriority.bAeFaceEnable =  OMX_TRUE;
+            } else {
+                mFacePriority.bAeFaceEnable =  OMX_FALSE;
             }
-        else if ( REGION_PRIORITY == priority )
-            {
-
-            OMX_INIT_STRUCT_PTR (&regionPriority, OMX_TI_CONFIG_3A_REGION_PRIORITY);
-            regionPriority.nPortIndex =  mCameraAdapterParameters.mImagePortIndex;
-
-            if ( algo & WHITE_BALANCE_ALGO )
-                {
-                if ( enable )
-                    {
-                    regionPriority.bAwbRegionEnable= OMX_TRUE;
-                    }
-                else
-                    {
-                    regionPriority.bAwbRegionEnable = OMX_FALSE;
-                    }
-                }
-
-            if ( algo & EXPOSURE_ALGO )
-                {
-                if ( enable )
-                    {
-                    regionPriority.bAeRegionEnable = OMX_TRUE;
-                    }
-                else
-                    {
-                    regionPriority.bAeRegionEnable = OMX_FALSE;
-                    }
-                }
-
-            if ( algo & FOCUS_ALGO )
-                {
-                if ( enable )
-                    {
-                    regionPriority.bAfRegionEnable = OMX_TRUE;
-                    }
-                else
-                    {
-                    regionPriority.bAfRegionEnable = OMX_FALSE;
-                    }
-                }
-
-            eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
-                                    ( OMX_INDEXTYPE ) OMX_TI_IndexConfigRegionPriority3a,
-                                    &regionPriority);
-            if ( OMX_ErrorNone != eError )
-                {
-                CAMHAL_LOGEB("Error while configuring region priority 0x%x", eError);
-                }
-            else
-                {
-                CAMHAL_LOGDA("Region priority for algorithms set successfully");
-                }
-
-            }
-
         }
+
+        if ( algo & FOCUS_ALGO ) {
+            if ( enable ) {
+                mFacePriority.bAfFaceEnable =  OMX_TRUE;
+            } else {
+                mFacePriority.bAfFaceEnable =  OMX_FALSE;
+            }
+        }
+
+        eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
+                                ( OMX_INDEXTYPE ) OMX_TI_IndexConfigFacePriority3a,
+                                &mFacePriority);
+        if ( OMX_ErrorNone != eError ) {
+            CAMHAL_LOGEB("Error while configuring face priority 0x%x", eError);
+        } else {
+            CAMHAL_LOGDB("Face priority for algorithms set successfully 0x%x, 0x%x, 0x%x",
+                         mFacePriority.bAfFaceEnable,
+                         mFacePriority.bAeFaceEnable,
+                         mFacePriority.bAwbFaceEnable);
+        }
+
+    } else if ( REGION_PRIORITY == priority ) {
+
+        if ( algo & WHITE_BALANCE_ALGO ) {
+            if ( enable ) {
+                mRegionPriority.bAwbRegionEnable= OMX_TRUE;
+            } else {
+                mRegionPriority.bAwbRegionEnable = OMX_FALSE;
+            }
+        }
+
+        if ( algo & EXPOSURE_ALGO ) {
+            if ( enable ) {
+                mRegionPriority.bAeRegionEnable = OMX_TRUE;
+            } else {
+                mRegionPriority.bAeRegionEnable = OMX_FALSE;
+            }
+        }
+
+        if ( algo & FOCUS_ALGO ) {
+            if ( enable ) {
+                mRegionPriority.bAfRegionEnable = OMX_TRUE;
+            } else {
+                mRegionPriority.bAfRegionEnable = OMX_FALSE;
+            }
+        }
+
+        eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
+                                ( OMX_INDEXTYPE ) OMX_TI_IndexConfigRegionPriority3a,
+                                &mRegionPriority);
+        if ( OMX_ErrorNone != eError ) {
+            CAMHAL_LOGEB("Error while configuring region priority 0x%x", eError);
+        } else {
+            CAMHAL_LOGDB("Region priority for algorithms set successfully 0x%x, 0x%x, 0x%x",
+                         mRegionPriority.bAfRegionEnable,
+                         mRegionPriority.bAeRegionEnable,
+                         mRegionPriority.bAwbRegionEnable);
+        }
+
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 
-    return ret;
+    return ErrorUtils::omxToAndroidError(eError);
 }
 
 status_t OMXCameraAdapter::setPictureRotation(unsigned int degree)

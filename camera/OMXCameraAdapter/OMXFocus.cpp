@@ -28,6 +28,7 @@
 
 #include "CameraHal.h"
 #include "OMXCameraAdapter.h"
+#include "ErrorUtils.h"
 
 #define TOUCH_FOCUS_RANGE 0xFF
 #define AF_CALLBACK_TIMEOUT 10000000 //10 seconds timeout
@@ -130,7 +131,6 @@ status_t OMXCameraAdapter::doAutoFocus()
             }
         else if ( FOCUS_FACE_PRIORITY == focusControl.eFocusControl )
             {
-
             //Disable region priority first
             setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, false);
 
@@ -257,12 +257,7 @@ status_t OMXCameraAdapter::stopAutoFocus()
         if ( OMX_ErrorNone != eError )
             {
             CAMHAL_LOGEB("Error while stopping focus 0x%x", eError);
-            ret = -1;
-            }
-        else
-            {
-            mParameters3A.Focus = OMX_IMAGE_FocusControlOff;
-            CAMHAL_LOGDA("Autofocus stopped successfully");
+            return ErrorUtils::omxToAndroidError(eError);
             }
         }
 
