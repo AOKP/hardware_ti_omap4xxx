@@ -99,10 +99,11 @@
     status = write(hCtx->fd_omx, pPacket, nPacketSize); \
     RPC_freePacket(pPacket); \
     pPacket = NULL; \
+    if(status < 0 ) DOMX_ERROR("DOMX Write failed 0x%x %d",status,status); \
     RPC_assert(status >= 0, RPC_OMX_ErrorUndefined, "Write failed"); \
     eError = TIMM_OSAL_ReadFromPipe(hCtx->pMsgPipe[nFxnIdx], &pRetPacket, \
         RPC_MSG_SIZE_FOR_PIPE, (TIMM_OSAL_U32 *)(&nSize), TIMM_OSAL_SUSPEND); \
-    RPC_assert(eError == TIMM_OSAL_ERR_NONE, RPC_OMX_ErrorUndefined, \
+    RPC_assert(eError == TIMM_OSAL_ERR_NONE, eError, \
         "Read failed"); \
     } while(0)
 
