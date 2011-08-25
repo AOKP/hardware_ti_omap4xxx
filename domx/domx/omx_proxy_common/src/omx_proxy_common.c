@@ -1205,7 +1205,7 @@ static OMX_ERRORTYPE PROXY_FreeBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 			{
 				if(pCompPrv->bMapIonBuffers == OMX_TRUE)
 				{
-			        	munmap(pBufferHdr->pBuffer, pBufferHdr->nSize);
+	                                munmap(pBufferHdr->pBuffer, pBufferHdr->nAllocLen);
         				close(pCompPrv->tBufList[count].mmap_fd);
 				}
 				ion_free(pCompPrv->ion_fd, pCompPrv->tBufList[count].pYBuffer);
