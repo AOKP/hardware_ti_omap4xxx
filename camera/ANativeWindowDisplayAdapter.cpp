@@ -166,6 +166,7 @@ ANativeWindowDisplayAdapter::ANativeWindowDisplayAdapter():mDisplayThread(NULL),
     mGrallocHandleMap = NULL;
     mOffsetsMap = NULL;
     mFrameProvider = NULL;
+    mANativeWindow = NULL;
 
     mFrameWidth = 0;
     mFrameHeight = 0;
@@ -405,6 +406,8 @@ int ANativeWindowDisplayAdapter::enableDisplay(int width, int height, struct tim
 
 int ANativeWindowDisplayAdapter::disableDisplay()
 {
+    status_t ret = NO_ERROR;
+
     LOG_FUNCTION_NAME;
 
     if(!mDisplayEnabled)
@@ -457,7 +460,17 @@ int ANativeWindowDisplayAdapter::disableDisplay()
         if (mANativeWindow)
             for(unsigned int i = 0; i < mFramesWithCameraAdapterMap.size(); i++) {
                 int value = mFramesWithCameraAdapterMap.valueAt(i);
-                mANativeWindow->cancel_buffer(mANativeWindow, mBufferHandleMap[value]);
+                ret = mANativeWindow->cancel_buffer(mANativeWindow, mBufferHandleMap[value]);
+                if ( ENODEV == ret ) {
+                    CAMHAL_LOGEA("Preview surface abandoned!");
+                    mANativeWindow = NULL;
+                    return -ret;
+                } else if ( NO_ERROR != ret ) {
+                    CAMHAL_LOGEB("cancel_buffer() failed: %s (%d)",
+                                 strerror(-ret),
+                                 -ret);
+                   return -ret;
+                }
             }
         else
             LOGE("mANativeWindow is NULL");
@@ -515,10 +528,20 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
     mGrallocHandleMap = new IMG_native_handle_t*[lnumBufs];
     int undequeued = 0;
 
+    if ( NULL == mANativeWindow ) {
+        return NULL;
+    }
+
     // Set gralloc usage bits for window.
     err = mANativeWindow->set_usage(mANativeWindow, GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP);
     if (err != 0) {
         LOGE("native_window_set_usage failed: %s (%d)", strerror(-err), -err);
+
+        if ( ENODEV == err ) {
+            CAMHAL_LOGEA("Preview surface abandoned!");
+            mANativeWindow = NULL;
+        }
+
         return NULL;
     }
 
@@ -529,6 +552,12 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
         err = mANativeWindow->set_buffer_count(mANativeWindow, numBufs);
         if (err != 0) {
             LOGE("native_window_set_buffer_count failed: %s (%d)", strerror(-err), -err);
+
+            if ( ENODEV == err ) {
+                CAMHAL_LOGEA("Preview surface abandoned!");
+                mANativeWindow = NULL;
+            }
+
             return NULL;
         }
         CAMHAL_LOGDB("Configuring %d buffers for ANativeWindow", numBufs);
@@ -544,6 +573,12 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
 
     if (err != 0) {
         LOGE("native_window_set_buffers_geometry failed: %s (%d)", strerror(-err), -err);
+
+        if ( ENODEV == err ) {
+            CAMHAL_LOGEA("Preview surface abandoned!");
+            mANativeWindow = NULL;
+        }
+
         return NULL;
     }
 
@@ -571,6 +606,12 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
 
         if (err != 0) {
             CAMHAL_LOGEB("dequeueBuffer failed: %s (%d)", strerror(-err), -err);
+
+            if ( ENODEV == err ) {
+                CAMHAL_LOGEA("Preview surface abandoned!");
+                mANativeWindow = NULL;
+            }
+
             goto fail;
         }
 
@@ -595,7 +636,17 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
     // return the rest of the buffers back to ANativeWindow
     for(i = (mBufferCount-undequeued); i >= 0 && i < mBufferCount; i++)
     {
-        mANativeWindow->cancel_buffer(mANativeWindow, mBufferHandleMap[i]);
+        err = mANativeWindow->cancel_buffer(mANativeWindow, mBufferHandleMap[i]);
+        if (err != 0) {
+            CAMHAL_LOGEB("cancel_buffer failed: %s (%d)", strerror(-err), -err);
+
+            if ( ENODEV == err ) {
+                CAMHAL_LOGEA("Preview surface abandoned!");
+                mANativeWindow = NULL;
+            }
+
+            goto fail;
+        }
     }
 
     mFirstInit = true;
@@ -611,6 +662,7 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
         int err = mANativeWindow->cancel_buffer(mANativeWindow, mBufferHandleMap[start]);
         if (err != 0) {
           CAMHAL_LOGEB("cancelBuffer failed w/ error 0x%08x", err);
+          break;
         }
     }
     CAMHAL_LOGEA("Error occurred, performing cleanup");
@@ -699,7 +751,17 @@ int ANativeWindowDisplayAdapter::maxQueueableBuffers(unsigned int& queueable)
         goto end;
     }
 
-    mANativeWindow->get_min_undequeued_buffer_count(mANativeWindow, &undequeued);
+    ret = mANativeWindow->get_min_undequeued_buffer_count(mANativeWindow, &undequeued);
+    if ( NO_ERROR != ret ) {
+        CAMHAL_LOGEB("get_min_undequeued_buffer_count failed: %s (%d)", strerror(-ret), -ret);
+
+        if ( ENODEV == ret ) {
+            CAMHAL_LOGEA("Preview surface abandoned!");
+            mANativeWindow = NULL;
+        }
+
+        return -ret;
+    }
 
     queueable = mBufferCount - undequeued;
 
@@ -1029,14 +1091,32 @@ bool ANativeWindowDisplayAdapter::handleFrameReturn()
     int stride;  // dummy variable to get stride
     // TODO(XXX): Do we need to keep stride information in camera hal?
 
+    if ( NULL == mANativeWindow ) {
+        return false;
+    }
+
     err = mANativeWindow->dequeue_buffer(mANativeWindow, &buf, &stride);
     if (err != 0) {
         CAMHAL_LOGEB("dequeueBuffer failed: %s (%d)", strerror(-err), -err);
+
+        if ( ENODEV == err ) {
+            CAMHAL_LOGEA("Preview surface abandoned!");
+            mANativeWindow = NULL;
+        }
+
+        return false;
     }
 
     err = mANativeWindow->lock_buffer(mANativeWindow, buf);
     if (err != 0) {
         CAMHAL_LOGEB("lockbuffer failed: %s (%d)", strerror(-err), -err);
+
+        if ( ENODEV == err ) {
+            CAMHAL_LOGEA("Preview surface abandoned!");
+            mANativeWindow = NULL;
+        }
+
+        return false;
     }
 
     for(i = 0; i < mBufferCount; i++)
