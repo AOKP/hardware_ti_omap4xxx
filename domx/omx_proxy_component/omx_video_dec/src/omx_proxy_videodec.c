@@ -91,7 +91,7 @@ OMX_ERRORTYPE PROXY_VIDDEC_EventHandler(OMX_HANDLETYPE hComponent,
 
 #endif //SET_STRIDE_PADDING_FROM_PROXY
 
-#ifdef ANDROID_QUIRCK_CHANGE_PORT_VALUES
+#ifdef ANDROID_QUIRK_CHANGE_PORT_VALUES
 
 OMX_ERRORTYPE PROXY_VIDDEC_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_IN OMX_INDEXTYPE nParamIndex, OMX_INOUT OMX_PTR pParamStruct);
@@ -181,7 +181,7 @@ OMX_ERRORTYPE OMX_ProxyViddecInit(OMX_HANDLETYPE hComponent)
 	    (PROXY_COMPONENT_PRIVATE *) pHandle->pComponentPrivate;
 
 	eError = OMX_ProxyCommonInit(hComponent);	// Calling Proxy Common Init()
-#ifdef ANDROID_QUIRCK_CHANGE_PORT_VALUES
+#ifdef ANDROID_QUIRK_CHANGE_PORT_VALUES
 	pHandle->SetParameter = PROXY_VIDDEC_SetParameter;		
         pHandle->GetParameter = PROXY_VIDDEC_GetParameter;
 #endif
@@ -244,7 +244,7 @@ OMX_ERRORTYPE OMX_ProxyViddecInit(OMX_HANDLETYPE hComponent)
 	return eError;
 }
 
-#ifdef  ANDROID_QUIRCK_CHANGE_PORT_VALUES
+#ifdef  ANDROID_QUIRK_CHANGE_PORT_VALUES
 
 /* ===========================================================================*/
 /**

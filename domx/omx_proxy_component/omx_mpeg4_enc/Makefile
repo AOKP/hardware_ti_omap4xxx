@@ -1,27 +1,27 @@
-#
-#  Copyright 2001-2008 Texas Instruments - http://www.ti.com/
-# 
+#  
+#  Copyright (C) Texas Instruments - http://www.ti.com/
+#  
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
 #  You may obtain a copy of the License at
-# 
-#     http://www.apache.org/licenses/LICENSE-2.0
-# 
-#  Unless required by applicable law or agreed to in writing, software
+#  
+#        http://www.apache.org/licenses/LICENSE-2.0
+#  
+#   Unless required by applicable law or agreed to in writing, software
 #  distributed under the License is distributed on an "AS IS" BASIS,
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-#
+#  
 #  ----------------------------------------------------------------------------
 #  Revision History
 #
 #
-#  SEP xx,2002    REF=ORG			Swamy MC
+#      REF=ORG
 #      Original version.
 #  ----------------------------------------------------------------------------
 
-#PROJROOT = $(ROOTDIR)/src
+
 
 include $(PROJROOT)/make/start.mk
 
@@ -29,12 +29,16 @@ include $(PROJROOT)/make/start.mk
 
 # Arguments to tools, will move to make system once finalized.
 
-CFLAGS         = 
-CDEFS          = DEBUG
+CFLAGS         =
+CDEFS          =
+ifeq ($(BUILD),udeb)
+CDEFS          += DEBUG
+endif
+CDEFS          +=
 
-EXEC_ARGS      = 
-ST_LIB_ARGS    = 
-SH_LIB_ARGS    = 
+EXEC_ARGS      =
+ST_LIB_ARGS    =
+SH_LIB_ARGS    =
 
 # Define this macro if target runs in kernel mode
 #__KERNEL__ = 1
@@ -44,46 +48,56 @@ SH_LIB_ARGS    =
 # shared library soname (SH_LIB): filename.so.maj_ver.min_ver
 # executable            (EXEC)  : filename.out
 
-TARGETNAME  =
+TARGETNAME  = libOMX.TI.DUCATI1.VIDEO.MPEG4E.so
 
 
 # TARGETTYPE must be EXEC, ST_LIB or SH_LIB in upper case.
-#TARGETTYPE  = ST_LIB
-TARGETTYPE  =
 
-# For shared object library, soname is filename.so.maj_ver
-SH_SONAME = 
+TARGETTYPE  = SH_LIB
+
+# install directory relative to the HOSTTARGET directory
+HOSTRELEASE = lib
+
+# install directory relative to the root filesystem
+ROOTFSRELEASE = lib
 
 # Folders in which gmake will run before building current target
 
 SUBMODULES  = \
-omx_sample \
-omx_video_dec \
-omx_h264_enc \
-omx_mpeg4_enc \
- 
-#video/omx_proxy_component/test 
 
 # Filename must not begin with '.', '/' or '\'
 
-SOURCES     =
+SOURCES     = \
+src/omx_proxy_mpeg4enc.c \
+
+
 
 # Search path for include files
 
-INCLUDES    =
+INCLUDES    = \
+    $(PROJROOT)/omx_core/inc \
+    $(PROJROOT)/mm_osal/inc \
+    $(PROJROOT)/domx \
+    $(PROJROOT)/domx/omx_rpc/inc \
+
 
 # Libraries needed for linking.
 
 ST_LIBS        =
-SH_LIBS        =
+#mm_osal domx
+SH_LIBS        = domx omx_core mm_osal
+#pthread rt utils procmgr ipc rcm notify
+#SH_LIBS        += sysmgr sysmemmgr
+
 
 # Search path for library (and linker command) files.
 # Current folder and target folder are included by default.
 
-LIBINCLUDES =
+LIBINCLUDES = $(PROJROOT)/mm_osal \
+              $(PROJROOT)/domx \
+              $(PROJROOT)/omx_core
 
 
 # Do not change below "include" line(s)
 
 include $(PROJROOT)/make/build.mk
-

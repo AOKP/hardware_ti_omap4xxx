@@ -71,26 +71,26 @@
 #include <VideoMetadata.h>
 #endif
 
-#define COMPONENT_NAME "OMX.TI.DUCATI1.VIDEO.H264E"
+#define COMPONENT_NAME "OMX.TI.DUCATI1.VIDEO.MPEG4E"
 /* needs to be specific for every configuration wrapper */
 
-#define OMX_H264E_INPUT_PORT 0
+#define OMX_MPEG4E_INPUT_PORT 0
 #define LINUX_PAGE_SIZE 4096
 
 #ifdef ANDROID_QUIRK_CHANGE_PORT_VALUES
 
-OMX_ERRORTYPE LOCAL_PROXY_H264E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
+OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_IN OMX_INDEXTYPE nParamIndex, OMX_INOUT OMX_PTR pParamStruct);
 
-OMX_ERRORTYPE LOCAL_PROXY_H264E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
+OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_IN OMX_INDEXTYPE nParamIndex, OMX_INOUT OMX_PTR pParamStruct);
 
 #endif
 
-OMX_ERRORTYPE LOCAL_PROXY_H264E_GetExtensionIndex(OMX_IN OMX_HANDLETYPE hComponent,
+OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_GetExtensionIndex(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_IN OMX_STRING cParameterName, OMX_OUT OMX_INDEXTYPE * pIndexType);
 
-OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
+OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
     OMX_BUFFERHEADERTYPE * pBufferHdr);
 
 extern OMX_ERRORTYPE RPC_UTIL_GetStride(OMX_COMPONENTTYPE * hRemoteComp,
@@ -141,12 +141,12 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 
 	eError = OMX_ProxyCommonInit(hComponent);	// Calling Proxy Common Init()
 #ifdef ANDROID_QUIRK_CHANGE_PORT_VALUES
-	pHandle->SetParameter = LOCAL_PROXY_H264E_SetParameter;
-    pHandle->GetParameter = LOCAL_PROXY_H264E_GetParameter;
+	pHandle->SetParameter = LOCAL_PROXY_MPEG4E_SetParameter;
+    pHandle->GetParameter = LOCAL_PROXY_MPEG4E_GetParameter;
 #endif
 	pComponentPrivate->IsLoadedState = OMX_TRUE;
-	pHandle->EmptyThisBuffer = LOCAL_PROXY_H264E_EmptyThisBuffer;
-	pHandle->GetExtensionIndex = LOCAL_PROXY_H264E_GetExtensionIndex;
+	pHandle->EmptyThisBuffer = LOCAL_PROXY_MPEG4E_EmptyThisBuffer;
+	pHandle->GetExtensionIndex = LOCAL_PROXY_MPEG4E_GetExtensionIndex;
 
       EXIT:
 	if (eError != OMX_ErrorNone)
@@ -170,7 +170,7 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 
 /* ===========================================================================*/
 /**
- * @name PROXY_H264E_GetParameter()
+ * @name PROXY_MPEG4E_GetParameter()
  * @brief
  * @param void
  * @return OMX_ErrorNone = Successful
@@ -178,7 +178,7 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
  *
  */
 /* ===========================================================================*/
-OMX_ERRORTYPE LOCAL_PROXY_H264E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
+OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_IN OMX_INDEXTYPE nParamIndex, OMX_INOUT OMX_PTR pParamStruct)
 {
 	OMX_ERRORTYPE eError = OMX_ErrorNone;
@@ -207,14 +207,6 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 		{
 			pPortDef->format.video.eColorFormat = OMX_TI_COLOR_FormatYUV420PackedSemiPlanar;
 		}
-
-		if(pPortDef->nPortIndex == OMX_H264E_INPUT_PORT)
-		{
-			if(pCompPrv->proxyPortBuffers[OMX_H264E_INPUT_PORT].proxyBufferType == EncoderMetadataPointers)
-			{
-				pPortDef->nBufferSize = sizeof(video_metadata_t);
-			}
-		}
 	}
 	else if ( nParamIndex == OMX_IndexParamVideoPortFormat)
 	{
@@ -231,7 +223,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 
 /* ===========================================================================*/
 /**
- * @name PROXY_H264E_SetParameter()
+ * @name PROXY_MPEG4E_SetParameter()
  * @brief
  * @param void
  * @return OMX_ErrorNone = Successful
@@ -239,7 +231,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
  *
  */
 /* ===========================================================================*/
-OMX_ERRORTYPE LOCAL_PROXY_H264E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
+OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_IN OMX_INDEXTYPE nParamIndex, OMX_IN OMX_PTR pParamStruct)
 {
 	OMX_ERRORTYPE eError = OMX_ErrorNone;
@@ -276,15 +268,15 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 	else if(nParamIndex == (OMX_INDEXTYPE) OMX_TI_IndexEncoderStoreMetadatInBuffers)
 	{
 		DOMX_DEBUG("Moving to Metadatamode");
-	    if (pStoreMetaData->nPortIndex == OMX_H264E_INPUT_PORT && pStoreMetaData->bStoreMetaData == OMX_TRUE)
+	    if (pStoreMetaData->nPortIndex == OMX_MPEG4E_INPUT_PORT && pStoreMetaData->bStoreMetaData == OMX_TRUE)
 	    {
 		tParamSetNPA.nSize = sizeof(OMX_TI_PARAM_BUFFERPREANNOUNCE);
 		tParamSetNPA.nVersion.s.nVersionMajor = OMX_VER_MAJOR;
 		tParamSetNPA.nVersion.s.nVersionMinor = OMX_VER_MINOR;
 		tParamSetNPA.nVersion.s.nRevision = 0x0;
 		tParamSetNPA.nVersion.s.nStep = 0x0;
-		tParamSetNPA.nPortIndex = OMX_H264E_INPUT_PORT;
-		tParamSetNPA.bEnabled = OMX_FALSE;
+		tParamSetNPA.nPortIndex = OMX_MPEG4E_INPUT_PORT;
+		tParamSetNPA.bEnabled = OMX_TRUE;
 		//Call NPA on OMX encoder on ducati.
 		PROXY_SetParameter(hComponent,OMX_TI_IndexParamBufferPreAnnouncement, &tParamSetNPA);
 		pCompPrv->proxyPortBuffers[pStoreMetaData->nPortIndex].proxyBufferType = EncoderMetadataPointers;
@@ -296,7 +288,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 		sPortDef.nVersion.s.nVersionMinor = OMX_VER_MINOR;
 		sPortDef.nVersion.s.nRevision = 0x0;
 		sPortDef.nVersion.s.nStep = 0x0;
-		sPortDef.nPortIndex = OMX_H264E_INPUT_PORT;
+		sPortDef.nPortIndex = OMX_MPEG4E_INPUT_PORT;
 
 		eError = PROXY_GetParameter(hComponent,OMX_IndexParamPortDefinition, &sPortDef);
 		PROXY_assert(eError == OMX_ErrorNone, eError," Error in Proxy GetParameter for Port Def");
@@ -332,7 +324,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
  *
  */
 /* ===========================================================================*/
-OMX_ERRORTYPE LOCAL_PROXY_H264E_GetExtensionIndex(OMX_IN OMX_HANDLETYPE hComponent,
+OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_GetExtensionIndex(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_IN OMX_STRING cParameterName, OMX_OUT OMX_INDEXTYPE * pIndexType)
 {
 	OMX_ERRORTYPE eError = OMX_ErrorNone;
@@ -372,7 +364,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_GetExtensionIndex(OMX_IN OMX_HANDLETYPE hCompone
 
 /* ===========================================================================*/
 /**
- * @name PROXY_H264E_EmptyThisBuffer()
+ * @name PROXY_MPEG4E_EmptyThisBuffer()
  * @brief
  * @param void
  * @return OMX_ErrorNone = Successful
@@ -380,7 +372,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_GetExtensionIndex(OMX_IN OMX_HANDLETYPE hCompone
  *
  */
 /* ===========================================================================*/
-OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
+OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
     OMX_BUFFERHEADERTYPE * pBufferHdr)
 {
 
@@ -389,8 +381,6 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
 	OMX_PTR pBufferOrig = NULL;
 	OMX_U32 nStride = 0, nNumLines = 0;
-	OMX_PARAM_PORTDEFINITIONTYPE tParamStruct;
-	OMX_U32 nFilledLen, nAllocLen;
 
 	PROXY_require(pBufferHdr != NULL, OMX_ErrorBadParameter, NULL);
 	PROXY_require(hComp->pComponentPrivate != NULL, OMX_ErrorBadParameter,
@@ -399,26 +389,12 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 
 	pCompPrv = (PROXY_COMPONENT_PRIVATE *) hComp->pComponentPrivate;
 
-	tParamStruct.nSize = sizeof(OMX_PARAM_PORTDEFINITIONTYPE);
-	tParamStruct.nVersion.s.nVersionMajor = OMX_VER_MAJOR;
-	tParamStruct.nVersion.s.nVersionMinor = OMX_VER_MINOR;
-	tParamStruct.nVersion.s.nRevision = 0x0;
-	tParamStruct.nVersion.s.nStep = 0x0;
-	tParamStruct.nPortIndex = OMX_H264E_INPUT_PORT;
-
-	eError = PROXY_GetParameter(hComponent, OMX_IndexParamPortDefinition, &tParamStruct);
-	PROXY_require(eError == OMX_ErrorNone, OMX_ErrorBadParameter, "Error is Get Parameter for port def");
-	nFilledLen = pBufferHdr->nFilledLen;
-	nAllocLen = pBufferHdr->nAllocLen;
-	pBufferHdr->nFilledLen = tParamStruct.nBufferSize;
-	pBufferHdr->nAllocLen =  tParamStruct.nBufferSize;
-
 	DOMX_DEBUG
 	    ("%s hComponent=%p, pCompPrv=%p, nFilledLen=%d, nOffset=%d, nFlags=%08x",
 	    __FUNCTION__,hComponent, pCompPrv, pBufferHdr->nFilledLen,
 	    pBufferHdr->nOffset, pBufferHdr->nFlags);
 
-	if( pCompPrv->proxyPortBuffers[OMX_H264E_INPUT_PORT].proxyBufferType == EncoderMetadataPointers)
+	if( pCompPrv->proxyPortBuffers[OMX_MPEG4E_INPUT_PORT].proxyBufferType == EncoderMetadataPointers)
 	{
 		OMX_U32 *pTempBuffer;
 		OMX_U32 nMetadataBufferType;
@@ -475,11 +451,8 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	PROXY_EmptyThisBuffer(hComponent, pBufferHdr);
 
 	if( pCompPrv->proxyPortBuffers[pBufferHdr->nInputPortIndex].proxyBufferType == EncoderMetadataPointers)
-	{
 		pBufferHdr->pBuffer = pBufferOrig;
-		pBufferHdr->nFilledLen = nFilledLen;
-		pBufferHdr->nAllocLen = nAllocLen;
-	}
+
 	EXIT:
 		return eError;
 }
