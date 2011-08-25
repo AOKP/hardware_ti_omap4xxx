@@ -67,12 +67,6 @@ typedef struct tiler_block_info tiler_block_info;
 #include "tilermem_utils.h"
 #include "memmgr.h"
 
-#ifdef HEAPTRACKER
-extern void print_backtrace(const intptr_t *bt, int depth);
-#else
-static void print_backtrace(const intptr_t *bt, int depth) {}
-#endif
-
 /* list of allocations */
 struct _AllocData {
     struct tiler_buf_info buf;
@@ -526,7 +520,6 @@ static void *tiler_mmap(struct tiler_block_info *blks, int num_blocks,
 #ifndef STUB_TILER
     dump_buf(&buf, "==(RBUF)=>");
     int ret = ioctl(td, TILIOC_RBUF, &buf);
-    print_backtrace(NULL, 0);
     dump_buf(&buf, "<=(RBUF)==");
     if (NOT_I(ret,==,0)) return NULL;
     size = buf.length;
@@ -585,7 +578,6 @@ static void *tiler_mmap(struct tiler_block_info *blks, int num_blocks,
         NOT_I(buf_cache_add(&buf, buf_type),==,0))
     {
 #ifndef STUB_TILER
-        print_backtrace(NULL, 0);
         A_I(ioctl(td, TILIOC_URBUF, &buf),==,0);
 #else
         FREE(buf_c);
@@ -780,7 +772,6 @@ int MemMgr_Free(void *bufPtr)
     {
 #ifndef STUB_TILER
         dump_buf(&buf, "==(URBUF)=>");
-        print_backtrace(NULL, 0);
         ret = A_I(ioctl(td, TILIOC_URBUF, &buf),==,0);
         dump_buf(&buf, "<=(URBUF)==");
 
@@ -879,7 +870,6 @@ int MemMgr_UnMap(void *bufPtr)
     {
 #ifndef STUB_TILER
         dump_buf(&buf, "==(URBUF)=>");
-        print_backtrace(NULL, 0);
         ret = A_I(ioctl(td, TILIOC_URBUF, &buf),==,0);
         dump_buf(&buf, "<=(URBUF)==");
 
