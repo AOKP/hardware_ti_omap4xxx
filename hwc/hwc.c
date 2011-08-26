@@ -73,8 +73,10 @@ struct omap4_hwc_device {
     int dsscomp_fd;
     int hdmi_fb_fd;
 
-    __u16 aspect_ratio;
-    struct omap_video_timings ext_timings;
+    __u16 ext_width;
+    __u16 ext_height;
+    __u32 ext_xres;
+    __u32 ext_yres;
     float m[2][3];
     IMG_framebuffer_device_public_t *fb_dev;
     struct dsscomp_setup_dispc_data dsscomp_data;
@@ -348,14 +350,14 @@ static inline int m_round(float x)
 static void set_ext_matrix(omap4_hwc_device_t *hwc_dev, int orig_w, int orig_h)
 {
     /* target screen aspect ratio */
-    int target_x = hwc_dev->aspect_ratio >> 8;
-    int target_y = hwc_dev->aspect_ratio & 0xFF;
+    int target_x = hwc_dev->ext_width;
+    int target_y = hwc_dev->ext_height;
     /* source pixel aspect ratio */
     int source_x = 1;
     int source_y = 1;
 
-    int target_w = hwc_dev->ext_timings.x_res;
-    int target_h = hwc_dev->ext_timings.y_res;
+    int target_w = hwc_dev->ext_xres;
+    int target_h = hwc_dev->ext_yres;
     int cropped_w = target_w;
     int cropped_h = target_h;
     if (!target_x || !target_y) {
@@ -395,10 +397,10 @@ static void
 omap4_hwc_create_ext_matrix(omap4_hwc_device_t *hwc_dev)
 {
     /* use VGA external resolution as default */
-    if (!hwc_dev->ext_timings.x_res ||
-        !hwc_dev->ext_timings.y_res) {
-        hwc_dev->ext_timings.x_res = 640;
-        hwc_dev->ext_timings.y_res = 480;
+    if (!hwc_dev->ext_xres ||
+        !hwc_dev->ext_yres) {
+        hwc_dev->ext_xres = 640;
+        hwc_dev->ext_yres = 480;
     }
 
     /* if docking, we cannot create the matrix ahead of time as it depends on input size */
@@ -933,13 +935,38 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
     pthread_mutex_lock(&hwc_dev->lock);
     hwc_dev->ext = 0;
     if (state) {
-        struct dsscomp_display_info dis = { .ix = 1,  };
-        int ret = ioctl(hwc_dev->dsscomp_fd, DSSCOMP_QUERY_DISPLAY, &dis);
+        struct _qdis {
+            struct dsscomp_display_info dis;
+            struct dsscomp_videomode modedb[16];
+        } d = { .dis = { .ix = 1 } };
+        d.dis.modedb_len = sizeof(d.modedb) / sizeof(*d.modedb);
+        int ret = ioctl(hwc_dev->dsscomp_fd, DSSCOMP_QUERY_DISPLAY, &d);
         if (!ret) {
-            hwc_dev->ext_timings = dis.timings;
-            hwc_dev->aspect_ratio = dis.s3d_info.gap;	// temp way of getting aspect ratio
+            __u32 i, best = ~0;
+            for (i = 0; i < d.dis.modedb_len; i++) {
+                LOGD("#%d: %dx%d %dHz", i, d.modedb[i].xres, d.modedb[i].yres, d.modedb[i].refresh);
+                if (!~best &&
+                    d.modedb[i].xres == hwc_dev->fb_dev->base.height &&
+                    d.modedb[i].yres == hwc_dev->fb_dev->base.width) {
+                    best = i;
+                }
+            }
+            if (~best || d.dis.modedb_len) {
+                struct dsscomp_setup_display_data sdis = { .ix = 1, };
+                best = ~best ? best : 0;
+                sdis.mode = d.dis.modedb[best];
+                LOGD("picking #%d", best);
+                ioctl(hwc_dev->dsscomp_fd, DSSCOMP_SETUP_DISPLAY, &sdis);
+                hwc_dev->ext_xres = sdis.mode.xres;
+                hwc_dev->ext_yres = sdis.mode.yres;
+            } else {
+                hwc_dev->ext_xres = d.dis.timings.x_res;
+                hwc_dev->ext_yres = d.dis.timings.y_res;
+            }
+            hwc_dev->ext_width = d.dis.width_in_mm;
+            hwc_dev->ext_height = d.dis.height_in_mm;
             hwc_dev->ext = EXT_ON | 3;
-            if (dis.channel == OMAP_DSS_CHANNEL_DIGIT)
+            if (d.dis.channel == OMAP_DSS_CHANNEL_DIGIT)
                 hwc_dev->ext |= EXT_TV;
             ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
         }
