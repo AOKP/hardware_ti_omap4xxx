@@ -600,6 +600,7 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
 
     LOG_FUNCTION_NAME;
 
+    //CAC is disabled by default
     OMX_INIT_STRUCT_PTR (&bCAC, OMX_CONFIG_BOOLEANTYPE);
     bCAC.bEnabled = OMX_FALSE;
 
@@ -621,13 +622,11 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
             {
             CAMHAL_LOGDA("Camera mode: HIGH QUALITY");
             camMode.eCamOperatingMode = OMX_CaptureImageProfileBase;
-            bCAC.bEnabled = OMX_TRUE;
             }
         else if( OMXCameraAdapter::HIGH_QUALITY_ZSL== mode )
             {
             CAMHAL_LOGDA("Camera mode: HIGH QUALITY_ZSL");
             camMode.eCamOperatingMode = OMX_TI_CaptureImageProfileZeroShutterLag;
-            bCAC.bEnabled = OMX_TRUE;
             }
         else if( OMXCameraAdapter::VIDEO_MODE == mode )
             {
