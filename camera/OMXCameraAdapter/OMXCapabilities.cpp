@@ -197,6 +197,14 @@ const CapU32 OMXCameraAdapter::mSensorNames [] = {
     // TODO(XXX): need to account for S3D camera later
 };
 
+// values for supported variable framerates sorted in ascending order
+// CapU32Pair = (max fps, min fps, string representation)
+const CapU32Pair OMXCameraAdapter::mVarFramerates [] = {
+    { 15, 15, "(15000,15000)"},
+    { 30, 15, "(15000,30000)" },
+    { 30, 24, "(24000,30000)" },
+    { 30, 30, "(30000,30000)" },
+};
 /************************************
  * static helper functions
  *************************************/
@@ -297,18 +305,18 @@ status_t OMXCameraAdapter::encodeFramerateCap(OMX_U32 framerateMax,
 }
 
 status_t OMXCameraAdapter::encodeVFramerateCap(OMX_TI_CAPTYPE &caps,
+                                               const CapU32Pair *cap,
+                                               size_t capCount,
                                                char *buffer,
                                                char *defaultRange,
                                                size_t bufferSize) {
     status_t ret = NO_ERROR;
     uint32_t minVFR, maxVFR;
-    char tmpBuffer[MAX_PROP_VALUE_LENGTH];
-    bool skipLast = false;
-    uint32_t min, max;
+    int default_index = -1;
 
     LOG_FUNCTION_NAME;
 
-    if ( NULL == buffer ) {
+    if ( (NULL == buffer) || (NULL == cap) ) {
         CAMHAL_LOGEA("Invalid input arguments");
         return -EINVAL;
     }
@@ -325,27 +333,37 @@ status_t OMXCameraAdapter::encodeVFramerateCap(OMX_TI_CAPTYPE &caps,
         minVFR = FPS_MIN;
     }
 
-    memset(tmpBuffer, '\0', MAX_PROP_VALUE_LENGTH);
-    min = max = 0;
-    for (unsigned int i = minVFR; i < maxVFR; i += FPS_STEP) {
+    for (unsigned int i = 0; i < capCount; i++) {
+        // add cap[i] if it is in range and maxVFR != minVFR
+        if ((maxVFR >= cap[i].num1) && (minVFR <= cap[i].num2)) {
+            if (buffer[0] != '\0') {
+                strncat(buffer, PARAM_SEP, bufferSize - 1);
+            }
+            strncat(buffer, cap[i].param, bufferSize - 1);
 
-        min = i * CameraHal::VFR_SCALE;
-        max = (i + FPS_RANGE_STEP) * CameraHal::VFR_SCALE;
-
-        snprintf(tmpBuffer, ( MAX_PROP_VALUE_LENGTH - 1 ), "(%d,%d)", min, min);
-        strncat(buffer, tmpBuffer, ( bufferSize - 1 ));
-        strncat(buffer, PARAM_SEP, bufferSize - 1);
-
-        if (max <= maxVFR * CameraHal::VFR_SCALE) {
-            snprintf(tmpBuffer, ( MAX_PROP_VALUE_LENGTH - 1 ), "(%d,%d)", min, max);
-            strncat(buffer, tmpBuffer, ( bufferSize - 1 ));
-            strncat(buffer, PARAM_SEP, bufferSize - 1);
+            // choose the max variable framerate as default
+            if (cap[i].num1 != cap[i].num2) {
+                default_index = i;
+            }
         }
     }
-    remove_last_sep(buffer);
 
-    if ( 1 < strlen(tmpBuffer) ) {
-        snprintf(defaultRange, ( MAX_PROP_VALUE_LENGTH - 1 ), "%d,%d", min, min);
+    // if we haven't found any caps in the list to populate
+    // just use the min and max
+    if (buffer[0] == '\0') {
+        snprintf(buffer, bufferSize - 1,
+             "(%u,%u)",
+             minVFR * CameraHal::VFR_SCALE,
+             maxVFR * CameraHal::VFR_SCALE);
+    }
+
+    if (default_index != -1) {
+        snprintf(defaultRange, (MAX_PROP_VALUE_LENGTH - 1), "%lu,%lu",
+                 cap[default_index].num2 * CameraHal::VFR_SCALE,
+                 cap[default_index].num1 * CameraHal::VFR_SCALE);
+    } else {
+        snprintf(defaultRange, (MAX_PROP_VALUE_LENGTH - 1), "%u,%u",
+                 minVFR * CameraHal::VFR_SCALE, maxVFR * CameraHal::VFR_SCALE);
     }
 
     LOG_FUNCTION_NAME_EXIT;
@@ -648,7 +666,12 @@ status_t OMXCameraAdapter::insertVFramerates(CameraProperties::Properties* param
 
     memset(supported, '\0', MAX_PROP_VALUE_LENGTH);
 
-    ret = encodeVFramerateCap(caps, supported, defaultRange, MAX_PROP_VALUE_LENGTH);
+    ret = encodeVFramerateCap(caps,
+                              mVarFramerates,
+                              ARRAY_SIZE(mVarFramerates),
+                              supported,
+                              defaultRange,
+                              MAX_PROP_VALUE_LENGTH);
 
     if ( NO_ERROR != ret ) {
         CAMHAL_LOGEB("Error inserting supported preview framerate ranges 0x%x", ret);
@@ -997,7 +1020,7 @@ status_t OMXCameraAdapter::insertSenMount(CameraProperties::Properties* params, 
     status_t ret = NO_ERROR;
     char supported[MAX_PROP_VALUE_LENGTH];
     const char *p;
-    int i = 0;
+    unsigned int i = 0;
 
     LOG_FUNCTION_NAME;
 
