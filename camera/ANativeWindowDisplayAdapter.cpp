@@ -404,7 +404,7 @@ int ANativeWindowDisplayAdapter::enableDisplay(int width, int height, struct tim
     return NO_ERROR;
 }
 
-int ANativeWindowDisplayAdapter::disableDisplay()
+int ANativeWindowDisplayAdapter::disableDisplay(bool cancel_buffer)
 {
     status_t ret = NO_ERROR;
 
@@ -456,7 +456,8 @@ int ANativeWindowDisplayAdapter::disableDisplay()
         mPreviewWidth = 0;
         mPreviewHeight = 0;
 
-
+       if(cancel_buffer)
+        {
         if (mANativeWindow)
             for(unsigned int i = 0; i < mFramesWithCameraAdapterMap.size(); i++) {
                 int value = mFramesWithCameraAdapterMap.valueAt(i);
@@ -474,6 +475,11 @@ int ANativeWindowDisplayAdapter::disableDisplay()
             }
         else
             LOGE("mANativeWindow is NULL");
+        }
+       else
+        {
+        mANativeWindow = NULL;
+        }
 
         ///Clear the frames with camera adapter map
         mFramesWithCameraAdapterMap.clear();
@@ -508,7 +514,7 @@ void ANativeWindowDisplayAdapter::destroy()
     if ( mDisplayEnabled )
     {
         CAMHAL_LOGDA("WARNING: Calling destroy of Display adapter when display enabled. Disabling display..");
-        disableDisplay();
+        disableDisplay(false);
     }
 
     mBufferCount = 0;

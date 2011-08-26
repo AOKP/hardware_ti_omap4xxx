@@ -67,7 +67,7 @@ public:
     virtual int setFrameProvider(FrameNotifier *frameProvider);
     virtual int setErrorHandler(ErrorNotifier *errorNotifier);
     virtual int enableDisplay(int width, int height, struct timeval *refTime = NULL, S3DParameters *s3dParams = NULL);
-    virtual int disableDisplay();
+    virtual int disableDisplay(bool cancel_buffer = true);
     virtual status_t pauseDisplay(bool pause);
 
 #if PPM_INSTRUMENTATION || PPM_INSTRUMENTATION_ABS

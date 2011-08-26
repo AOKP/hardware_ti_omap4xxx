@@ -778,7 +778,7 @@ public:
     virtual int setFrameProvider(FrameNotifier *frameProvider) = 0;
     virtual int setErrorHandler(ErrorNotifier *errorNotifier) = 0;
     virtual int enableDisplay(int width, int height, struct timeval *refTime = NULL, S3DParameters *s3dParams = NULL) = 0;
-    virtual int disableDisplay() = 0;
+    virtual int disableDisplay(bool cancel_buffer = true) = 0;
     //Used for Snapshot review temp. pause
     virtual int pauseDisplay(bool pause) = 0;
 
