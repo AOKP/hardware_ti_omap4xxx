@@ -55,6 +55,7 @@ extern "C" {
 
 
 #define MAX_URI_LENGTH      (OMX_MAX_STRINGNAME_SIZE)
+#define MAX_ALGOAREAS       (35)
 
 /*======================================================================= */
 /* Enumerated values for operation mode for compressed image
@@ -2384,7 +2385,11 @@ typedef struct OMX_TI_CAPTYPE {
 	OMX_U16                 ulCapVarFPSModesCount;  // supported variable FPS capture modes count
 	OMX_TI_VARFPSTYPE       tCapVarFPSModes[10];
 	OMX_TI_SENMOUNT_TYPE    tSenMounting;
+        OMX_U16                 ulAlgoAreasFocusCount;    // supported number of AlgoAreas for focus areas
+       OMX_U16                  ulAlgoAreasExposureCount; // supported number of AlgoAreas for exposure areas
 } OMX_TI_CAPTYPE;
+
+
 
 /**
  * Defines 3A Face priority mode.
@@ -2599,6 +2604,48 @@ typedef struct OMX_TI_CONFIG_ZSLDELAYTYPE {
     OMX_VERSIONTYPE nVersion;
     OMX_S32 nDelay;
 } OMX_TI_CONFIG_ZSLDELAYTYPE;
+
+/**
+ * AlogAreas purpose
+ * This type specifies the purpose of areas specified in OMX_ALGOAREASTYPE.
+ * */
+typedef enum OMX_ALGOAREAPURPOSE{
+    OMX_AlgoAreaFocus = 0, // Multi region focus
+    OMX_AlgoAreaExposure,
+}OMX_ALGOAREAPURPOSE;
+
+typedef  struct OMX_ALGOAREA {
+    OMX_S32 nLeft;                      /**< The leftmost coordinate of the area rectangle */
+    OMX_S32 nTop;                       /**< The topmost coordinate of the area rectangle */
+    OMX_U32 nWidth;                     /**< The width of the area rectangle in pixels */
+    OMX_U32 nHeight;                    /**< The height of the area rectangle in pixels */
+    OMX_U32 nPriority;                  /**< Priority - ranges from 1 to 1000 */
+}OMX_ALGOAREA;
+
+/**
+ * Algorythm areas type
+ * This type defines areas for Multi Region Focus,
+ * or another algorithm region parameters,
+ * such as Multi Region Auto Exposure.
+ *
+ * STRUCT MEMBERS:
+ *  nSize            : Size of the structure in bytes
+ *  nVersion         : OMX specification version information
+ *  nPortIndex       : Port index
+ *  tAreaPosition    : Area definition - coordinates and purpose - Multi Region Focus, Auto Exposure, etc.
+ *  nNumAreas        : Number of areas defined in the array
+ *  nAlgoAreaPurpose : Algo area purpose - eg. Multi Region Focus is OMX_AlgoAreaFocus
+ */
+typedef  struct OMX_ALGOAREASTYPE {
+    OMX_U32 nSize;
+    OMX_VERSIONTYPE nVersion;
+    OMX_U32 nPortIndex;
+
+    OMX_U32 nNumAreas;
+    OMX_ALGOAREA tAlgoAreas[MAX_ALGOAREAS];
+    OMX_ALGOAREAPURPOSE nAlgoAreaPurpose;
+} OMX_ALGOAREASTYPE;
+
 
 
 #ifdef __cplusplus
