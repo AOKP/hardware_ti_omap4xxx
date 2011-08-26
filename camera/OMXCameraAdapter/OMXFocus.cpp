@@ -68,6 +68,7 @@ status_t OMXCameraAdapter::doAutoFocus()
     status_t ret = NO_ERROR;
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focusControl;
+    OMX_PARAM_FOCUSSTATUSTYPE focusStatus;
 
     LOG_FUNCTION_NAME;
 
@@ -87,54 +88,72 @@ status_t OMXCameraAdapter::doAutoFocus()
     // If the app calls autoFocus, the camera will stop sending face callbacks.
     pauseFaceDetection(true);
 
-    if ( NO_ERROR == ret )
-        {
-        OMX_INIT_STRUCT_PTR (&focusControl, OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE);
-        focusControl.eFocusControl = ( OMX_IMAGE_FOCUSCONTROLTYPE ) mParameters3A.Focus;
+    OMX_INIT_STRUCT_PTR (&focusControl, OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE);
+    focusControl.eFocusControl = ( OMX_IMAGE_FOCUSCONTROLTYPE ) mParameters3A.Focus;
 
-        if ( ( mParameters3A.Focus != OMX_IMAGE_FocusControlAuto )  &&
-             ( mParameters3A.Focus != OMX_IMAGE_FocusControlAutoInfinity ) )
-            {
-
-            ret = RegisterForEvent(mCameraAdapterParameters.mHandleComp,
-                                        (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
-                                        OMX_ALL,
-                                        OMX_IndexConfigCommonFocusStatus,
-                                        mDoAFSem);
-
-            if ( NO_ERROR == ret )
-                {
-                ret = setFocusCallback(true);
-                }
-
-            }
-
-        eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
-                                OMX_IndexConfigFocusControl,
-                                &focusControl);
-
-        if ( OMX_ErrorNone != eError )
-            {
-            CAMHAL_LOGEB("Error while starting focus 0x%x", eError);
-            return INVALID_OPERATION;
-            }
-        else
-            {
-            CAMHAL_LOGDA("Autofocus started successfully");
-            }
+    //In case we have CAF running we should first check the AF status.
+    //If it has managed to lock, then do as usual and return status
+    //immediately. If lock is not available, then switch temporarily
+    //to 'autolock' and do normal AF.
+    if ( mParameters3A.Focus == OMX_IMAGE_FocusControlAuto ) {
+//FIXME: The CAF seems to return focus failure all the time.
+// Probably this is tuning related, disable this until the
+// MMS IQ team fixes it
+#if 0
+        ret = checkFocus(&focusStatus);
+#else
+        ret = NO_ERROR;
+        focusStatus.eFocusStatus = OMX_FocusStatusReached;
+#endif
+        if ( NO_ERROR != ret ) {
+            CAMHAL_LOGEB("Focus status check failed 0x%x!", ret);
+            return ret;
+        } else {
+            CAMHAL_LOGDB("Focus status check 0x%x!", focusStatus.eFocusStatus);
         }
 
-    if ( ( mParameters3A.Focus != OMX_IMAGE_FocusControlAuto )  &&
-         ( mParameters3A.Focus != OMX_IMAGE_FocusControlAutoInfinity ) )
-        {
+        if ( OMX_FocusStatusReached != focusStatus.eFocusStatus ) {
+            focusControl.eFocusControl = OMX_IMAGE_FocusControlAutoLock;
+        }
+    }
+
+    if ( ( focusControl.eFocusControl != OMX_IMAGE_FocusControlAuto ) &&
+         ( focusControl.eFocusControl != ( OMX_IMAGE_FOCUSCONTROLTYPE )
+                 OMX_IMAGE_FocusControlAutoInfinity ) ) {
+
+        ret = RegisterForEvent(mCameraAdapterParameters.mHandleComp,
+                                    (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
+                                    OMX_ALL,
+                                    OMX_IndexConfigCommonFocusStatus,
+                                    mDoAFSem);
+
+        if ( NO_ERROR == ret ) {
+            ret = setFocusCallback(true);
+        }
+
+    }
+
+    eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
+                            OMX_IndexConfigFocusControl,
+                            &focusControl);
+
+    if ( OMX_ErrorNone != eError ) {
+        CAMHAL_LOGEB("Error while starting focus 0x%x", eError);
+        return INVALID_OPERATION;
+    } else {
+        CAMHAL_LOGDA("Autofocus started successfully");
+    }
+
+    if ( ( focusControl.eFocusControl != OMX_IMAGE_FocusControlAuto ) &&
+         ( focusControl.eFocusControl != ( OMX_IMAGE_FOCUSCONTROLTYPE )
+                 OMX_IMAGE_FocusControlAutoInfinity ) ) {
         ret = mDoAFSem.WaitTimeout(AF_CALLBACK_TIMEOUT);
         //Disable auto focus callback from Ducati
         setFocusCallback(false);
         //Signal a dummy AF event so that in case the callback from ducati
         //does come then it doesnt crash after
         //exiting this function since eventSem will go out of scope.
-        if(ret != NO_ERROR)
-            {
+        if(ret != NO_ERROR) {
             CAMHAL_LOGEA("Autofocus callback timeout expired");
             SignalEvent(mCameraAdapterParameters.mHandleComp,
                                         (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
@@ -142,21 +161,22 @@ status_t OMXCameraAdapter::doAutoFocus()
                                         OMX_IndexConfigCommonFocusStatus,
                                         NULL );
             returnFocusStatus(true);
-            }
-        else
-            {
+        } else {
             CAMHAL_LOGDA("Autofocus callback received");
             ret = returnFocusStatus(false);
-            }
+        }
 
-        }
-    else
-        {
-        if ( NO_ERROR == ret )
-            {
+    } else {
+        if ( NO_ERROR == ret ) {
             ret = returnFocusStatus(false);
-            }
         }
+    }
+
+    //Restore CAF if needed
+    if ( ( mParameters3A.Focus == OMX_IMAGE_FocusControlAuto ) &&
+         ( focusControl.eFocusControl == OMX_IMAGE_FocusControlAutoLock ) ) {
+        mPending3Asettings |= SetFocus;
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 
@@ -211,10 +231,38 @@ status_t OMXCameraAdapter::stopAutoFocus()
     return ret;
 }
 
+status_t OMXCameraAdapter::getFocusMode(OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE &focusMode)
+{;
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+
+    LOG_FUNCTION_NAME;
+
+    if ( OMX_StateInvalid == mComponentState ) {
+        CAMHAL_LOGEA("OMX component is in invalid state");
+        return NO_INIT;
+    }
+
+    OMX_INIT_STRUCT_PTR (&focusMode, OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE);
+    focusMode.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
+
+    eError =  OMX_GetConfig(mCameraAdapterParameters.mHandleComp,
+                            OMX_IndexConfigFocusControl,
+                            &focusMode);
+
+    if ( OMX_ErrorNone != eError ) {
+        CAMHAL_LOGEB("Error while retrieving focus mode 0x%x", eError);
+    }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return ErrorUtils::omxToAndroidError(eError);
+}
+
 status_t OMXCameraAdapter::cancelAutoFocus()
 {
     status_t ret = NO_ERROR;
     OMX_ERRORTYPE eError = OMX_ErrorNone;
+    OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focusMode;
 
     LOG_FUNCTION_NAME;
     // Unlock 3A locks since they were locked by AF
@@ -225,10 +273,15 @@ status_t OMXCameraAdapter::cancelAutoFocus()
       CAMHAL_LOGDA("AE/AWB unlocked successfully");
     }
 
+    ret = getFocusMode(focusMode);
+    if ( NO_ERROR != ret ) {
+        return ret;
+    }
+
     //Stop the AF only for modes other than CAF  or Inifinity
-    if ( ( mParameters3A.Focus != OMX_IMAGE_FocusControlAuto ) ||
-         ( mParameters3A.Focus != OMX_IMAGE_FocusControlAutoInfinity ) )
-        {
+    if ( ( focusMode.eFocusControl != OMX_IMAGE_FocusControlAuto ) &&
+         ( focusMode.eFocusControl != ( OMX_IMAGE_FOCUSCONTROLTYPE )
+                 OMX_IMAGE_FocusControlAutoInfinity ) ) {
         stopAutoFocus();
         //Signal a dummy AF event so that in case the callback from ducati
         //does come then it doesnt crash after
@@ -238,7 +291,7 @@ status_t OMXCameraAdapter::cancelAutoFocus()
                                     OMX_ALL,
                                     OMX_IndexConfigCommonFocusStatus,
                                     NULL );
-        }
+    }
 
     // If the apps call #cancelAutoFocus()}, the face callbacks will also resume.
     pauseFaceDetection(false);

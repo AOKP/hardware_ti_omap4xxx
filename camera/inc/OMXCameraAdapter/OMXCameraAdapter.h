@@ -419,6 +419,8 @@ private:
     status_t stopAutoFocus();
     status_t checkFocus(OMX_PARAM_FOCUSSTATUSTYPE *eFocusStatus);
     status_t returnFocusStatus(bool timeoutReached);
+    status_t getFocusMode(OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE &focusMode);
+
 
     //Focus distances
     status_t setParametersFocus(const CameraParameters &params,
