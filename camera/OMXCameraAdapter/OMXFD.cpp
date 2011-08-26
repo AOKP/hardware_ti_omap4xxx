@@ -28,6 +28,8 @@
 #include "CameraHal.h"
 #include "OMXCameraAdapter.h"
 
+#define FACE_DETECTION_THRESHOLD 80
+
 namespace android {
 
 status_t OMXCameraAdapter::setParametersFD(const CameraParameters &params,
@@ -379,30 +381,39 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
             trans_bot = 3; // bottom
 
         }
-        for ( int i = 0  ; i < faceData->ulFaceCount ; i++)
-            {
 
-            tmp = ( double ) faceData->tFacePosition[i].nLeft / ( double ) previewWidth;
+        int j = 0, i = 0;
+        for ( ; j < faceData->ulFaceCount ; j++)
+            {
+             //Face filtering
+             //For real faces, it is seen that the h/w passes a score >=80
+             //For false faces, we seem to get even a score of 70 sometimes.
+             //In order to avoid any issue at application level, we filter
+             //<=70 score here.
+            if(faceData->tFacePosition[j].nScore <= FACE_DETECTION_THRESHOLD)
+             continue;
+
+            tmp = ( double ) faceData->tFacePosition[j].nLeft / ( double ) previewWidth;
             tmp *= hRange;
             tmp -= hRange/2;
             faces[i].rect[trans_left] = tmp;
 
-            tmp = ( double ) faceData->tFacePosition[i].nTop / ( double )previewHeight;
+            tmp = ( double ) faceData->tFacePosition[j].nTop / ( double )previewHeight;
             tmp *= vRange;
             tmp -= vRange/2;
             faces[i].rect[trans_top] = tmp;
 
-            tmp = ( double ) faceData->tFacePosition[i].nWidth / ( double ) previewWidth;
+            tmp = ( double ) faceData->tFacePosition[j].nWidth / ( double ) previewWidth;
             tmp *= hRange;
             tmp *= orient_mult;
             faces[i].rect[trans_right] = faces[i].rect[trans_left] + tmp;
 
-            tmp = ( double ) faceData->tFacePosition[i].nHeight / ( double ) previewHeight;
+            tmp = ( double ) faceData->tFacePosition[j].nHeight / ( double ) previewHeight;
             tmp *= vRange;
             tmp *= orient_mult;
             faces[i].rect[trans_bot] = faces[i].rect[trans_top] + tmp;
 
-            faces[i].score = faceData->tFacePosition[i].nScore;
+            faces[i].score = faceData->tFacePosition[j].nScore;
             faces[i].id = 0;
             faces[i].left_eye[0] = CameraFDResult::INVALID_DATA;
             faces[i].left_eye[1] = CameraFDResult::INVALID_DATA;
@@ -410,9 +421,10 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
             faces[i].right_eye[1] = CameraFDResult::INVALID_DATA;
             faces[i].mouth[0] = CameraFDResult::INVALID_DATA;
             faces[i].mouth[1] = CameraFDResult::INVALID_DATA;
+            i++;
             }
 
-        faceResult->number_of_faces = faceData->ulFaceCount;
+        faceResult->number_of_faces = i;
         faceResult->faces = faces;
 
     } else {
