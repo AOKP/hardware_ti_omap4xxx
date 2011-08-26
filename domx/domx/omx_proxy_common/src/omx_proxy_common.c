@@ -1203,6 +1203,8 @@ static OMX_ERRORTYPE PROXY_FreeBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 	if (pCompPrv->tBufList[count].pBufHeader)
 	{
 #ifdef USE_ION
+		if(pCompPrv->tBufList[count].pYBuffer)
+		{
         		(void)RPC_UTIL_GetStride(pCompPrv->hRemoteComp, nPortIndex, &nStride);
         		if (nStride == 0 && pCompPrv->bUseIon == OMX_TRUE)
 			{
@@ -1214,6 +1216,7 @@ static OMX_ERRORTYPE PROXY_FreeBuffer(OMX_IN OMX_HANDLETYPE hComponent,
 				ion_free(pCompPrv->ion_fd, pCompPrv->tBufList[count].pYBuffer);
 				pCompPrv->tBufList[count].pYBuffer = NULL;
 			}
+		}
 #endif
 #ifdef ALLOCATE_TILER_BUFFER_IN_PROXY
 		if(pCompPrv->tBufList[count].pYBuffer)
