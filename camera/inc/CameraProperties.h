@@ -127,6 +127,7 @@ public:
     static const char AUTO_WHITEBALANCE_LOCK_SUPPORTED[];
     static const char MAX_NUM_METERING_AREAS[];
     static const char METERING_AREAS[];
+    static const char MAX_NUM_FOCUS_AREAS[];
 
     CameraProperties();
     ~CameraProperties();

@@ -925,6 +925,29 @@ status_t OMXCameraAdapter::insertFlickerModes(CameraProperties::Properties* para
     return ret;
 }
 
+status_t OMXCameraAdapter::insertAreas(CameraProperties::Properties* params, OMX_TI_CAPTYPE &caps) {
+    status_t ret = NO_ERROR;
+    char supported[MAX_PROP_VALUE_LENGTH];
+    const char *p;
+
+    LOG_FUNCTION_NAME;
+
+    memset(supported, '\0', MAX_PROP_VALUE_LENGTH);
+
+    sprintf(supported, "%d", caps.ulAlgoAreasFocusCount);
+    params->set(CameraProperties::MAX_FOCUS_AREAS, supported);
+    CAMHAL_LOGDB("Maximum supported focus areas %s", supported);
+
+    memset(supported, '\0', MAX_PROP_VALUE_LENGTH);
+    sprintf(supported, "%d", caps.ulAlgoAreasExposureCount);
+    params->set(CameraProperties::MAX_NUM_METERING_AREAS, supported);
+    CAMHAL_LOGDB("Maximum supported exposure areas %s", supported);
+
+    LOG_FUNCTION_NAME;
+
+    return ret;
+}
+
 status_t OMXCameraAdapter::insertLocks(CameraProperties::Properties* params, OMX_TI_CAPTYPE &caps) {
     status_t ret = NO_ERROR;
 
@@ -967,7 +990,6 @@ status_t OMXCameraAdapter::insertDefaults(CameraProperties::Properties* params, 
     params->set(CameraProperties::PREVIEW_SIZE, DEFAULT_PREVIEW_SIZE);
     params->set(CameraProperties::REQUIRED_PREVIEW_BUFS, DEFAULT_NUM_PREV_BUFS);
     params->set(CameraProperties::REQUIRED_IMAGE_BUFS, DEFAULT_NUM_PIC_BUFS);
-    params->set(CameraProperties::MAX_FOCUS_AREAS, DEFAULT_MAX_FOCUS_AREAS);
     params->set(CameraProperties::SATURATION, DEFAULT_SATURATION);
     params->set(CameraProperties::SCENE_MODE, DEFAULT_SCENE_MODE);
     params->set(CameraProperties::SHARPNESS, DEFAULT_SHARPNESS);
@@ -978,7 +1000,6 @@ status_t OMXCameraAdapter::insertDefaults(CameraProperties::Properties* params, 
     params->set(CameraProperties::MAX_FD_SW_FACES, DEFAULT_MAX_FD_SW_FACES);
     params->set(CameraProperties::AUTO_EXPOSURE_LOCK, DEFAULT_AE_LOCK);
     params->set(CameraProperties::AUTO_WHITEBALANCE_LOCK, DEFAULT_AWB_LOCK);
-    params->set(CameraProperties::MAX_NUM_METERING_AREAS, DEFAULT_MAX_NUM_METERING_AREAS);
     params->set(CameraProperties::FOCAL_LENGTH, DEFAULT_FOCAL_LENGTH);
     params->set(CameraProperties::HOR_ANGLE, DEFAULT_HOR_ANGLE);
     params->set(CameraProperties::VER_ANGLE, DEFAULT_VER_ANGLE);
@@ -1105,10 +1126,16 @@ status_t OMXCameraAdapter::insertCapabilities(CameraProperties::Properties* para
     if ( NO_ERROR == ret ) {
         ret = insertLocks(params, caps);
     }
+    if ( NO_ERROR == ret) {
+        ret = insertAreas(params, caps);
+
+    }
 
     if ( NO_ERROR == ret ) {
         ret = insertDefaults(params, caps);
     }
+
+
 
     LOG_FUNCTION_NAME_EXIT;
 

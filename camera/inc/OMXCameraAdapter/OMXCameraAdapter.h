@@ -474,6 +474,7 @@ private:
     status_t setExposureLock(Gen3A_settings& Gen3A);
     status_t setWhiteBalanceLock(Gen3A_settings& Gen3A);
     status_t set3ALock(OMX_BOOL toggle);
+    status_t setMeteringAreas(Gen3A_settings& Gen3A);
 
     //API to set FrameRate using VFR interface
     status_t setVFramerate(OMX_U32 minFrameRate,OMX_U32 maxFrameRate);
@@ -496,12 +497,7 @@ private:
     status_t printComponentVersion(OMX_HANDLETYPE handle);
 
     //Touch AF
-    status_t setTouchFocus(size_t posX,
-                           size_t posY,
-                           size_t posWidth,
-                           size_t posHeight,
-                           size_t previewWidth,
-                           size_t previewHeight);
+    status_t setTouchFocus();
 
     //Face detection
     status_t setParametersFD(const CameraParameters &params,
@@ -557,6 +553,7 @@ private:
     static status_t insertSenMount(CameraProperties::Properties*, OMX_TI_CAPTYPE&);
     static status_t insertDefaults(CameraProperties::Properties*, OMX_TI_CAPTYPE&);
     static status_t insertLocks(CameraProperties::Properties*, OMX_TI_CAPTYPE&);
+    static status_t insertAreas(CameraProperties::Properties*, OMX_TI_CAPTYPE&);
 
     status_t setParametersCapture(const CameraParameters &params,
                                   BaseCameraAdapter::AdapterState state);
@@ -712,7 +709,6 @@ private:
     static const char DEFAULT_FOCAL_LENGTH[];
     static const char DEFAULT_HOR_ANGLE[];
     static const char DEFAULT_VER_ANGLE[];
-    static const size_t MAX_FOCUS_AREAS;
 
     OMX_VERSIONTYPE mCompRevision;
 
@@ -728,6 +724,9 @@ private:
     // Current Focus areas
     Vector< sp<CameraArea> > mFocusAreas;
     mutable Mutex mFocusAreasLock;
+
+    // Current Metering areas
+    Vector< sp<CameraArea> > mMeteringAreas;
 
     CaptureMode mCapMode;
     size_t mBurstFrames;

@@ -827,6 +827,11 @@ int CameraHal::setParameters(const CameraParameters& params)
             CAMHAL_LOGDB("Auto WhiteBalance Lock set %s", params.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK));
             mParameters.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, valstr);
           }
+        if( (valstr = params.get(CameraParameters::KEY_METERING_AREAS)) != NULL )
+            {
+            CAMHAL_LOGEB("Metering areas position set %s", params.get(CameraParameters::KEY_METERING_AREAS));
+            mParameters.set(CameraParameters::KEY_METERING_AREAS, valstr);
+            }
 
         CameraParameters adapterParams = mParameters;
 
