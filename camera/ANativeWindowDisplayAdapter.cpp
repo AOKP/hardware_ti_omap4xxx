@@ -21,6 +21,7 @@
 
 #include "ANativeWindowDisplayAdapter.h"
 #include <OMX_IVCommon.h>
+#include <ui/GraphicBuffer.h>
 #include <ui/GraphicBufferMapper.h>
 #include <hal_public.h>
 
@@ -32,7 +33,6 @@ const int ANativeWindowDisplayAdapter::DISPLAY_TIMEOUT = 1000;  // seconds
 
 //Suspends buffers after given amount of failed dq's
 const int ANativeWindowDisplayAdapter::FAILED_DQS_TO_SUSPEND = 3;
-
 
 
 OMX_COLOR_FORMATTYPE toOMXPixFormat(const char* parameters_format)
@@ -407,6 +407,7 @@ int ANativeWindowDisplayAdapter::enableDisplay(int width, int height, struct tim
 int ANativeWindowDisplayAdapter::disableDisplay(bool cancel_buffer)
 {
     status_t ret = NO_ERROR;
+    GraphicBufferMapper &mapper = GraphicBufferMapper::get();
 
     LOG_FUNCTION_NAME;
 
@@ -461,6 +462,10 @@ int ANativeWindowDisplayAdapter::disableDisplay(bool cancel_buffer)
         if (mANativeWindow)
             for(unsigned int i = 0; i < mFramesWithCameraAdapterMap.size(); i++) {
                 int value = mFramesWithCameraAdapterMap.valueAt(i);
+
+                // unlock buffer before giving it up
+                mapper.unlock((buffer_handle_t) mGrallocHandleMap[value]);
+
                 ret = mANativeWindow->cancel_buffer(mANativeWindow, mBufferHandleMap[value]);
                 if ( ENODEV == ret ) {
                     CAMHAL_LOGEA("Preview surface abandoned!");
@@ -533,6 +538,9 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
     mBufferHandleMap = new buffer_handle_t*[lnumBufs];
     mGrallocHandleMap = new IMG_native_handle_t*[lnumBufs];
     int undequeued = 0;
+    GraphicBufferMapper &mapper = GraphicBufferMapper::get();
+    Rect bounds;
+
 
     if ( NULL == mANativeWindow ) {
         return NULL;
@@ -632,11 +640,23 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
         CAMHAL_LOGDB("Adding buffer index=%d, address=0x%x", i, buffers[i]);
     }
 
-
     // lock the initial queueable buffers
+    bounds.left = 0;
+    bounds.top = 0;
+    bounds.right = width;
+    bounds.bottom = height;
+
     for( i = 0;  i < mBufferCount-undequeued; i++ )
     {
+        void *y_uv[2];
+
         mANativeWindow->lock_buffer(mANativeWindow, mBufferHandleMap[i]);
+
+        mapper.lock((buffer_handle_t) mGrallocHandleMap[i],
+                    GRALLOC_USAGE_HW_RENDER |
+                    GRALLOC_USAGE_SW_READ_RARELY |
+                    GRALLOC_USAGE_SW_WRITE_NEVER,
+                    bounds, y_uv);
     }
 
     // return the rest of the buffers back to ANativeWindow
@@ -653,6 +673,7 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
 
             goto fail;
         }
+        mFramesWithCameraAdapterMap.removeItem((int) mGrallocHandleMap[i]);
     }
 
     mFirstInit = true;
@@ -670,6 +691,7 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
           CAMHAL_LOGEB("cancelBuffer failed w/ error 0x%08x", err);
           break;
         }
+        mFramesWithCameraAdapterMap.removeItem((int) mGrallocHandleMap[start]);
     }
     CAMHAL_LOGEA("Error occurred, performing cleanup");
     if ( buffers )
@@ -978,6 +1000,7 @@ status_t ANativeWindowDisplayAdapter::PostFrame(ANativeWindowDisplayAdapter::Dis
     status_t ret = NO_ERROR;
     uint32_t actualFramesWithDisplay = 0;
     android_native_buffer_t *buffer = NULL;
+    GraphicBufferMapper &mapper = GraphicBufferMapper::get();
     int i;
 
     ///@todo Do cropping based on the stabilized frame coordinates
@@ -1035,6 +1058,9 @@ status_t ANativeWindowDisplayAdapter::PostFrame(ANativeWindowDisplayAdapter::Dis
             mYOff = yOff;
         }
 
+        // unlock buffer before sending to display
+        mapper.unlock((buffer_handle_t) mGrallocHandleMap[i]);
+
         ret = mANativeWindow->enqueue_buffer(mANativeWindow, mBufferHandleMap[i]);
         if (ret != 0) {
             LOGE("Surface::queueBuffer returned error %d", ret);
@@ -1072,6 +1098,10 @@ status_t ANativeWindowDisplayAdapter::PostFrame(ANativeWindowDisplayAdapter::Dis
     else
     {
         Mutex::Autolock lock(mLock);
+
+        // unlock buffer before giving it up
+        mapper.unlock((buffer_handle_t) mGrallocHandleMap[i]);
+
         // cancel buffer and dequeue another one
         ret = mANativeWindow->cancel_buffer(mANativeWindow, mBufferHandleMap[i]);
         if (ret != 0) {
@@ -1095,6 +1125,10 @@ bool ANativeWindowDisplayAdapter::handleFrameReturn()
     buffer_handle_t* buf;
     int i = 0;
     int stride;  // dummy variable to get stride
+    GraphicBufferMapper &mapper = GraphicBufferMapper::get();
+    Rect bounds;
+    void *y_uv[2];
+
     // TODO(XXX): Do we need to keep stride information in camera hal?
 
     if ( NULL == mANativeWindow ) {
@@ -1130,6 +1164,17 @@ bool ANativeWindowDisplayAdapter::handleFrameReturn()
         if (mBufferHandleMap[i] == buf)
             break;
     }
+
+    // lock buffer before sending to FrameProvider for filling
+    bounds.left = 0;
+    bounds.top = 0;
+    bounds.right = mFrameWidth;
+    bounds.bottom = mFrameHeight;
+    mapper.lock((buffer_handle_t) mGrallocHandleMap[i],
+                GRALLOC_USAGE_HW_RENDER |
+                GRALLOC_USAGE_SW_READ_RARELY |
+                GRALLOC_USAGE_SW_WRITE_NEVER,
+                bounds, y_uv);
 
     mFramesWithCameraAdapterMap.add((int) mGrallocHandleMap[i], i);
 

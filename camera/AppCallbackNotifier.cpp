@@ -26,7 +26,7 @@
 #include <ui/GraphicBuffer.h>
 #include <ui/GraphicBufferMapper.h>
 
-
+#define LOCK_BUFFER_TRIES 5
 namespace android {
 
 const int AppCallbackNotifier::NOTIFIER_TIMEOUT = -1;
@@ -319,6 +319,7 @@ static void copy2Dto1D(void *dst,
     unsigned char *bufferDstEnd, *bufferSrcEnd;
     uint16_t *bufferSrc_UV;
     void *y_uv[2];     //y_uv[0]=> y pointer; y_uv[1]=>uv pointer
+    int lock_try_count = 0;
 
     GraphicBufferMapper &mapper = GraphicBufferMapper::get();
     Rect bounds;
@@ -329,9 +330,18 @@ static void copy2Dto1D(void *dst,
     bounds.bottom = height;
 
     // get the y & uv pointers from the gralloc handle;
-    mapper.lock((buffer_handle_t)src,
-                GRALLOC_USAGE_SW_READ_RARELY | GRALLOC_USAGE_SW_WRITE_NEVER,
-                bounds, y_uv);
+    while (mapper.lock((buffer_handle_t)src,
+                       GRALLOC_USAGE_SW_READ_RARELY | GRALLOC_USAGE_SW_WRITE_NEVER,
+                       bounds, y_uv) < 0) {
+        // give up after LOCK_BUFFER_TRIES (defined in this file)
+        if (++lock_try_count > LOCK_BUFFER_TRIES) {
+            return;
+        }
+
+        // sleep for 50 ms before we try to lock again.
+        // somebody else has a write lock on this buffer
+        usleep(50000);
+    }
 
     CAMHAL_LOGDB("copy2Dto1D() y= %p ; uv=%p.",y_uv[0],y_uv[1]);
     CAMHAL_LOGDB("pixelFormat,= %d; offset=%d",*pixelFormat,offset);
