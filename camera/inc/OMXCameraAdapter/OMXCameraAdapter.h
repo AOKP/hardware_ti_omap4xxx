@@ -66,7 +66,7 @@ namespace android {
 #define DEFAULT_THUMB_WIDTH         160
 #define DEFAULT_THUMB_HEIGHT        120
 #define FRAME_RATE_FULL_HD          27
-#define ZOOM_STAGES                 61
+#define ZOOM_STAGES                 31
 
 #define FACE_DETECTION_BUFFER_SIZE  0x1000
 
