@@ -284,7 +284,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 		tParamSetNPA.nVersion.s.nRevision = 0x0;
 		tParamSetNPA.nVersion.s.nStep = 0x0;
 		tParamSetNPA.nPortIndex = OMX_H264E_INPUT_PORT;
-		tParamSetNPA.bEnabled = OMX_TRUE;
+		tParamSetNPA.bEnabled = OMX_FALSE;
 		//Call NPA on OMX encoder on ducati.
 		PROXY_SetParameter(hComponent,OMX_TI_IndexParamBufferPreAnnouncement, &tParamSetNPA);
 		pCompPrv->proxyPortBuffers[pStoreMetaData->nPortIndex].proxyBufferType = EncoderMetadataPointers;
@@ -389,6 +389,8 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
 	OMX_PTR pBufferOrig = NULL;
 	OMX_U32 nStride = 0, nNumLines = 0;
+	OMX_PARAM_PORTDEFINITIONTYPE tParamStruct;
+	OMX_U32 nFilledLen, nAllocLen;
 
 	PROXY_require(pBufferHdr != NULL, OMX_ErrorBadParameter, NULL);
 	PROXY_require(hComp->pComponentPrivate != NULL, OMX_ErrorBadParameter,
@@ -396,6 +398,20 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	PROXY_CHK_VERSION(pBufferHdr, OMX_BUFFERHEADERTYPE);
 
 	pCompPrv = (PROXY_COMPONENT_PRIVATE *) hComp->pComponentPrivate;
+
+	tParamStruct.nSize = sizeof(OMX_PARAM_PORTDEFINITIONTYPE);
+	tParamStruct.nVersion.s.nVersionMajor = OMX_VER_MAJOR;
+	tParamStruct.nVersion.s.nVersionMinor = OMX_VER_MINOR;
+	tParamStruct.nVersion.s.nRevision = 0x0;
+	tParamStruct.nVersion.s.nStep = 0x0;
+	tParamStruct.nPortIndex = OMX_H264E_INPUT_PORT;
+
+	eError = PROXY_GetParameter(hComponent, OMX_IndexParamPortDefinition, &tParamStruct);
+	PROXY_require(eError == OMX_ErrorNone, OMX_ErrorBadParameter, "Error is Get Parameter for port def");
+	nFilledLen = pBufferHdr->nFilledLen;
+	nAllocLen = pBufferHdr->nAllocLen;
+	pBufferHdr->nFilledLen = tParamStruct.nBufferSize;
+	pBufferHdr->nAllocLen =  tParamStruct.nBufferSize;
 
 	DOMX_DEBUG
 	    ("%s hComponent=%p, pCompPrv=%p, nFilledLen=%d, nOffset=%d, nFlags=%08x",
@@ -459,8 +475,11 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	PROXY_EmptyThisBuffer(hComponent, pBufferHdr);
 
 	if( pCompPrv->proxyPortBuffers[pBufferHdr->nInputPortIndex].proxyBufferType == EncoderMetadataPointers)
+	{
 		pBufferHdr->pBuffer = pBufferOrig;
-
+		pBufferHdr->nFilledLen = nFilledLen;
+		pBufferHdr->nAllocLen = nAllocLen;
+	}
 	EXIT:
 		return eError;
 }
