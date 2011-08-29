@@ -149,7 +149,7 @@ char Core_Array[][MAX_CORENAME_LENGTH] =
     { \
         DOMX_DEBUG("Corresponding RPC function executed successfully"); \
         eError = eCompReturn; \
-        PROXY_assert(eError == OMX_ErrorNone, eError, "Error returned from OMX API in ducati"); \
+        PROXY_assert((eError == OMX_ErrorNone) || (eError == OMX_ErrorNoMore), eError, "Error returned from OMX API in ducati"); \
     } else \
     { \
         DOMX_ERROR("RPC function returned error 0x%x", eRPCError); \
@@ -178,7 +178,7 @@ char Core_Array[][MAX_CORENAME_LENGTH] =
 
 #ifdef USE_ION
 
-RPC_OMX_ERRORTYPE RPC_RegisterBuffer(OMX_HANDLETYPE hRPCCtx, int fd, 
+RPC_OMX_ERRORTYPE RPC_RegisterBuffer(OMX_HANDLETYPE hRPCCtx, int fd,
 				     struct ion_handle **handle)
 {
 	int status;
@@ -193,7 +193,7 @@ RPC_OMX_ERRORTYPE RPC_RegisterBuffer(OMX_HANDLETYPE hRPCCtx, int fd,
 	return RPC_OMX_ErrorNone;
 }
 
-static OMX_ERRORTYPE PROXY_AllocateBufferIonCarveout(PROXY_COMPONENT_PRIVATE *pCompPrv, 
+static OMX_ERRORTYPE PROXY_AllocateBufferIonCarveout(PROXY_COMPONENT_PRIVATE *pCompPrv,
 						 size_t len, struct ion_handle **handle)
 {
 	int fd;
@@ -204,7 +204,7 @@ static OMX_ERRORTYPE PROXY_AllocateBufferIonCarveout(PROXY_COMPONENT_PRIVATE *pC
 	DOMX_DEBUG("ION being USED for allocation!!!!! handle = %x, ret =%x",temp,ret);
 	if (ret)
 			return OMX_ErrorInsufficientResources;
-	/*	
+	/*
 	ret = ion_share(pCompPrv->ion_fd, temp, &fd);
 	if (ret) {
 		ion_free(pCompPrv->ion_fd, temp);
@@ -2015,7 +2015,7 @@ OMX_ERRORTYPE OMX_ProxyCommonInit(OMX_HANDLETYPE hComponent)
 
 	pCompPrv->ion_fd = ion_open();
 	if(pCompPrv->ion_fd == 0)
-	{		
+	{
 		DOMX_ERROR("ion_open failed!!!");
 		return OMX_ErrorInsufficientResources;
 	}

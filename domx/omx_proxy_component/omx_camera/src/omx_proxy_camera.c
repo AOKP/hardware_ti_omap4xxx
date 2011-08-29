@@ -415,8 +415,11 @@ OMX_ERRORTYPE DCC_Init(OMX_HANDLETYPE hComponent)
 
 	dccbuf_size = read_DCCdir(NULL, dcc_dir, nIndex);
 
-	PROXY_assert(dccbuf_size > 0, OMX_ErrorInsufficientResources,
-	    "No DCC files found, switching back to default DCC");
+    if(dccbuf_size <= 0)
+    {
+	    DOMX_DEBUG("No DCC files found, switching back to default DCC");
+        return OMX_ErrorInsufficientResources;
+    }
 
 	MemReqDescTiler =
 		(MemAllocBlock *) TIMM_OSAL_Malloc((sizeof(MemAllocBlock) * 2),

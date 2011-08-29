@@ -475,7 +475,7 @@ done:
 int camera_device_open(const hw_module_t* module, const char* name,
                 hw_device_t** device)
 {
-    int rv = -EINVAL;
+    int rv = 0;
     int num_cameras = 0;
     int cameraid;
     ti_camera_device_t* camera_device = NULL;
