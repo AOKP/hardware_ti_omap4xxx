@@ -1114,6 +1114,7 @@ public:
 
 /*----------Member variables - Private ---------------------*/
 private:
+    bool mDynamicPreviewSwitch;
     //keeps paused state of display
     bool mDisplayPaused;
     //Index of current camera adapter

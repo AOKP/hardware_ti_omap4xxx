@@ -263,55 +263,14 @@ int CameraHal::setParameters(const CameraParameters& params)
 
             CAMHAL_LOGDB("PreviewFormat %s", params.getPreviewFormat());
 
-        if ((valstr = params.getPreviewFormat()) != NULL) {
-            if ( isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FORMATS))) {
-                mParameters.setPreviewFormat(valstr);
-            } else {
-                CAMHAL_LOGEB("Invalid preview format.Supported: %s",  mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FORMATS));
-                return -EINVAL;
+            if ((valstr = params.getPreviewFormat()) != NULL) {
+                if ( isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FORMATS))) {
+                    mParameters.setPreviewFormat(valstr);
+                } else {
+                    CAMHAL_LOGEB("Invalid preview format.Supported: %s",  mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FORMATS));
+                    return -EINVAL;
+                }
             }
-        }
-
-            params.getPreviewSize(&w, &h);
-            if (w == -1 && h == -1) {
-                CAMHAL_LOGEA("Unable to get preview size");
-                return -EINVAL;
-              }
-
-            int orientation =0;
-            if((valstr = params.get(TICameraParameters::KEY_SENSOR_ORIENTATION)) != NULL)
-                {
-                CAMHAL_LOGDB("Sensor Orientation is set to %s", params.get(TICameraParameters::KEY_SENSOR_ORIENTATION));
-                mParameters.set(TICameraParameters::KEY_SENSOR_ORIENTATION, valstr);
-                orientation = params.getInt(TICameraParameters::KEY_SENSOR_ORIENTATION);
-                }
-
-            if(orientation ==90 || orientation ==270)
-           {
-              if ( !isResolutionValid(h,w, mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_SIZES)))
-               {
-                CAMHAL_LOGEB("Invalid preview resolution %d x %d", w, h);
-                return -EINVAL;
-               }
-              else
-              {
-                mParameters.setPreviewSize(w, h);
-               }
-           }
-           else
-           {
-            if ( !isResolutionValid(w, h, mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_SIZES)))
-                {
-                CAMHAL_LOGEB("Invalid preview resolution %d x %d", w, h);
-                return -EINVAL;
-                }
-            else
-                {
-                mParameters.setPreviewSize(w, h);
-                }
-           }
-
-            CAMHAL_LOGDB("PreviewResolution by App %d x %d", w, h);
 
             if ((valstr = params.get(TICameraParameters::KEY_VNF)) != NULL) {
                 if ( (params.getInt(TICameraParameters::KEY_VNF)==0) || (params.getInt(TICameraParameters::KEY_VNF)==1) ) {
@@ -361,6 +320,60 @@ int CameraHal::setParameters(const CameraParameters& params)
                 mParameters.set(TICameraParameters::KEY_AUTOCONVERGENCE, valstr);
                 }
 
+            }
+
+        //CTS requirement, we should be able to change the preview resolution
+        //while in paused display state
+        if ( !previewEnabled() || mDisplayPaused )
+            {
+            params.getPreviewSize(&w, &h);
+            if (w == -1 && h == -1) {
+                CAMHAL_LOGEA("Unable to get preview size");
+                return -EINVAL;
+              }
+
+            int oldWidth, oldHeight;
+            mParameters.getPreviewSize(&oldWidth, &oldHeight);
+
+            int orientation =0;
+            if((valstr = params.get(TICameraParameters::KEY_SENSOR_ORIENTATION)) != NULL)
+                {
+                CAMHAL_LOGDB("Sensor Orientation is set to %s", params.get(TICameraParameters::KEY_SENSOR_ORIENTATION));
+                mParameters.set(TICameraParameters::KEY_SENSOR_ORIENTATION, valstr);
+                orientation = params.getInt(TICameraParameters::KEY_SENSOR_ORIENTATION);
+                }
+
+            if(orientation ==90 || orientation ==270)
+           {
+              if ( !isResolutionValid(h,w, mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_SIZES)))
+               {
+                CAMHAL_LOGEB("Invalid preview resolution %d x %d", w, h);
+                return -EINVAL;
+               }
+              else
+              {
+                mParameters.setPreviewSize(w, h);
+               }
+           }
+           else
+           {
+            if ( !isResolutionValid(w, h, mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_SIZES)))
+                {
+                CAMHAL_LOGEB("Invalid preview resolution %d x %d", w, h);
+                return -EINVAL;
+                }
+            else
+                {
+                mParameters.setPreviewSize(w, h);
+                }
+           }
+
+            if ( ( oldWidth != w ) || ( oldHeight != h ) )
+                {
+                mDynamicPreviewSwitch = true;
+                }
+
+            CAMHAL_LOGDB("PreviewResolution by App %d x %d", w, h);
             }
 
         // Handle RECORDING_HINT to Set/Reset Video Mode Parameters
@@ -1276,8 +1289,15 @@ status_t CameraHal::startPreview()
         {
             mAppCallbackNotifier->enableMsgType (CAMERA_MSG_PREVIEW_FRAME);
         }
-        return ret;
-
+        if ( mDynamicPreviewSwitch )
+            {
+            forceStopPreview();
+            mDynamicPreviewSwitch = false;
+            }
+        else
+            {
+            return ret;
+            }
         }
 
     /// Ensure that buffers for preview are allocated before we start the camera
@@ -2553,6 +2573,7 @@ CameraHal::CameraHal(int cameraId)
     mRecordingEnabled = 0;
     mRecordEnabled = 0;
     mSensorListener = NULL;
+    mDynamicPreviewSwitch = false;
 
 #if PPM_INSTRUMENTATION || PPM_INSTRUMENTATION_ABS
 
