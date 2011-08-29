@@ -1019,6 +1019,7 @@ status_t CameraHal::allocPreviewDataBufs(size_t size, size_t bufferCount)
 
     if ( NO_ERROR == ret )
         {
+        bytes = ((bytes+4095)/4096)*4096;
         mPreviewDataBufs = (int32_t *)mMemoryManager->allocateBuffer(0, 0, NULL, bytes, bufferCount);
 
         CAMHAL_LOGDB("Size of Preview data buffer = %d", bytes);
@@ -1101,6 +1102,7 @@ status_t CameraHal::allocImageBufs(unsigned int width, unsigned int height, size
 
     if ( NO_ERROR == ret )
         {
+        bytes = ((bytes+4095)/4096)*4096;
         mImageBufs = (int32_t *)mMemoryManager->allocateBuffer(0, 0, previewFormat, bytes, bufferCount);
 
         CAMHAL_LOGDB("Size of Image cap buffer = %d", bytes);

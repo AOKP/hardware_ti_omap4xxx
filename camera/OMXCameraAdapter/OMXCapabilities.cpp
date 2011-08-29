@@ -1128,8 +1128,8 @@ status_t OMXCameraAdapter::getCaps(CameraProperties::Properties* params, OMX_HAN
 
     LOG_FUNCTION_NAME;
 
-    // allocate tiler (or ion) buffer for caps
-    caps_size = sizeof(OMX_TI_CAPTYPE);
+    // allocate tiler (or ion) buffer for caps (size is always a multiple of 4K)
+    caps_size = ((sizeof(OMX_TI_CAPTYPE)+4095)/4096)*4096;
     caps = (OMX_TI_CAPTYPE**) memMgr.allocateBuffer(0, 0, NULL, caps_size, 1);
 
     if (!caps) {

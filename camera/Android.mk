@@ -57,6 +57,7 @@ LOCAL_C_INCLUDES += \
     $(LOCAL_PATH)/inc/OMXCameraAdapter \
     $(LOCAL_PATH)/../libtiutils \
     hardware/ti/omap4xxx/tiler \
+    hardware/ti/omap4xxx/ion \
     frameworks/base/include/ui \
     frameworks/base/include/utils \
     hardware/ti/omap4xxx/domx/omx_core/inc \
@@ -75,7 +76,8 @@ LOCAL_SHARED_LIBRARIES:= \
     libtimemmgr \
     libcamera_client \
     libgui \
-    libdomx
+    libdomx \
+    libion \
 
 LOCAL_CFLAGS := -fno-short-enums -DCOPY_IMAGE_BUFFER
 
@@ -106,6 +108,7 @@ LOCAL_C_INCLUDES += \
     $(LOCAL_PATH)/inc/V4LCameraAdapter \
     $(LOCAL_PATH)/../libtiutils \
     hardware/ti/omap4xxx/tiler \
+    hardware/ti/omap4xxx/ion \
     frameworks/base/include/ui \
     frameworks/base/include/utils \
     frameworks/base/include/media/stagefright/openmax
@@ -117,7 +120,8 @@ LOCAL_SHARED_LIBRARIES:= \
     libcutils \
     libtiutils \
     libtimemmgr \
-    libcamera_client
+    libcamera_client \
+    libion \
 
 LOCAL_CFLAGS := -fno-short-enums -DCOPY_IMAGE_BUFFER
 

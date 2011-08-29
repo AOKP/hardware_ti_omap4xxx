@@ -26,6 +26,8 @@ extern "C" {
 
 #include "memmgr.h"
 #include "tiler.h"
+#include <ion.h>
+
 //#include <timm_osal_interfaces.h>
 //#include <timm_osal_trace.h>
 
@@ -46,12 +48,20 @@ namespace android {
 void* MemoryManager::allocateBuffer(int width, int height, const char* format, int &bytes, int numBufs)
 {
     LOG_FUNCTION_NAME;
+
+    if(mIonFd == 0)
+        {
+        mIonFd = ion_open();
+        if(mIonFd == 0)
+            {
+            CAMHAL_LOGEA("ion_open failed!!!");
+            return NULL;
+            }
+        }
+
     ///We allocate numBufs+1 because the last entry will be marked NULL to indicate end of array, which is used when freeing
     ///the buffers
     const uint numArrayEntriesC = (uint)(numBufs+1);
-
-    MemAllocBlock tMemBlock[ALLOCATION_2D];
-    memset(tMemBlock, 0, sizeof(MemAllocBlock));
 
     ///Allocate a buffer array
     uint32_t *bufsArr = new uint32_t [numArrayEntriesC];
@@ -66,115 +76,56 @@ void* MemoryManager::allocateBuffer(int width, int height, const char* format, i
     ///If a value of an array element is NULL, it means we didnt allocate it
     memset(bufsArr, 0, sizeof(*bufsArr) * numArrayEntriesC);
 
-    ///If the bytes field is not zero, it means it is a 1-D tiler buffer request (possibly for image capture bit stream buffer)
-    if(bytes!=0)
+    //2D Allocations are not supported currently
+    if(bytes != 0)
         {
+        struct ion_handle *handle;
+        int mmap_fd;
+
         ///1D buffers
         for (int i = 0; i < numBufs; i++)
             {
-            tMemBlock->dim.len = bytes;
-            tMemBlock->fmt = PIXEL_FMT_PAGE;
-            tMemBlock->stride = 0;
-            CAMHAL_LOGDB("requested bytes = %d", bytes);
-            CAMHAL_LOGDB("tMemBlock.dim.len = %d", tMemBlock->dim.len);
-            bufsArr[i] = (uint32_t)MemMgr_Alloc(tMemBlock, 1);
-            if(!bufsArr[i])
+            int ret = ion_alloc(mIonFd, bytes, 0, 1 << ION_HEAP_TYPE_CARVEOUT, &handle);
+            if(ret < 0)
                 {
-                LOGE("Buffer allocation failed for iteration %d", i);
+                CAMHAL_LOGEB("ion_alloc resulted in error %d", ret);
                 goto error;
                 }
-            else
+
+            CAMHAL_LOGDB("Before mapping, handle = %x, nSize = %d", handle, bytes);
+            if ((ret = ion_map(mIonFd, handle, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, 0,
+                          (unsigned char**)&bufsArr[i], &mmap_fd)) < 0)
                 {
-                CAMHAL_LOGDB("Allocated Tiler PAGED mode buffer address[%x]", bufsArr[i]);
+                CAMHAL_LOGEB("Userspace mapping of ION buffers returned error %d", ret);
+                ion_free(mIonFd, handle);
+                goto error;
                 }
+
+            mIonHandleMap.add(bufsArr[i], (unsigned int)handle);
+            mIonFdMap.add(bufsArr[i], (unsigned int) mmap_fd);
+            mIonBufLength.add(bufsArr[i], (unsigned int) bytes);
             }
 
         }
-    else ///If bytes is not zero, then it is a 2-D tiler buffer request
+    else // If bytes is not zero, then it is a 2-D tiler buffer request
         {
-        ///2D buffers
-
-        for (int i = 0; i < numBufs; i++)
-            {
-            int numAllocs = 1;
-            pixel_fmt_t pixelFormat[ALLOCATION_2D];
-            int stride[ALLOCATION_2D];
-
-            if(!strcmp(format,(const char *) CameraParameters::PIXEL_FORMAT_YUV422I))
-                {
-                ///YUV422I format
-                pixelFormat[0] = PIXEL_FMT_16BIT;
-                stride[0] = STRIDE_16BIT;
-                }
-            else if(!strcmp(format,(const char *) CameraParameters::PIXEL_FORMAT_YUV420SP))
-                {
-                ///YUV420 NV12 format
-                pixelFormat[0] = PIXEL_FMT_8BIT;
-                pixelFormat[1] = PIXEL_FMT_16BIT;
-                stride[0] = STRIDE_8BIT;
-                stride[1] = STRIDE_16BIT;
-                numAllocs = 2;
-                }
-            else if(!strcmp(format,(const char *) CameraParameters::PIXEL_FORMAT_RGB565))
-                {
-                ///RGB 565 format
-                pixelFormat[0] = PIXEL_FMT_16BIT;
-                stride[0] = STRIDE_16BIT;
-                }
-            else if(!strcmp(format,(const char *) TICameraParameters::PIXEL_FORMAT_RAW))
-                {
-                ///RAW format
-                pixelFormat[0] = PIXEL_FMT_16BIT;
-                stride[0] = STRIDE_16BIT;
-                }
-            else
-                {
-                ///By default assume YUV420 NV12 format
-                ///YUV420 NV12 format
-                pixelFormat[0] = PIXEL_FMT_8BIT;
-                pixelFormat[1] = PIXEL_FMT_16BIT;
-                stride[0] = STRIDE_8BIT;
-                stride[1] = STRIDE_16BIT;
-                numAllocs = 2;
-                }
-
-            for(int index=0;index<numAllocs;index++)
-                {
-                tMemBlock[index].fmt = pixelFormat[index];
-                tMemBlock[index].stride = stride[index];
-                tMemBlock[index].dim.area.width=  width;/*width*/
-                tMemBlock[index].dim.area.height=  height;/*height*/
-                }
-
-            bufsArr[i] = (uint32_t)MemMgr_Alloc(tMemBlock, numAllocs);
-            if(!bufsArr[i])
-                {
-                CAMHAL_LOGEB("Buffer allocation failed for iteration %d", i);
-                goto error;
-                }
-            else
-                {
-                CAMHAL_LOGDB("Allocated Tiler PAGED mode buffer address[%x]", bufsArr[i]);
-                }
-            }
         }
 
         LOG_FUNCTION_NAME_EXIT;
 
         return (void*)bufsArr;
 
-    error:
-        LOGE("Freeing buffers already allocated after error occurred");
-        freeBuffer(bufsArr);
-        free(tMemBlock);
+error:
+    LOGE("Freeing buffers already allocated after error occurred");
+    freeBuffer(bufsArr);
 
-        if ( NULL != mErrorNotifier.get() )
-            {
-            mErrorNotifier->errorNotify(-ENOMEM);
-            }
+    if ( NULL != mErrorNotifier.get() )
+        {
+        mErrorNotifier->errorNotify(-ENOMEM);
+        }
 
-        LOG_FUNCTION_NAME_EXIT;
-        return NULL;
+    LOG_FUNCTION_NAME_EXIT;
+    return NULL;
 }
 
 //TODO: Get needed data to map tiler buffers
@@ -213,13 +164,34 @@ int MemoryManager::freeBuffer(void* buf)
 
     while(*bufEntry)
         {
-        ret |= MemMgr_Free((void*)*bufEntry++);
+        unsigned int ptr = (unsigned int) *bufEntry++;
+        if(mIonBufLength.valueFor(ptr))
+            {
+            munmap((void *)ptr, mIonBufLength.valueFor(ptr));
+            close(mIonFdMap.valueFor(ptr));
+            ion_free(mIonFd, (ion_handle*)mIonHandleMap.valueFor(ptr));
+            mIonHandleMap.removeItem(ptr);
+            mIonBufLength.removeItem(ptr);
+            mIonFdMap.removeItem(ptr);
+            }
+        else
+            {
+            CAMHAL_LOGEA("Not a valid Memory Manager buffer");
+            }
         }
 
     ///@todo Check if this way of deleting array is correct, else use malloc/free
     uint32_t * bufArr = (uint32_t*)buf;
     delete [] bufArr;
 
+    if(mIonBufLength.size() == 0)
+        {
+        if(mIonFd)
+            {
+            ion_close(mIonFd);
+            mIonFd = 0;
+            }
+        }
     LOG_FUNCTION_NAME_EXIT;
     return ret;
 }

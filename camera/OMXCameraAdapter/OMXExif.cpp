@@ -253,6 +253,7 @@ status_t OMXCameraAdapter::setupEXIF()
                           ( EXIF_DATE_TIME_SIZE ) +
                           ( GPS_MAPDATUM_SIZE ) +
                           ( GPS_PROCESSING_SIZE );
+        buf_size = ((buf_size+4095)/4096)*4096;
         sharedBuffer.nSharedBuffSize = buf_size;
 
         memmgr_buf_array = (OMX_U8 **)memMgr.allocateBuffer(0, 0, NULL, buf_size, 1);
