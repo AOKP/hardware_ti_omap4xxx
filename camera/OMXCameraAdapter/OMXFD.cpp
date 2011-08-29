@@ -367,24 +367,11 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
         / *   ---------------
         / *               (r, b)
           */
-        if (mDeviceOrientation == 180) {
-            orient_mult = -1;
-            trans_left = 2; // right is now left
-            trans_top = 3; // bottom is now top
-            trans_right = 0; // left is now right
-            trans_bot = 1; // top is not bottom
-        } else {
-            orient_mult = 1;
-            trans_left = 0; // left
-            trans_top = 1; // top
-            trans_right = 2; // right
-            trans_bot = 3; // bottom
-
-        }
 
         int j = 0, i = 0;
         for ( ; j < faceData->ulFaceCount ; j++)
             {
+             OMX_S32 nLeft = 0;
              //Face filtering
              //For real faces, it is seen that the h/w passes a score >=80
              //For false faces, we seem to get even a score of 70 sometimes.
@@ -393,7 +380,25 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
             if(faceData->tFacePosition[j].nScore <= FACE_DETECTION_THRESHOLD)
              continue;
 
-            tmp = ( double ) faceData->tFacePosition[j].nLeft / ( double ) previewWidth;
+            if (mDeviceOrientation == 180) {
+                orient_mult = -1;
+                trans_left = 2; // right is now left
+                trans_top = 3; // bottom is now top
+                trans_right = 0; // left is now right
+                trans_bot = 1; // top is not bottom
+                // from sensor pov, the left pos is the right corner of the face in pov of frame
+                nLeft  = faceData->tFacePosition[j].nLeft + faceData->tFacePosition[j].nWidth;
+            } else {
+                orient_mult = 1;
+                trans_left = 0; // left
+                trans_top = 1; // top
+                trans_right = 2; // right
+                trans_bot = 3; // bottom
+                nLeft  = faceData->tFacePosition[j].nLeft;
+
+            }
+
+            tmp = ( double ) nLeft / ( double ) previewWidth;
             tmp *= hRange;
             tmp -= hRange/2;
             faces[i].rect[trans_left] = tmp;
