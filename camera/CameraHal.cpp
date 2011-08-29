@@ -817,16 +817,6 @@ int CameraHal::setParameters(const CameraParameters& params)
 
         CameraParameters adapterParams = mParameters;
 
-        //If the app has not set the capture mode, set the capture resolution as preview resolution
-        //so that black bars are not displayed in preview.
-        //Later in takePicture we will configure the correct picture size
-        if(mParameters.get(TICameraParameters::KEY_CAP_MODE) == NULL)
-            {
-            CAMHAL_LOGDA("Capture mode not set by app, setting picture res to preview res");
-            mParameters.getPreviewSize(&w, &h);
-            adapterParams.setPictureSize(w,h);
-            }
-
         // Only send parameters to adapter if preview is already
         // enabled. Initial setParameters to camera adapter, will
         // be called in startPreview()
@@ -1180,15 +1170,6 @@ status_t CameraHal::signalEndImageCapture()
 
     mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_IMAGE_CAPTURE);
 
-    //If the app has not set the capture mode, restore the capture resolution
-    //back to the preview resolution to get rid of the black bars issue
-    if (mParameters.get(TICameraParameters::KEY_CAP_MODE) == NULL) {
-        CAMHAL_LOGDA("Capture mode not set by app, setting picture res back to preview res");
-        mParameters.getPreviewSize(&w, &h);
-        adapterParams.setPictureSize(w,h);
-        ret = mCameraAdapter->setParameters(adapterParams);
-    }
-
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
@@ -1262,20 +1243,7 @@ status_t CameraHal::startPreview()
 
     if ( NULL != mCameraAdapter ) {
 
-        CameraParameters adapterParams = mParameters;
-
-        //If the app has not set the capture mode, set the capture resolution as preview resolution
-        //so that black bars are not displayed in preview.
-        //Later in takePicture we will configure the correct picture size
-        if(mParameters.get(TICameraParameters::KEY_CAP_MODE) == NULL)
-            {
-            int w,h;
-            CAMHAL_LOGDA("Capture mode not set by app, setting picture res to preview res");
-            mParameters.getPreviewSize(&w, &h);
-            adapterParams.setPictureSize(w,h);
-            }
-
-        ret = mCameraAdapter->setParameters(adapterParams);
+        ret = mCameraAdapter->setParameters(mParameters);
     }
 
     ///If we don't have the preview callback enabled and display adapter,
@@ -2287,13 +2255,6 @@ status_t CameraHal::takePicture( )
 
         if (  (NO_ERROR == ret) && ( NULL != mCameraAdapter ) )
             {
-
-            //Configure the correct picture resolution now if the capture mode is not set
-            if(mParameters.get(TICameraParameters::KEY_CAP_MODE) == NULL)
-                {
-                ret = mCameraAdapter->setParameters(mParameters);
-                }
-
             if ( NO_ERROR == ret )
                 ret = mCameraAdapter->sendCommand(CameraAdapter::CAMERA_QUERY_BUFFER_SIZE_IMAGE_CAPTURE,
                                                   ( int ) &frame,
