@@ -725,6 +725,7 @@ private:
 
     // Current Focus areas
     Vector< sp<CameraArea> > mFocusAreas;
+    mutable Mutex mFocusAreasLock;
 
     CaptureMode mCapMode;
     size_t mBurstFrames;

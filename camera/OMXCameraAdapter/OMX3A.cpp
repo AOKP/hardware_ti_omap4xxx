@@ -396,11 +396,14 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
         return NO_INIT;
         }
 
-    if ( !mFocusAreas.isEmpty() )
         {
-        focusArea = mFocusAreas.itemAt(0);
-        }
+        Mutex::Autolock lock(mFocusAreasLock);
 
+        if ( !mFocusAreas.isEmpty() )
+            {
+            focusArea = mFocusAreas.itemAt(0);
+            }
+        }
 
     ///Face detection takes precedence over touch AF
     if ( mFaceDetectionRunning )

@@ -40,6 +40,7 @@ status_t OMXCameraAdapter::setParametersFocus(const CameraParameters &params,
 {
     status_t ret = NO_ERROR;
     const char *str = NULL;
+    Mutex::Autolock lock(mFocusAreasLock);
 
     LOG_FUNCTION_NAME;
 
