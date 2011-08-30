@@ -102,15 +102,8 @@ status_t OMXCameraAdapter::doAutoFocus()
     //immediately. If lock is not available, then switch temporarily
     //to 'autolock' and do normal AF.
     if ( mParameters3A.Focus == OMX_IMAGE_FocusControlAuto ) {
-//FIXME: The CAF seems to return focus failure all the time.
-// Probably this is tuning related, disable this until the
-// MMS IQ team fixes it
-#if 0
+
         ret = checkFocus(&focusStatus);
-#else
-        ret = NO_ERROR;
-        focusStatus.eFocusStatus = OMX_FocusStatusReached;
-#endif
         if ( NO_ERROR != ret ) {
             CAMHAL_LOGEB("Focus status check failed 0x%x!", ret);
             return ret;
