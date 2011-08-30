@@ -415,9 +415,6 @@ status_t OMXCameraAdapter::setExposureMode(Gen3A_settings& Gen3A)
     exp.nPortIndex = OMX_ALL;
     exp.eExposureControl = (OMX_EXPOSURECONTROLTYPE)Gen3A.Exposure;
 
-///FIXME: Face priority exposure metering is not stable because of varying face sizes
-///coming from the FD module. So disabling it for now.
-#if 0
     if ( mFaceDetectionRunning )
         {
         //Disable Region priority and enable Face priority
@@ -425,7 +422,7 @@ status_t OMXCameraAdapter::setExposureMode(Gen3A_settings& Gen3A)
         setAlgoPriority(FACE_PRIORITY, EXPOSURE_ALGO, true);
         }
     else
-#endif
+
         {
         //Disable Region priority and Face priority
         setAlgoPriority(REGION_PRIORITY, EXPOSURE_ALGO, false);
