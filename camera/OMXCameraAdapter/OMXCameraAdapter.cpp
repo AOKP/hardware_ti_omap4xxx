@@ -2567,6 +2567,7 @@ status_t OMXCameraAdapter::RegisterForEvent(OMX_IN OMX_HANDLETYPE hComponent,
         if ( NO_MEMORY == res )
             {
             CAMHAL_LOGEA("No ressources for inserting OMX events");
+            free(msg);
             ret = -ENOMEM;
             }
         }
@@ -3063,6 +3064,21 @@ OMXCameraAdapter::~OMXCameraAdapter()
         {
         OMX_Deinit();
         }
+
+    //Remove any unhandled events
+    if ( !mEventSignalQ.isEmpty() )
+      {
+        for (unsigned int i = 0 ; i < mEventSignalQ.size() ; i++ )
+          {
+            TIUTILS::Message *msg = mEventSignalQ.itemAt(i);
+            //remove from queue and free msg
+            mEventSignalQ.removeAt(i);
+            if ( NULL != msg )
+              {
+                free(msg);
+              }
+          }
+      }
 
     //Exit and free ref to command handling thread
     if ( NULL != mCommandHandler.get() )
