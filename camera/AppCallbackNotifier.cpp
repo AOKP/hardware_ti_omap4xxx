@@ -595,6 +595,15 @@ void AppCallbackNotifier::notifyFrame()
                                    frame->mLength);
                             }
 
+                        // CTS Requirement: The camera client should be
+                        // able to restart the preview from within the context
+                        // of a jpeg callback. Here we should return the image
+                        // frame before calling the data callback. This way
+                        // we won't depend on the binder ipc timing and we
+                        // will be able to execute the client request successfully.
+                        mFrameProvider->returnFrame(frame->mBuffer,
+                                                    ( CameraFrame::FrameType ) frame->mFrameType);
+
                         {
                             Mutex::Autolock lock(mBurstLock);
 #if 0 //TODO: enable burst mode later
@@ -619,9 +628,6 @@ void AppCallbackNotifier::notifyFrame()
                             {
                             raw_picture->release(raw_picture);
                             }
-
-                        mFrameProvider->returnFrame(frame->mBuffer,
-                                                    ( CameraFrame::FrameType ) frame->mFrameType);
 
                     }
                 else if ( ( CameraFrame::VIDEO_FRAME_SYNC == frame->mFrameType ) &&
