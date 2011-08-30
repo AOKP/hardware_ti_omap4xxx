@@ -631,7 +631,7 @@ OMX_ERRORTYPE PROXY_FillThisBuffer(OMX_HANDLETYPE hComponent,
  *
  */
 /* ===========================================================================*/
-static OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
+OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_INOUT OMX_BUFFERHEADERTYPE ** ppBufferHdr,
     OMX_IN OMX_U32 nPortIndex,
     OMX_IN OMX_PTR pAppPrivate, OMX_IN OMX_U32 nSizeBytes)
@@ -1153,7 +1153,7 @@ static OMX_ERRORTYPE PROXY_UseBuffer(OMX_IN OMX_HANDLETYPE hComponent,
  *
  */
 /* ===========================================================================*/
-static OMX_ERRORTYPE PROXY_FreeBuffer(OMX_IN OMX_HANDLETYPE hComponent,
+OMX_ERRORTYPE PROXY_FreeBuffer(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_IN OMX_U32 nPortIndex, OMX_IN OMX_BUFFERHEADERTYPE * pBufferHdr)
 {
 	OMX_ERRORTYPE eError = OMX_ErrorNone, eCompReturn = OMX_ErrorNone;

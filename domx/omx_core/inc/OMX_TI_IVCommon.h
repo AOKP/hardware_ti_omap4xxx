@@ -1945,8 +1945,10 @@ typedef enum OMX_TI_COLOR_FORMATTYPE {
 	    (OMX_COLOR_FORMATTYPE) OMX_COLOR_FormatVendorStartUnused + 1,
 	OMX_TI_COLOR_FormatRawBayer10bitStereo =
 	    OMX_COLOR_FormatVendorStartUnused + 2, /**< 10 bit raw for stereo */
-        OMX_TI_COLOR_FormatYUV420PackedSemiPlanar =
-            (OMX_COLOR_FORMATTYPE) OMX_COLOR_FormatVendorStartUnused  + 0x100 /* 0x100 is used since it is the corresponding HAL pixel fromat */
+	OMX_TI_COLOR_FormatYUV420PackedSemiPlanar =
+            (OMX_COLOR_FORMATTYPE) OMX_COLOR_FormatVendorStartUnused  + 0x100, /* 0x100 is used since it is the corresponding HAL pixel fromat */
+        OMX_COLOR_FormatAndroidOpaque =
+	    (OMX_COLOR_FORMATTYPE) OMX_COLOR_FormatVendorStartUnused  + 0x789 /**< Platform specified opaque format set to unique value 0x789*/
 } OMX_TI_COLOR_FORMATTYPE;
 
 /**

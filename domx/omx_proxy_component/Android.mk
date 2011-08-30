@@ -104,19 +104,22 @@ LOCAL_C_INCLUDES += \
 	system/core/include/cutils \
 	$(LOCAL_PATH)/../../hwc \
 	$(HARDWARE_TI_OMAP4_BASE)/camera/inc \
-	frameworks/base/include/media/stagefright
+	frameworks/base/include/media/stagefright \
+	$(HARDWARE_TI_OMAP4_BASE)/tiler/
 
 LOCAL_SHARED_LIBRARIES := \
 	libmm_osal \
 	libc \
 	libOMX_Core \
 	liblog \
-	libdomx
+	libdomx \
+	libtimemmgr \
+	libhardware
 
 
 LOCAL_CFLAGS += -DLINUX -DTMS32060 -D_DB_TIOMAP -DSYSLINK_USE_SYSMGR -DSYSLINK_USE_LOADER
 LOCAL_CFLAGS += -D_Android -DSET_STRIDE_PADDING_FROM_PROXY -DANDROID_QUIRK_CHANGE_PORT_VALUES -DUSE_ENHANCED_PORTRECONFIG  -DENABLE_GRALLOC_BUFFER
-LOCAL_CFLAGS += -DANDROID_QUIRK_LOCK_BUFFER -DUSE_ION
+LOCAL_CFLAGS += -DANDROID_QUIRK_LOCK_BUFFER -DUSE_ION -DANDROID_CUSTOM_OPAQUECOLORFORMAT
 LOCAL_MODULE_TAGS:= optional
 
 LOCAL_SRC_FILES:= omx_h264_enc/src/omx_proxy_h264enc.c

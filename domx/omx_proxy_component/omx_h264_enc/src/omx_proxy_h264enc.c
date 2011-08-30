@@ -31,9 +31,9 @@
  */
 
 /**
- *  @file  omx_proxy_videodecoder.c
+ *  @file  omx_proxy_h264enc.c
  *         This file contains methods that provides the functionality for
- *         the OpenMAX1.1 DOMX Framework Tunnel Proxy component.
+ *         the OpenMAX1.1 DOMX Framework Proxy component.
  *********************************************************************************************
  This is the proxy specific wrapper that passes the component name to the generic proxy init()
  The proxy wrapper also does some runtime/static time onfig on per proxy basis
@@ -49,12 +49,24 @@
 /*==============================================================
  *! Revision History
  *! ============================
+ * 26-August-2011 Abhishek Ranka : Support for color conv at encoder
+ *                                 input port
+ *
  *! 20-August-2010 Sarthak Aggarwal sarthak@ti.com: Initial Version
  *================================================================*/
 
 /******************************************************************
  *   INCLUDE FILES
  ******************************************************************/
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+/* Opaque color format requires below quirks to be enabled
+ * ENABLE_GRALLOC_BUFFER
+ * ANDROID_QUIRCK_CHANGE_PORT_VALUES
+ */
+#include "memmgr.h"
+#include "tiler.h"
+#endif
+
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
@@ -87,16 +99,48 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 
 #endif
 
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+#define OMX_H264VE_NUM_INTERNAL_BUF (8)
+#define HAL_PIXEL_FORMAT_TI_NV12 (0x100)
+
+#define COLORCONVERT_MAX_SUB_BUFFERS (3)
+
+#define COLORCONVERT_BUFTYPE_VIRTUAL (0x0)
+#define COLORCONVERT_BUFTYPE_ION     (0x1)
+#define COLORCONVERT_BUFTYPE_GRALLOCOPAQUE (0x2)
+
+int COLORCONVERT_open(void **hCC);
+int COLORCONVERT_PlatformOpaqueToNV12(void *hCC, void *pSrc[],
+				      void *pDst[], int nWidth,
+				      int nHeight, int nStride,
+				      int nSrcBufType, int nDstBufType);
+int COLORCONVERT_close(void *hCC);
+
+static OMX_ERRORTYPE LOCAL_PROXY_H264E_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
+    OMX_INOUT OMX_BUFFERHEADERTYPE ** ppBufferHdr, OMX_IN OMX_U32 nPortIndex,
+    OMX_IN OMX_PTR pAppPrivate, OMX_IN OMX_U32 nSizeBytes);
+
+static OMX_ERRORTYPE LOCAL_PROXY_H264E_FreeBuffer(OMX_IN OMX_HANDLETYPE hComponent,
+    OMX_IN OMX_U32 nPortIndex, OMX_IN OMX_BUFFERHEADERTYPE * pBufferHdr);
+
+static OMX_ERRORTYPE LOCAL_PROXY_H264E_ComponentDeInit(OMX_HANDLETYPE hComponent);
+
+typedef struct _OMX_PROXY_H264E_PRIVATE
+{
+	OMX_PTR  hBufPipe;
+	OMX_BOOL bAndroidOpaqueFormat;
+	OMX_PTR  hCC;
+	OMX_PTR  pBuf0[OMX_H264VE_NUM_INTERNAL_BUF];
+	OMX_PTR  pBuf1[OMX_H264VE_NUM_INTERNAL_BUF];
+	OMX_S32  nCurBufIndex;
+}OMX_PROXY_H264E_PRIVATE;
+#endif
+
 OMX_ERRORTYPE LOCAL_PROXY_H264E_GetExtensionIndex(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_IN OMX_STRING cParameterName, OMX_OUT OMX_INDEXTYPE * pIndexType);
 
 OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
     OMX_BUFFERHEADERTYPE * pBufferHdr);
-
-extern OMX_ERRORTYPE RPC_UTIL_GetStride(OMX_COMPONENTTYPE * hRemoteComp,
-    OMX_U32 nPortIndex, OMX_U32 * nStride);
-extern OMX_ERRORTYPE RPC_UTIL_GetNumLines(OMX_COMPONENTTYPE * hComp,
-    OMX_U32 nPortIndex, OMX_U32 * nNumOfLines);
 
 OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 {
@@ -105,6 +149,11 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 	PROXY_COMPONENT_PRIVATE *pComponentPrivate = NULL;
 	pHandle = (OMX_COMPONENTTYPE *) hComponent;
         OMX_TI_PARAM_ENHANCEDPORTRECONFIG tParamStruct;
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+	TIMM_OSAL_ERRORTYPE eOSALStatus = TIMM_OSAL_ERR_NONE;
+	OMX_PROXY_H264E_PRIVATE *pProxy = NULL;
+#endif
+
 	DOMX_ENTER("");
 
 	DOMX_DEBUG("Component name provided is %s", COMPONENT_NAME);
@@ -132,6 +181,29 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 	    OMX_ErrorInsufficientResources,
 	    " Error in Allocating space for proxy component table");
 
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+	pComponentPrivate->pCompProxyPrv =
+	    (OMX_PROXY_H264E_PRIVATE *)
+	    TIMM_OSAL_Malloc(sizeof(OMX_PROXY_H264E_PRIVATE), TIMM_OSAL_TRUE,
+	    0, TIMMOSAL_MEM_SEGMENT_INT);
+
+	PROXY_assert(pComponentPrivate->pCompProxyPrv != NULL,
+	    OMX_ErrorInsufficientResources,
+	    " Could not allocate proxy component private");
+
+	TIMM_OSAL_Memset(pComponentPrivate->pCompProxyPrv, 0,
+		sizeof(OMX_PROXY_H264E_PRIVATE));
+
+	pProxy = (OMX_PROXY_H264E_PRIVATE *) pComponentPrivate->pCompProxyPrv;
+
+	/* Create Pipe of for encoder input buffers */
+	eOSALStatus = TIMM_OSAL_CreatePipe(&pProxy->hBufPipe, sizeof(OMX_U32),
+					   OMX_H264VE_NUM_INTERNAL_BUF, 1);
+	PROXY_assert(eOSALStatus == TIMM_OSAL_ERR_NONE,
+			OMX_ErrorInsufficientResources,
+			"Pipe creation failed");
+#endif
+
 	// Copying component Name - this will be picked up in the proxy common
 	PROXY_assert(strlen(COMPONENT_NAME) + 1 < MAX_COMPONENT_NAME_LENGTH,
 	    OMX_ErrorInvalidComponentName,
@@ -148,10 +220,31 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 	pHandle->EmptyThisBuffer = LOCAL_PROXY_H264E_EmptyThisBuffer;
 	pHandle->GetExtensionIndex = LOCAL_PROXY_H264E_GetExtensionIndex;
 
-      EXIT:
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+	pHandle->ComponentDeInit = LOCAL_PROXY_H264E_ComponentDeInit;
+	pHandle->FreeBuffer = LOCAL_PROXY_H264E_FreeBuffer;
+	pHandle->AllocateBuffer = LOCAL_PROXY_H264E_AllocateBuffer;
+#endif
+
+    EXIT:
 	if (eError != OMX_ErrorNone)
 	{
 		DOMX_DEBUG("Error in Initializing Proxy");
+
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+		if(pProxy->hBufPipe != NULL)
+		{
+			TIMM_OSAL_DeletePipe(pProxy->hBufPipe);
+			pProxy->hBufPipe = NULL;
+		}
+
+		if(pComponentPrivate->pCompProxyPrv != NULL)
+		{
+			TIMM_OSAL_Free(pComponentPrivate->pCompProxyPrv);
+			pComponentPrivate->pCompProxyPrv = NULL;
+			pProxy = NULL;
+		}
+#endif
 		if (pComponentPrivate->cCompName != NULL)
 		{
 			TIMM_OSAL_Free(pComponentPrivate->cCompName);
@@ -184,28 +277,43 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 	OMX_ERRORTYPE eError = OMX_ErrorNone;
 	PROXY_COMPONENT_PRIVATE *pCompPrv = NULL;
 	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
-	OMX_PARAM_PORTDEFINITIONTYPE* pPortDef = (OMX_PARAM_PORTDEFINITIONTYPE *)pParamStruct;
-	OMX_VIDEO_PARAM_PORTFORMATTYPE* pPortParam = (OMX_VIDEO_PARAM_PORTFORMATTYPE *)pParamStruct;
+	OMX_PARAM_PORTDEFINITIONTYPE* pPortDef = NULL;
+	OMX_VIDEO_PARAM_PORTFORMATTYPE* pPortParam = NULL;
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+	OMX_PROXY_H264E_PRIVATE *pProxy = NULL;
+#endif
 
 	PROXY_require((pParamStruct != NULL), OMX_ErrorBadParameter, NULL);
 	PROXY_assert((hComp->pComponentPrivate != NULL),
 	    OMX_ErrorBadParameter, NULL);
 
 	pCompPrv = (PROXY_COMPONENT_PRIVATE *) hComp->pComponentPrivate;
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+	pProxy = (OMX_PROXY_H264E_PRIVATE *) pCompPrv->pCompProxyPrv;
+#endif
 
 	DOMX_ENTER
 	    ("hComponent = %p, pCompPrv = %p, nParamIndex = %d, pParamStruct = %p",
 	    hComponent, pCompPrv, nParamIndex, pParamStruct);
 
 	eError = PROXY_GetParameter(hComponent,nParamIndex, pParamStruct);
-	PROXY_assert(eError == OMX_ErrorNone,
-		    eError," Error in Proxy GetParameter");
 
-	if( nParamIndex == OMX_IndexParamPortDefinition)
+	if(nParamIndex == OMX_IndexParamPortDefinition)
 	{
+		pPortDef = (OMX_PARAM_PORTDEFINITIONTYPE *)pParamStruct;
+
 		if(pPortDef->format.video.eColorFormat == OMX_COLOR_FormatYUV420PackedSemiPlanar)
 		{
-			pPortDef->format.video.eColorFormat = OMX_TI_COLOR_FormatYUV420PackedSemiPlanar;
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+			if(pProxy->bAndroidOpaqueFormat == OMX_TRUE)
+			{
+				pPortDef->format.video.eColorFormat = OMX_COLOR_FormatAndroidOpaque;
+			}
+			else
+#endif
+			{
+				pPortDef->format.video.eColorFormat = OMX_TI_COLOR_FormatYUV420PackedSemiPlanar;
+			}
 		}
 
 		if(pPortDef->nPortIndex == OMX_H264E_INPUT_PORT)
@@ -216,13 +324,35 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 			}
 		}
 	}
-	else if ( nParamIndex == OMX_IndexParamVideoPortFormat)
+	else if (nParamIndex == OMX_IndexParamVideoPortFormat)
 	{
-		if(pPortParam->eColorFormat == OMX_COLOR_FormatYUV420PackedSemiPlanar)
+		pPortParam = (OMX_VIDEO_PARAM_PORTFORMATTYPE *)pParamStruct;
+
+		if((eError == OMX_ErrorNone) &&
+		   (pPortParam->eColorFormat == OMX_COLOR_FormatYUV420PackedSemiPlanar))
 		{
 			pPortParam->eColorFormat = OMX_TI_COLOR_FormatYUV420PackedSemiPlanar;
 		}
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+		else if ((eError == OMX_ErrorNoMore) &&
+			 (pPortParam->nIndex == 1))
+		{
+			/* HACK:Remote OMX-H264E supports only 1 color format (index 0). The
+			 * OMX_COLOR_FormatAndroidOpaque is supported only at the proxy.
+			 * Call GetParameter() to fill in defaults for parameters and
+			 * override color format and index for the additional
+			 * OMX_COLOR_FormatAndroidOpaque support*/
+			pPortParam->nIndex = 0;
+			eError = PROXY_GetParameter(hComponent, nParamIndex, pParamStruct);
+			pPortParam->nIndex = 1;
+			pPortParam->eColorFormat = OMX_COLOR_FormatAndroidOpaque;
+			eError = OMX_ErrorNone;
+		}
+#endif
         }
+
+	PROXY_assert(eError == OMX_ErrorNone,
+		    eError," Error in Proxy GetParameter");
 
       EXIT:
 	DOMX_EXIT("eError: %d", eError);
@@ -245,36 +375,74 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 	OMX_ERRORTYPE eError = OMX_ErrorNone;
 	PROXY_COMPONENT_PRIVATE *pCompPrv = NULL;
 	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
-	OMX_PARAM_PORTDEFINITIONTYPE* pPortDef = (OMX_PARAM_PORTDEFINITIONTYPE *)pParamStruct;
-	OMX_VIDEO_PARAM_PORTFORMATTYPE* pPortParams = (OMX_VIDEO_PARAM_PORTFORMATTYPE *)pParamStruct;
-	OMX_VIDEO_STOREMETADATAINBUFFERSPARAMS* pStoreMetaData = (OMX_VIDEO_STOREMETADATAINBUFFERSPARAMS *) pParamStruct;
+	OMX_PARAM_PORTDEFINITIONTYPE* pPortDef = NULL;
+	OMX_VIDEO_PARAM_PORTFORMATTYPE* pPortParams = NULL;
+	OMX_VIDEO_STOREMETADATAINBUFFERSPARAMS* pStoreMetaData = NULL;
 	OMX_TI_PARAM_BUFFERPREANNOUNCE tParamSetNPA;
 	OMX_PARAM_PORTDEFINITIONTYPE sPortDef;
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+	OMX_PROXY_H264E_PRIVATE *pProxy = NULL;
+#endif
+
+	DOMX_ENTER
+	    ("hComponent = %p, pCompPrv = %p, nParamIndex = %d, pParamStruct = %p",
+	    hComponent, pCompPrv, nParamIndex, pParamStruct);
 
 	PROXY_require((pParamStruct != NULL), OMX_ErrorBadParameter, NULL);
 	PROXY_require((hComp->pComponentPrivate != NULL),
 	    OMX_ErrorBadParameter, NULL);
 
 	pCompPrv = (PROXY_COMPONENT_PRIVATE *) hComp->pComponentPrivate;
-	DOMX_ENTER
-	    ("hComponent = %p, pCompPrv = %p, nParamIndex = %d, pParamStruct = %p",
-	    hComponent, pCompPrv, nParamIndex, pParamStruct);
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+	pProxy = (OMX_PROXY_H264E_PRIVATE *) pCompPrv->pCompProxyPrv;
+#endif
+
 	if(nParamIndex == OMX_IndexParamPortDefinition)
 	{
+		pPortDef = (OMX_PARAM_PORTDEFINITIONTYPE *)pParamStruct;
+
 		if(pPortDef->format.video.eColorFormat == OMX_TI_COLOR_FormatYUV420PackedSemiPlanar)
 		{
 			pPortDef->format.video.eColorFormat = OMX_COLOR_FormatYUV420PackedSemiPlanar;
 		}
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+		else if(pPortDef->format.video.eColorFormat == OMX_COLOR_FormatAndroidOpaque)
+		{
+			if(COLORCONVERT_open(&pProxy->hCC) != 0)
+			{
+				PROXY_assert(0, OMX_ErrorInsufficientResources,
+							"Failed to open Color converting service");
+			}
+			pProxy->bAndroidOpaqueFormat = OMX_TRUE;
+			pPortDef->format.video.eColorFormat = OMX_COLOR_FormatYUV420PackedSemiPlanar;
+		}
+#endif
 	}
 	else if(nParamIndex == OMX_IndexParamVideoPortFormat)
 	{
+		pPortParams = (OMX_VIDEO_PARAM_PORTFORMATTYPE *)pParamStruct;
+
 		if(pPortParams->eColorFormat == OMX_TI_COLOR_FormatYUV420PackedSemiPlanar)
 		{
 			pPortParams->eColorFormat = OMX_COLOR_FormatYUV420PackedSemiPlanar;
 		}
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+		else if(pPortParams->eColorFormat == OMX_COLOR_FormatAndroidOpaque)
+		{
+			if(COLORCONVERT_open(&pProxy->hCC) != 0)
+			{
+				PROXY_assert(0, OMX_ErrorInsufficientResources,
+							"Failed to open Color converting service");
+			}
+			pProxy->bAndroidOpaqueFormat = OMX_TRUE;
+			pPortParams->eColorFormat = OMX_COLOR_FormatYUV420PackedSemiPlanar;
+		}
+#endif
 	}
 	else if(nParamIndex == (OMX_INDEXTYPE) OMX_TI_IndexEncoderStoreMetadatInBuffers)
 	{
+		pStoreMetaData = (OMX_VIDEO_STOREMETADATAINBUFFERSPARAMS *) pParamStruct;
+
 		DOMX_DEBUG("Moving to Metadatamode");
 	    if (pStoreMetaData->nPortIndex == OMX_H264E_INPUT_PORT && pStoreMetaData->bStoreMetaData == OMX_TRUE)
 	    {
@@ -391,6 +559,12 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	OMX_U32 nStride = 0, nNumLines = 0;
 	OMX_PARAM_PORTDEFINITIONTYPE tParamStruct;
 	OMX_U32 nFilledLen, nAllocLen;
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+	OMX_PROXY_H264E_PRIVATE *pProxy = NULL;
+	TIMM_OSAL_ERRORTYPE eOSALStatus = TIMM_OSAL_ERR_NONE;
+	void *pDest[COLORCONVERT_MAX_SUB_BUFFERS]={NULL,NULL,NULL};
+	OMX_U32 nBufIndex = 0, nSize=0, nRet=0;
+#endif
 
 	PROXY_require(pBufferHdr != NULL, OMX_ErrorBadParameter, NULL);
 	PROXY_require(hComp->pComponentPrivate != NULL, OMX_ErrorBadParameter,
@@ -398,6 +572,9 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	PROXY_CHK_VERSION(pBufferHdr, OMX_BUFFERHEADERTYPE);
 
 	pCompPrv = (PROXY_COMPONENT_PRIVATE *) hComp->pComponentPrivate;
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+	pProxy = (OMX_PROXY_H264E_PRIVATE *) pCompPrv->pCompProxyPrv;
+#endif
 
 	tParamStruct.nSize = sizeof(OMX_PARAM_PORTDEFINITIONTYPE);
 	tParamStruct.nVersion.s.nVersionMajor = OMX_VER_MAJOR;
@@ -442,7 +619,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 
 			pBufferHdr->pBuffer = (OMX_U8 *)(pGrallocHandle->fd[0]);
 			((OMX_TI_PLATFORMPRIVATE *) pBufferHdr->pPlatformPrivate)->
-			    pAuxBuf1 = pGrallocHandle->fd[1];
+			pAuxBuf1 = (OMX_PTR) pGrallocHandle->fd[1];
 			DOMX_DEBUG("%s Gralloc=0x%x, Y-fd=%d, UV-fd=%d", __FUNCTION__, pGrallocHandle,
 			            pGrallocHandle->fd[0], pGrallocHandle->fd[1]);
 
@@ -453,17 +630,49 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 		{
 #ifdef ENABLE_GRALLOC_BUFFER
 			IMG_native_handle_t* pGrallocHandle;
+			buffer_handle_t  tBufHandle;
 			DOMX_DEBUG("MetadataBufferType is kMetadataBufferTypeGrallocSource");
 
 			pTempBuffer++;
-			pGrallocHandle = (IMG_native_handle_t*) pTempBuffer;
+			tBufHandle =  *((buffer_handle_t *)pTempBuffer);
+			pGrallocHandle = (IMG_native_handle_t*) tBufHandle;
 			DOMX_DEBUG("Grallloc buffer recieved in metadata buffer 0x%x",pGrallocHandle );
 
 			pBufferHdr->pBuffer = (OMX_U8 *)(pGrallocHandle->fd[0]);
 			((OMX_TI_PLATFORMPRIVATE *) pBufferHdr->pPlatformPrivate)->
-			    pAuxBuf1 = pGrallocHandle->fd[1];
+			pAuxBuf1 = (OMX_PTR) pGrallocHandle->fd[1];
 			DOMX_DEBUG("%s Gralloc=0x%x, Y-fd=%d, UV-fd=%d", __FUNCTION__, pGrallocHandle,
 			            pGrallocHandle->fd[0], pGrallocHandle->fd[1]);
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+			if (pProxy->bAndroidOpaqueFormat)
+			{
+				/* Dequeue NV12 buffer for encoder */
+				eOSALStatus = TIMM_OSAL_ReadFromPipe(pProxy->hBufPipe, &nBufIndex,
+						                     sizeof(OMX_PTR), (TIMM_OSAL_U32 *)(&nSize),
+						                     TIMM_OSAL_SUSPEND);
+				PROXY_assert(eOSALStatus == TIMM_OSAL_ERR_NONE, OMX_ErrorBadParameter, NULL);
+
+				pDest[0] = pProxy->pBuf0[nBufIndex];
+				pDest[1] = pProxy->pBuf1[nBufIndex];
+
+				/* Get NV12 data after colorconv*/
+				nRet = COLORCONVERT_PlatformOpaqueToNV12(pProxy->hCC, (void **) pGrallocHandle, pDest,
+									 pGrallocHandle->iWidth,
+									 pGrallocHandle->iHeight,
+									 4096, COLORCONVERT_BUFTYPE_GRALLOCOPAQUE,
+									 COLORCONVERT_BUFTYPE_VIRTUAL);
+				if(nRet != 0)
+				{
+					eOSALStatus = TIMM_OSAL_WriteToPipe(pProxy->hBufPipe, (void *) &nBufIndex,
+						                     sizeof(OMX_U32), TIMM_OSAL_SUSPEND);
+					PROXY_assert(0, OMX_ErrorBadParameter, "Color conversion routine failed");
+				}
+
+				/* Update pBufferHdr with NV12 buffers for OMX component */
+				pBufferHdr->pBuffer= pDest[0];
+				((OMX_TI_PLATFORMPRIVATE *) pBufferHdr->pPlatformPrivate)->pAuxBuf1 = pDest[1];
+			}
+#endif
 #endif
 		}
 		else
@@ -473,7 +682,15 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	}
 
 	PROXY_EmptyThisBuffer(hComponent, pBufferHdr);
-
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+	if (pProxy->bAndroidOpaqueFormat)
+	{
+		/*Write buffer to end of pipe for re-circulation for future ETB()*/
+		eOSALStatus = TIMM_OSAL_WriteToPipe(pProxy->hBufPipe, (void *) &nBufIndex,
+					    sizeof(OMX_U32), TIMM_OSAL_SUSPEND);
+		PROXY_assert(eOSALStatus == TIMM_OSAL_ERR_NONE, OMX_ErrorBadParameter, "Pipe write failed");
+	}
+#endif
 	if( pCompPrv->proxyPortBuffers[pBufferHdr->nInputPortIndex].proxyBufferType == EncoderMetadataPointers)
 	{
 		pBufferHdr->pBuffer = pBufferOrig;
@@ -483,3 +700,227 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	EXIT:
 		return eError;
 }
+
+#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
+static OMX_ERRORTYPE LOCAL_PROXY_H264E_AllocateBuffer(OMX_HANDLETYPE hComponent,
+		     OMX_BUFFERHEADERTYPE ** ppBufferHdr, OMX_U32 nPortIndex,
+		     OMX_PTR pAppPrivate, OMX_U32 nSizeBytes)
+{
+	OMX_ERRORTYPE eError = OMX_ErrorNone;
+	PROXY_COMPONENT_PRIVATE *pCompPrv = NULL;
+	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
+	MemAllocBlock blocks[2];
+	OMX_CONFIG_RECTTYPE tParamRect;
+	OMX_PROXY_H264E_PRIVATE *pProxy = NULL;
+	TIMM_OSAL_ERRORTYPE eOSALStatus = TIMM_OSAL_ERR_NONE;
+
+	PROXY_require(hComp->pComponentPrivate != NULL, OMX_ErrorBadParameter,
+	    NULL);
+	pCompPrv = (PROXY_COMPONENT_PRIVATE *) hComp->pComponentPrivate;
+	pProxy = (OMX_PROXY_H264E_PRIVATE *) pCompPrv->pCompProxyPrv;
+
+	if((nPortIndex == OMX_H264E_INPUT_PORT) &&
+	   (pProxy->bAndroidOpaqueFormat))
+	{
+		memset(blocks, 0, sizeof(MemAllocBlock)*2);
+
+		tParamRect.nSize = sizeof(OMX_CONFIG_RECTTYPE);
+		tParamRect.nVersion.s.nVersionMajor = 1;
+		tParamRect.nVersion.s.nVersionMinor = 1;
+		tParamRect.nVersion.s.nRevision = 0;
+		tParamRect.nVersion.s.nStep = 0;
+		tParamRect.nPortIndex = nPortIndex;
+
+		eError = PROXY_GetParameter(hComponent, (OMX_INDEXTYPE)OMX_TI_IndexParam2DBufferAllocDimension, &tParamRect);
+		PROXY_assert(eError == OMX_ErrorNone, eError," Error in Proxy GetParameter");
+
+		blocks[0].fmt = PIXEL_FMT_8BIT;
+		blocks[0].dim.area.width  = tParamRect.nWidth;
+		blocks[0].dim.area.height = tParamRect.nHeight;
+		blocks[0].stride = 0;
+
+		blocks[1].fmt = PIXEL_FMT_16BIT;
+		blocks[1].dim.area.width  = tParamRect.nWidth >> 1;
+		blocks[1].dim.area.height = tParamRect.nHeight >> 1;
+		blocks[1].stride = 0;
+
+		pProxy->pBuf0[pProxy->nCurBufIndex] = (OMX_U8*) MemMgr_Alloc(&blocks[0], 1);
+		PROXY_assert((pProxy->pBuf0[pProxy->nCurBufIndex] != NULL),
+			      OMX_ErrorInsufficientResources, "MemMgr_Alloc returns NULL, abort,");
+
+		pProxy->pBuf1[pProxy->nCurBufIndex] = (OMX_U8*) MemMgr_Alloc(&blocks[1], 1);
+		PROXY_assert((pProxy->pBuf1[pProxy->nCurBufIndex] != NULL),
+			      OMX_ErrorInsufficientResources, "MemMgr_Alloc returns NULL, abort,");
+	}
+
+	eError = PROXY_AllocateBuffer(hComponent, ppBufferHdr, nPortIndex,
+				      pAppPrivate, nSizeBytes);
+EXIT:
+	if((nPortIndex == OMX_H264E_INPUT_PORT) &&
+	   (pProxy->bAndroidOpaqueFormat))
+	{
+		if(eError != OMX_ErrorNone)
+		{
+			if(pProxy->pBuf0[pProxy->nCurBufIndex])
+			MemMgr_Free(pProxy->pBuf0[pProxy->nCurBufIndex]);
+
+			if(pProxy->pBuf1[pProxy->nCurBufIndex])
+			MemMgr_Free(pProxy->pBuf1[pProxy->nCurBufIndex]);
+
+			pProxy->pBuf0[pProxy->nCurBufIndex] = NULL;
+			pProxy->pBuf1[pProxy->nCurBufIndex] = NULL;
+		}
+		else
+		{
+			/*Populate buffer to pipe*/
+			eOSALStatus = TIMM_OSAL_WriteToPipe(pProxy->hBufPipe, (void *) &pProxy->nCurBufIndex,
+						    sizeof(OMX_U32), TIMM_OSAL_SUSPEND);
+			pProxy->nCurBufIndex++;
+		}
+	}
+	return eError;
+}
+
+static OMX_ERRORTYPE LOCAL_PROXY_H264E_FreeBuffer(OMX_IN OMX_HANDLETYPE hComponent,
+    OMX_IN OMX_U32 nPortIndex, OMX_IN OMX_BUFFERHEADERTYPE * pBufferHdr)
+{
+	OMX_ERRORTYPE eError = OMX_ErrorNone;
+	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
+	PROXY_COMPONENT_PRIVATE *pCompPrv = NULL;
+	OMX_U32 nBufIndex, nSize, nCount=0;
+	OMX_PROXY_H264E_PRIVATE *pProxy = NULL;
+
+	PROXY_require(hComp->pComponentPrivate != NULL, OMX_ErrorBadParameter,
+	    NULL);
+	pCompPrv = (PROXY_COMPONENT_PRIVATE *) hComp->pComponentPrivate;
+	pProxy = (OMX_PROXY_H264E_PRIVATE *) pCompPrv->pCompProxyPrv;
+
+	if((nPortIndex == OMX_H264E_INPUT_PORT) &&
+	   (pProxy->bAndroidOpaqueFormat))
+	{
+		pProxy->nCurBufIndex--;
+		PROXY_require(pProxy->nCurBufIndex >=0,
+			      OMX_ErrorBadParameter, "Buffer index underflow");
+
+		if(pProxy->pBuf0[pProxy->nCurBufIndex])
+		MemMgr_Free(pProxy->pBuf0[pProxy->nCurBufIndex]);
+
+		if(pProxy->pBuf1[pProxy->nCurBufIndex])
+		MemMgr_Free(pProxy->pBuf1[pProxy->nCurBufIndex]);
+
+		pProxy->pBuf0[pProxy->nCurBufIndex] = NULL;
+		pProxy->pBuf1[pProxy->nCurBufIndex] = NULL;
+
+		/*Clear the Bufindex pipe by dummy reads*/
+		TIMM_OSAL_GetPipeReadyMessageCount(pProxy->hBufPipe, (TIMM_OSAL_U32 *)&nCount);
+		if(nCount)
+		{
+			TIMM_OSAL_ReadFromPipe(pProxy->hBufPipe, &nBufIndex,
+					       sizeof(OMX_PTR), (TIMM_OSAL_U32 *)&nSize, TIMM_OSAL_NO_SUSPEND);
+		}
+	}
+
+	eError = PROXY_FreeBuffer(hComponent, nPortIndex, pBufferHdr);
+
+EXIT:
+	return eError;
+}
+
+OMX_ERRORTYPE LOCAL_PROXY_H264E_ComponentDeInit(OMX_HANDLETYPE hComponent)
+{
+	OMX_ERRORTYPE eError = OMX_ErrorNone;
+	PROXY_COMPONENT_PRIVATE *pCompPrv;
+	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
+	OMX_PROXY_H264E_PRIVATE *pProxy = NULL;
+	TIMM_OSAL_ERRORTYPE eOSALStatus = TIMM_OSAL_ERR_NONE;
+	OMX_U32 i;
+
+	PROXY_require(hComp->pComponentPrivate != NULL, OMX_ErrorBadParameter,
+	    NULL);
+	pCompPrv = (PROXY_COMPONENT_PRIVATE *) hComp->pComponentPrivate;
+	pProxy = (OMX_PROXY_H264E_PRIVATE *) pCompPrv->pCompProxyPrv;
+
+	if(pProxy->bAndroidOpaqueFormat == OMX_TRUE)
+	{
+		/* Cleanup internal buffers in pipe if not freed on FreeBuffer */
+		for(i=0; i<OMX_H264VE_NUM_INTERNAL_BUF; i++)
+		{
+			if(pProxy->pBuf0[i] != NULL)
+			{
+				MemMgr_Free(pProxy->pBuf0[i]);
+				pProxy->pBuf0[i] = NULL;
+			}
+			if(pProxy->pBuf1[i] != NULL)
+			{
+				MemMgr_Free(pProxy->pBuf1[i]);
+				pProxy->pBuf1[i] = NULL;
+			}
+		}
+
+		if(pProxy->hBufPipe != NULL)
+		{
+			eOSALStatus = TIMM_OSAL_DeletePipe(pProxy->hBufPipe);
+			pProxy->hBufPipe = NULL;
+
+			if(eOSALStatus != TIMM_OSAL_ERR_NONE)
+			{
+				DOMX_ERROR("Pipe deletion failed");
+			}
+		}
+		if(pCompPrv->pCompProxyPrv != NULL)
+		{
+			TIMM_OSAL_Free(pCompPrv->pCompProxyPrv);
+			pCompPrv->pCompProxyPrv = NULL;
+		}
+
+		pProxy->bAndroidOpaqueFormat = OMX_FALSE;
+	}
+
+	eError = PROXY_ComponentDeInit(hComponent);
+EXIT:
+	DOMX_EXIT("eError: %d", eError);
+	return eError;
+}
+
+int COLORCONVERT_open(void **hCC)
+{
+	int nErr = -1;
+	hw_module_t const* module = NULL;
+
+	nErr = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module);
+
+	if (nErr == 0)
+	{
+		*hCC = (void *) ((IMG_gralloc_module_public_t const *)module);
+	}
+	else
+	{
+		 DOMX_ERROR("FATAL: gralloc api hw_get_module() returned error: Can't find \
+			    %s module err = %x", GRALLOC_HARDWARE_MODULE_ID, nErr);
+	}
+
+	return nErr;
+}
+
+int COLORCONVERT_PlatformOpaqueToNV12(void *hCC,
+				      void *pSrc[COLORCONVERT_MAX_SUB_BUFFERS],
+				      void *pDst[COLORCONVERT_MAX_SUB_BUFFERS],
+				      int nWidth, int nHeight, int nStride,
+				      int nSrcBufType,int nDstBufType)
+{
+	IMG_gralloc_module_public_t const* module = hCC;
+	int nErr = -1;
+
+	if((nSrcBufType == COLORCONVERT_BUFTYPE_GRALLOCOPAQUE) && (nDstBufType == COLORCONVERT_BUFTYPE_VIRTUAL))
+	{
+		nErr = module->Blit(module, pSrc[0], pDst, HAL_PIXEL_FORMAT_TI_NV12);
+	}
+
+	return nErr;
+}
+
+int COLORCONVERT_close(void *hCC)
+{
+	return 0;
+}
+#endif

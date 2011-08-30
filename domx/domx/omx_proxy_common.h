@@ -188,6 +188,7 @@ extern "C"
 		OMX_U32 nAllocatedBuffers;
 
 		/* PROXY specific data - PROXY PRIVATE DATA */
+		OMX_PTR pCompProxyPrv;
 		char *cCompName;
 
 		PROXY_EMPTYBUFFER_DONE proxyEmptyBufferDone;
@@ -247,6 +248,12 @@ extern "C"
 	    OMX_PTR pMarkData);
 	OMX_ERRORTYPE PROXY_FillThisBuffer(OMX_HANDLETYPE hComponent,
 	    OMX_BUFFERHEADERTYPE * pBufferHdr);
+	OMX_ERRORTYPE PROXY_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
+	    OMX_INOUT OMX_BUFFERHEADERTYPE ** ppBufferHdr,OMX_IN OMX_U32 nPortIndex,
+	    OMX_IN OMX_PTR pAppPrivate, OMX_IN OMX_U32 nSizeBytes);
+	OMX_ERRORTYPE PROXY_FreeBuffer(OMX_IN OMX_HANDLETYPE hComponent,
+	    OMX_IN OMX_U32 nPortIndex, OMX_IN OMX_BUFFERHEADERTYPE * pBufferHdr);
+	OMX_ERRORTYPE PROXY_ComponentDeInit(OMX_HANDLETYPE hComponent);
 
 
 #ifdef __cplusplus
