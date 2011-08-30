@@ -3042,6 +3042,7 @@ void CameraHal::initDefaultParameters()
     p.set(TICameraParameters::KEY_EXPOSURE_MODE, mCameraProperties->get(CameraProperties::EXPOSURE_MODE));
     p.set(TICameraParameters::KEY_ISO, mCameraProperties->get(CameraProperties::ISO_MODE));
     p.set(TICameraParameters::KEY_IPP, mCameraProperties->get(CameraProperties::IPP));
+    p.set(TICameraParameters::KEY_GBCE, mCameraProperties->get(CameraProperties::GBCE));
     p.set(TICameraParameters::KEY_S3D2D_PREVIEW, mCameraProperties->get(CameraProperties::S3D2D_PREVIEW));
     p.set(TICameraParameters::KEY_AUTOCONVERGENCE, mCameraProperties->get(CameraProperties::AUTOCONVERGENCE));
     p.set(TICameraParameters::KEY_MANUALCONVERGENCE_VALUES, mCameraProperties->get(CameraProperties::MANUALCONVERGENCE_VALUES));

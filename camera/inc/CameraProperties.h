@@ -93,6 +93,7 @@ public:
     static const char SHARPNESS[];
     static const char CONTRAST[];
     static const char IPP[];
+    static const char GBCE[];
     static const char AUTOCONVERGENCE[];
     static const char AUTOCONVERGENCE_MODE[];
     static const char MANUALCONVERGENCE_VALUES[];

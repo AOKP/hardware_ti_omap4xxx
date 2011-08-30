@@ -41,6 +41,7 @@ const char OMXCameraAdapter::DEFAULT_FLASH_MODE[] = "off";
 const char OMXCameraAdapter::DEFAULT_FOCUS_MODE[] = "infinity";
 const char OMXCameraAdapter::DEFAULT_FRAMERATE_RANGE[] = "20000,30000";
 const char OMXCameraAdapter::DEFAULT_IPP[] = "ldc-nsf";
+const char OMXCameraAdapter::DEFAULT_GBCE[] = "enable";
 const char OMXCameraAdapter::DEFAULT_ISO_MODE[] = "auto";
 const char OMXCameraAdapter::DEFAULT_JPEG_QUALITY[] = "95";
 const char OMXCameraAdapter::DEFAULT_THUMBNAIL_QUALITY[] = "60";

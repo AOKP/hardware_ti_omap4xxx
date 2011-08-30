@@ -78,6 +78,7 @@ const char CameraProperties::BRIGHTNESS[] = "prop-brightness-default";
 const char CameraProperties::SATURATION[] = "prop-saturation-default";
 const char CameraProperties::SHARPNESS[] = "prop-sharpness-default";
 const char CameraProperties::IPP[] = "prop-ipp-default";
+const char CameraProperties::GBCE[] = "prop-gbce-default";
 const char CameraProperties::S3D2D_PREVIEW[] = "prop-s3d2d-preview";
 const char CameraProperties::S3D2D_PREVIEW_MODES[] = "prop-s3d2d-preview-values";
 const char CameraProperties::AUTOCONVERGENCE[] = "prop-auto-convergence";

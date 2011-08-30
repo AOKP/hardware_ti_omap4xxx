@@ -678,6 +678,7 @@ private:
     static const char DEFAULT_FOCUS_MODE[];
     static const char DEFAULT_FRAMERATE_RANGE[];
     static const char DEFAULT_IPP[];
+    static const char DEFAULT_GBCE[];
     static const char DEFAULT_ISO_MODE[];
     static const char DEFAULT_JPEG_QUALITY[];
     static const char DEFAULT_THUMBNAIL_QUALITY[];

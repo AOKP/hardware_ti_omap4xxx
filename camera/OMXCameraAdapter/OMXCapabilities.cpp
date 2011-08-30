@@ -955,6 +955,7 @@ status_t OMXCameraAdapter::insertDefaults(CameraProperties::Properties* params, 
     params->set(CameraProperties::FLASH_MODE, DEFAULT_FLASH_MODE);
     params->set(CameraProperties::FOCUS_MODE, DEFAULT_FOCUS_MODE);
     params->set(CameraProperties::IPP, DEFAULT_IPP);
+    params->set(CameraProperties::GBCE, DEFAULT_GBCE);
     params->set(CameraProperties::ISO_MODE, DEFAULT_ISO_MODE);
     params->set(CameraProperties::JPEG_QUALITY, DEFAULT_JPEG_QUALITY);
     params->set(CameraProperties::JPEG_THUMBNAIL_QUALITY, DEFAULT_THUMBNAIL_QUALITY);
