@@ -220,6 +220,7 @@ public:
 
     enum IPPMode
         {
+        IPP_NULL = -1,
         IPP_NONE = 0,
         IPP_NSF,
         IPP_LDC,
@@ -589,6 +590,7 @@ private:
     status_t sendFrame(CameraFrame &frame);
 
     status_t apply3Asettings( Gen3A_settings& Gen3A );
+    status_t apply3ADefaults(Gen3A_settings &Gen3A);
 
     // AutoConvergence
     status_t setAutoConvergence(OMX_TI_AUTOCONVERGENCEMODETYPE pACMode, OMX_S32 pManualConverence);

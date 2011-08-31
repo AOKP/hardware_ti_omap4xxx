@@ -293,6 +293,62 @@ const char* OMXCameraAdapter::getLUTvalue_OMXtoHAL(int OMXValue, LUTtype LUT)
     return NULL;
 }
 
+status_t OMXCameraAdapter::apply3ADefaults(Gen3A_settings &Gen3A)
+{
+    status_t ret = NO_ERROR;
+
+    LOG_FUNCTION_NAME;
+
+    Gen3A.Effect = getLUTvalue_HALtoOMX(OMXCameraAdapter::DEFAULT_EFFECT, EffLUT);
+    ret |= setEffect(Gen3A);
+
+    Gen3A.FlashMode = getLUTvalue_HALtoOMX(OMXCameraAdapter::DEFAULT_FLASH_MODE, FlashLUT);
+    ret |= setFlashMode(Gen3A);
+
+    Gen3A.SceneMode = getLUTvalue_HALtoOMX(OMXCameraAdapter::DEFAULT_SCENE_MODE, SceneLUT);
+    ret |= setScene(Gen3A);
+
+    Gen3A.EVCompensation = atoi(OMXCameraAdapter::DEFAULT_EV_COMPENSATION);
+    ret |= setEVCompensation(Gen3A);
+
+    Gen3A.Focus = getLUTvalue_HALtoOMX(OMXCameraAdapter::DEFAULT_FOCUS_MODE, FocusLUT);
+    ret |= setFocusMode(Gen3A);
+
+    Gen3A.ISO = getLUTvalue_HALtoOMX(OMXCameraAdapter::DEFAULT_ISO_MODE, IsoLUT);
+    ret |= setISO(Gen3A);
+
+    Gen3A.Flicker = getLUTvalue_HALtoOMX(OMXCameraAdapter::DEFAULT_ANTIBANDING, FlickerLUT);
+    ret |= setFlicker(Gen3A);
+
+    Gen3A.Brightness = atoi(OMXCameraAdapter::DEFAULT_BRIGHTNESS);
+    ret |= setBrightness(Gen3A);
+
+    Gen3A.Saturation = atoi(OMXCameraAdapter::DEFAULT_SATURATION);
+    ret |= setSaturation(Gen3A);
+
+    Gen3A.Sharpness = atoi(OMXCameraAdapter::DEFAULT_SHARPNESS);
+    ret |= setSharpness(Gen3A);
+
+    Gen3A.Contrast = atoi(OMXCameraAdapter::DEFAULT_CONTRAST);
+    ret |= setContrast(Gen3A);
+
+    Gen3A.WhiteBallance = getLUTvalue_HALtoOMX(OMXCameraAdapter::DEFAULT_WB, WBalLUT);
+    ret |= setWBMode(Gen3A);
+
+    Gen3A.Exposure = getLUTvalue_HALtoOMX(OMXCameraAdapter::DEFAULT_EXPOSURE_MODE, ExpLUT);
+    ret |= setExposureMode(Gen3A);
+
+    Gen3A.ExposureLock = OMX_FALSE;
+    ret |= setExposureLock(Gen3A);
+
+    Gen3A.WhiteBalanceLock = OMX_FALSE;
+    ret |= setWhiteBalanceLock(Gen3A);
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return NO_ERROR;
+}
+
 status_t OMXCameraAdapter::setExposureMode(Gen3A_settings& Gen3A)
 {
     OMX_ERRORTYPE eError = OMX_ErrorNone;

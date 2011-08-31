@@ -224,6 +224,9 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
         mComponentState = OMX_StateLoaded;
 
         mCapMode = HIGH_QUALITY;
+        mIPP = IPP_NULL;
+        mVstabEnabled = false;
+        mVnfEnabled = false;
         mBurstFrames = 1;
         mCapturedFrames = 0;
         mPictureQuality = 100;
@@ -324,6 +327,14 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
 
         memset(&mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex], 0, sizeof(OMXCameraPortParameters));
         memset(&mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex], 0, sizeof(OMXCameraPortParameters));
+
+        //Initialize 3A defaults
+        ret = apply3ADefaults(mParameters3A);
+        if ( NO_ERROR != ret )
+            {
+            goto EXIT;
+            }
+
     }
     LOG_FUNCTION_NAME_EXIT;
     return ErrorUtils::omxToAndroidError(eError);
