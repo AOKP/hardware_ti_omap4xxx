@@ -651,6 +651,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                 /* move fb z-order up (by lowering dss layers) */
                 while (fb_zmax < z - 1)
                     dsscomp->ovls[1 + fb_zmax++].cfg.zorder--;
+                fb_z = fb_zmax;
             }
         }
     }
