@@ -540,7 +540,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 {
     omap4_hwc_device_t *hwc_dev = (omap4_hwc_device_t *)dev;
     struct dsscomp_setup_dispc_data *dsscomp = &hwc_dev->dsscomp_data;
-    struct counts num = { .composited_layers = list->numHwLayers };
+    struct counts num = { .composited_layers = list ? list->numHwLayers : 0 };
     unsigned int i;
 
     pthread_mutex_lock(&hwc_dev->lock);
@@ -548,7 +548,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     dsscomp->sync_id = sync_id++;
 
     /* Figure out how many layers we can support via DSS */
-    for (i = 0; i < list->numHwLayers; i++) {
+    for (i = 0; list && i < list->numHwLayers; i++) {
         hwc_layer_t *layer = &list->hwLayers[i];
         IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
 
@@ -582,8 +582,8 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         hwc_dev->swap_rb = is_BGR(hwc_dev->fb_dev->base.format);
     }
     if (debug) {
-        LOGD("prepare (%d) %d layers - %s (comp=%d, poss=%d/%d scaled, RGB=%d,BGR=%d,NV12=%d) (ext=%x, %dex/%dmx (last %dex,%din)\n",
-         dsscomp->sync_id, list->numHwLayers,
+        LOGD("prepare (%d) - %s (comp=%d, poss=%d/%d scaled, RGB=%d,BGR=%d,NV12=%d) (ext=%x, %dex/%dmx (last %dex,%din)\n",
+         dsscomp->sync_id,
          hwc_dev->use_sgx ? "SGX+OVL" : "all-OVL",
          num.composited_layers,
          num.possible_overlay_layers, num.scaled_layers,
@@ -600,7 +600,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 
     /* set up if DSS layers */
     unsigned int mem_used = 0;
-    for (i = 0; i < list->numHwLayers && dsscomp->num_ovls < num.max_hw_overlays; i++) {
+    for (i = 0; list && i < list->numHwLayers && dsscomp->num_ovls < num.max_hw_overlays; i++) {
         hwc_layer_t *layer = &list->hwLayers[i];
         IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
 
@@ -754,17 +754,12 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
     int err;
     unsigned int i;
 
-    if (!list) {
-        LOGE("list is NULL");
-        return 0;
-    }
-
     pthread_mutex_lock(&hwc_dev->lock);
     char big_log[1024];
     int e = sizeof(big_log);
     char *end = big_log + e;
     e -= snprintf(end - e, e, "set H{");
-    for (i = 0; i < list->numHwLayers; i++) {
+    for (i = 0; list && i < list->numHwLayers; i++) {
         if (i)
             e -= snprintf(end - e, e, " ");
         hwc_layer_t *layer = &list->hwLayers[i];
