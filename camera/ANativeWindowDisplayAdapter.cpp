@@ -194,10 +194,11 @@ ANativeWindowDisplayAdapter::~ANativeWindowDisplayAdapter()
     LOG_FUNCTION_NAME;
 
     ///If Frame provider exists
-    if(mFrameProvider)
-        {
+    if (mFrameProvider) {
         // Unregister with the frame provider
         mFrameProvider->disableFrameNotification(CameraFrame::ALL_FRAMES);
+        delete mFrameProvider;
+        mFrameProvider = NULL; 
     }
 
     ///The ANativeWindow object will get destroyed here
@@ -284,11 +285,15 @@ int ANativeWindowDisplayAdapter::setFrameProvider(FrameNotifier *frameProvider)
     LOG_FUNCTION_NAME;
 
     // Check for NULL pointer
-    if ( !frameProvider )
-        {
+    if ( !frameProvider ) {
         CAMHAL_LOGEA("NULL passed for frame provider");
         LOG_FUNCTION_NAME_EXIT;
         return BAD_VALUE;
+    }
+
+    //Release any previous frame providers
+    if ( NULL != mFrameProvider ) {
+        delete mFrameProvider;
     }
 
     /** Dont do anything here, Just save the pointer for use when display is
@@ -534,7 +539,6 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
     status_t err;
     int i = -1;
     const int lnumBufs = numBufs;
-    int32_t *buffers = new int32_t[lnumBufs];
     mBufferHandleMap = new buffer_handle_t*[lnumBufs];
     mGrallocHandleMap = new IMG_native_handle_t*[lnumBufs];
     int undequeued = 0;
@@ -599,11 +603,10 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
     ///We just return the buffers from ANativeWindow, if the width and height are same, else (vstab, vnf case)
     ///re-allocate buffers using ANativeWindow and then get them
     ///@todo - Re-allocate buffers for vnf and vstab using the width, height, format, numBufs etc
-    if ( (buffers == NULL) || (mBufferHandleMap == NULL) )
+    if ( mBufferHandleMap == NULL )
     {
         CAMHAL_LOGEA("Couldn't create array for ANativeWindow buffers");
         LOG_FUNCTION_NAME_EXIT;
-        delete [] buffers;
         return NULL;
     }
 
@@ -637,7 +640,6 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
 
         bytes =  getBufSize(format, width, height);
 
-        CAMHAL_LOGDB("Adding buffer index=%d, address=0x%x", i, buffers[i]);
     }
 
     // lock the initial queueable buffers
@@ -694,10 +696,6 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
         mFramesWithCameraAdapterMap.removeItem((int) mGrallocHandleMap[start]);
     }
     CAMHAL_LOGEA("Error occurred, performing cleanup");
-    if ( buffers )
-        {
-        delete [] buffers;
-    }
 
     if ( NULL != mErrorNotifier.get() )
         {
