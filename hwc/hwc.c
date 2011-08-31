@@ -656,18 +656,14 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         }
     }
 
-    /* clear FB above DSS layers */
-    /* FIXME: for now assume full screen layers.  later this can be optimized */
-    int obstructed = 0;
-    if (dsscomp->num_ovls > hwc_dev->use_sgx) {
-        for (i = list->numHwLayers; i > 0;) {
-            i--;
+    /* clear FB above all opaque layers if rendering via SGX */
+    if (hwc_dev->use_sgx) {
+        for (i = 0; list && i < list->numHwLayers; i++) {
             hwc_layer_t *layer = &list->hwLayers[i];
+            IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
             if ((layer->flags & HWC_SKIP_LAYER) || !layer->handle)
                 continue;
-            if (layer->compositionType != HWC_OVERLAY)
-                obstructed = 1;
-            else if (obstructed)
+            if (!is_ALPHA(handle->iFormat))
                 layer->hints |= HWC_HINT_CLEAR_FB;
         }
     }
