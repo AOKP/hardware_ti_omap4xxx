@@ -200,7 +200,7 @@ static OMX_ERRORTYPE PROXY_AllocateBufferIonCarveout(PROXY_COMPONENT_PRIVATE *pC
 	int ret;
 	struct ion_handle *temp;
 
-	ret = ion_alloc(pCompPrv->ion_fd, len, 0, 1 << ION_HEAP_TYPE_CARVEOUT, &temp);
+	ret = ion_alloc(pCompPrv->ion_fd, len, 0x1000, 1 << ION_HEAP_TYPE_CARVEOUT, &temp);
 	DOMX_DEBUG("ION being USED for allocation!!!!! handle = %x, ret =%x",temp,ret);
 	if (ret)
 			return OMX_ErrorInsufficientResources;
