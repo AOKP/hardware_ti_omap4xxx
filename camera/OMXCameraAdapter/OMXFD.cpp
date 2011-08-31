@@ -372,6 +372,7 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
         for ( ; j < faceData->ulFaceCount ; j++)
             {
              OMX_S32 nLeft = 0;
+             OMX_S32 nTop = 0;
              //Face filtering
              //For real faces, it is seen that the h/w passes a score >=80
              //For false faces, we seem to get even a score of 70 sometimes.
@@ -388,6 +389,7 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
                 trans_bot = 1; // top is not bottom
                 // from sensor pov, the left pos is the right corner of the face in pov of frame
                 nLeft  = faceData->tFacePosition[j].nLeft + faceData->tFacePosition[j].nWidth;
+                nTop =  faceData->tFacePosition[j].nTop + faceData->tFacePosition[j].nHeight;
             } else {
                 orient_mult = 1;
                 trans_left = 0; // left
@@ -395,6 +397,7 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
                 trans_right = 2; // right
                 trans_bot = 3; // bottom
                 nLeft  = faceData->tFacePosition[j].nLeft;
+                nTop =  faceData->tFacePosition[j].nTop;
 
             }
 
@@ -403,7 +406,7 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
             tmp -= hRange/2;
             faces[i].rect[trans_left] = tmp;
 
-            tmp = ( double ) faceData->tFacePosition[j].nTop / ( double )previewHeight;
+            tmp = ( double ) nTop / ( double )previewHeight;
             tmp *= vRange;
             tmp -= vRange/2;
             faces[i].rect[trans_top] = tmp;
