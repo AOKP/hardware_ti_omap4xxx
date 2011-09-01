@@ -61,7 +61,7 @@
 #ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
 /* Opaque color format requires below quirks to be enabled
  * ENABLE_GRALLOC_BUFFER
- * ANDROID_QUIRCK_CHANGE_PORT_VALUES
+ * ANDROID_QUIRK_CHANGE_PORT_VALUES
  */
 #include "memmgr.h"
 #include "tiler.h"
@@ -351,7 +351,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 #endif
         }
 
-	PROXY_assert(eError == OMX_ErrorNone,
+	PROXY_assert((eError == OMX_ErrorNone) || (eError == OMX_ErrorNoMore),
 		    eError," Error in Proxy GetParameter");
 
       EXIT:
@@ -656,7 +656,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 				pDest[1] = pProxy->pBuf1[nBufIndex];
 
 				/* Get NV12 data after colorconv*/
-				nRet = COLORCONVERT_PlatformOpaqueToNV12(pProxy->hCC, (void **) pGrallocHandle, pDest,
+				nRet = COLORCONVERT_PlatformOpaqueToNV12(pProxy->hCC, (void **) &pGrallocHandle, pDest,
 									 pGrallocHandle->iWidth,
 									 pGrallocHandle->iHeight,
 									 4096, COLORCONVERT_BUFTYPE_GRALLOCOPAQUE,
