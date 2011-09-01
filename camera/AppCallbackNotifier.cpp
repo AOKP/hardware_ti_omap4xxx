@@ -22,6 +22,7 @@
 
 #include "CameraHal.h"
 #include "VideoMetadata.h"
+#include "Encoder_libjpeg.h"
 #include <MetadataBufferType.h>
 #include <ui/GraphicBuffer.h>
 #include <ui/GraphicBufferMapper.h>
@@ -31,12 +32,71 @@ namespace android {
 
 const int AppCallbackNotifier::NOTIFIER_TIMEOUT = -1;
 
+void AppCallbackNotifierEncoderCallback(size_t jpeg_size,
+                                        uint8_t* src,
+                                        CameraFrame::FrameType type,
+                                        void* cookie1,
+                                        void* cookie2,
+                                        void* cookie3)
+{
+    if (cookie1) {
+        AppCallbackNotifier* cb = (AppCallbackNotifier*) cookie1;
+        cb->EncoderDoneCb(jpeg_size, src, type, cookie2);
+    }
+}
+
 /*--------------------NotificationHandler Class STARTS here-----------------------------*/
+
+void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFrame::FrameType type, void* cookie1)
+{
+    camera_memory_t* encoded_mem = NULL;
+
+    LOG_FUNCTION_NAME;
+
+    Mutex::Autolock lock(mLock);
+
+    encoded_mem = (camera_memory_t*) cookie1;
+
+    // TODO(XXX): Need to temporarily allocate another chunk of memory and then memcpy
+    //            encoded buffer since MemoryHeapBase and MemoryBase are passed as
+    //            one camera_memory_t structure. How fix this?
+
+    camera_memory_t* picture = mRequestMemory(-1, jpeg_size, 1, NULL);
+
+    if(picture && picture->data && encoded_mem && encoded_mem->data) {
+        memcpy(picture->data, encoded_mem->data, jpeg_size);
+    }
+
+    {
+        Mutex::Autolock lock(mBurstLock);
+#if 0 //TODO: enable burst mode later
+        if ( mBurst )
+        {
+            `(CAMERA_MSG_BURST_IMAGE, JPEGPictureMemBase, mCallbackCookie);
+        }
+        else
+#endif
+        {
+            mDataCb(CAMERA_MSG_COMPRESSED_IMAGE, picture, 0, NULL, mCallbackCookie);
+        }
+    }
+
+    if (encoded_mem) {
+        encoded_mem->release(encoded_mem);
+    }
+
+    if (picture) {
+        picture->release(picture);
+    }
+
+    mFrameProvider->returnFrame(src, type);
+
+    LOG_FUNCTION_NAME_EXIT;
+}
 
 /**
   * NotificationHandler class
   */
-
 
 ///Initialization function for AppCallbackNotifier
 status_t AppCallbackNotifier::initialize()
@@ -571,6 +631,59 @@ void AppCallbackNotifier::notifyFrame()
                         {
                         raw_picture->release(raw_picture);
                         }
+
+                    }
+                else if ( (CameraFrame::IMAGE_FRAME == frame->mFrameType) &&
+                          (NULL != mCameraHal) &&
+                          (NULL != mDataCb) &&
+                          (CameraFrame::ENCODE_RAW_YUV422I_TO_JPEG & frame->mQuirks) )
+                    {
+                    Mutex::Autolock lock(mLock);
+
+                    int encode_quality = 100;
+                    const char* valstr = NULL;
+                    camera_memory_t* raw_picture = mRequestMemory(-1, frame->mLength, 1, NULL);
+
+                    if(raw_picture) {
+                        buf = raw_picture->data;
+                    }
+
+                    valstr = mParameters.get(CameraParameters::KEY_JPEG_QUALITY);
+                    if (valstr) {
+                        encode_quality = atoi(valstr);
+                        if (encode_quality < 0 || encode_quality > 100) {
+                            encode_quality = 100;
+                        }
+                    }
+
+                    CAMHAL_LOGVB("encoder(%p, %d, %p, %d, %d, %d, %d,%p,%d,%p,%p, %d)",
+                                 (uint8_t*)frame->mBuffer,
+                                 frame->mLength,
+                                 (uint8_t*)buf,
+                                 frame->mLength,
+                                 encode_quality,
+                                 frame->mWidth,
+                                 frame->mHeight,
+                                 AppCallbackNotifierEncoderCallback,
+                                 frame->mFrameType,
+                                 this,
+                                 raw_picture,
+                                 NULL);
+
+                    sp<Encoder_libjpeg> encoder = new Encoder_libjpeg((uint8_t*)frame->mBuffer,
+                                                                      frame->mLength,
+                                                                      (uint8_t*)buf,
+                                                                      frame->mLength,
+                                                                      encode_quality,
+                                                                      frame->mWidth,
+                                                                      frame->mHeight,
+                                                                      AppCallbackNotifierEncoderCallback,
+                                                                      (CameraFrame::FrameType)frame->mFrameType,
+                                                                      this,
+                                                                      raw_picture,
+                                                                      NULL);
+                    encoder->run();
+                    encoder.clear();
 
                     }
                 else if ( ( CameraFrame::IMAGE_FRAME == frame->mFrameType ) &&
@@ -1131,6 +1244,16 @@ void AppCallbackNotifier::setBurst(bool burst)
     mBurst = burst;
 
     LOG_FUNCTION_NAME_EXIT;
+}
+
+int AppCallbackNotifier::setParameters(const CameraParameters& params)
+{
+    LOG_FUNCTION_NAME;
+
+    mParameters = params
+
+    LOG_FUNCTION_NAME_EXIT;
+    return NO_ERROR;
 }
 
 status_t AppCallbackNotifier::stopPreviewCallbacks()

@@ -125,6 +125,16 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
         pixFormat = OMX_COLOR_FormatUnused;
         }
 
+    // JPEG capture is not supported in video mode by OMX Camera
+    // Set capture format to yuv422i...jpeg encode will
+    // be done on A9
+    valstr = params.get(TICameraParameters::KEY_CAP_MODE);
+    if ( (valstr && !strcmp(valstr, (const char *) TICameraParameters::VIDEO_MODE)) &&
+         (pixFormat == OMX_COLOR_FormatUnused) ) {
+        CAMHAL_LOGDA("Capturing in video mode...selecting yuv422i");
+        pixFormat = OMX_COLOR_FormatCbYCrY;
+    }
+
     if ( pixFormat != cap->mColorFormat )
         {
         updateImagePortParams = true;
@@ -746,37 +756,38 @@ status_t OMXCameraAdapter::startImageCapture()
 
         }
 
-    if ( NO_ERROR == ret )
-        {
+    if ( NO_ERROR == ret ) {
         capData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex];
 
         ///Queue all the buffers on capture port
-        for ( int index = 0 ; index < capData->mNumBufs ; index++ )
-            {
+        for ( int index = 0 ; index < capData->mNumBufs ; index++ ) {
             CAMHAL_LOGDB("Queuing buffer on Capture port - 0x%x",
                          ( unsigned int ) capData->mBufferHeader[index]->pBuffer);
             eError = OMX_FillThisBuffer(mCameraAdapterParameters.mHandleComp,
                         (OMX_BUFFERHEADERTYPE*)capData->mBufferHeader[index]);
 
             GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
-            }
+        }
 
         mWaitingForSnapshot = true;
         mCaptureSignalled = false;
 
-        OMX_INIT_STRUCT_PTR (&bOMX, OMX_CONFIG_BOOLEANTYPE);
-        bOMX.bEnabled = OMX_TRUE;
+        // Capturing command is not needed when capturing in video mode
+        // Only need to queue buffers on image ports
+        if (mCapMode != VIDEO_MODE) {
+            OMX_INIT_STRUCT_PTR (&bOMX, OMX_CONFIG_BOOLEANTYPE);
+            bOMX.bEnabled = OMX_TRUE;
 
-        /// sending Capturing Command to the component
-        eError = OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
-                               OMX_IndexConfigCapturing,
-                               &bOMX);
+            /// sending Capturing Command to the component
+            eError = OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
+                                   OMX_IndexConfigCapturing,
+                                   &bOMX);
 
-        CAMHAL_LOGDB("Capture set - 0x%x", eError);
+            CAMHAL_LOGDB("Capture set - 0x%x", eError);
 
-        GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
-
+            GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
         }
+    }
 
     //OMX shutter callback events are only available in hq mode
     if ( (HIGH_QUALITY == mCapMode) || (HIGH_QUALITY_ZSL== mCapMode))

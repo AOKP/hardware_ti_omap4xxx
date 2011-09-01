@@ -1786,8 +1786,61 @@ status_t BaseCameraAdapter::setState(CameraCommands operation)
                     mNextState = VIDEO_ZOOM_STATE;
                     break;
 
+                case CAMERA_USE_BUFFERS_IMAGE_CAPTURE:
+                    CAMHAL_LOGDB("Adapter state switch VIDEO_STATE->VIDEO_LOADED_CAPTURE_STATE event = 0x%x",
+                                 operation);
+                    mNextState = VIDEO_LOADED_CAPTURE_STATE;
+                    break;
+
+                case CAMERA_QUERY_BUFFER_SIZE_IMAGE_CAPTURE:
+                    CAMHAL_LOGDB("Adapter state switch VIDEO_STATE->VIDEO_STATE event = 0x%x",
+                                 operation);
+                    mNextState = VIDEO_STATE;
+                    break;
+
                 default:
                     CAMHAL_LOGEB("Adapter state switch VIDEO_STATE Invalid Op! event = 0x%x",
+                                 operation);
+                    ret = INVALID_OPERATION;
+                    break;
+
+                }
+
+            break;
+
+        case VIDEO_LOADED_CAPTURE_STATE:
+
+            switch ( operation )
+                {
+
+                case CAMERA_START_IMAGE_CAPTURE:
+                    CAMHAL_LOGDB("Adapter state switch LOADED_CAPTURE_STATE->CAPTURE_STATE event = 0x%x",
+                                 operation);
+                    mNextState = VIDEO_CAPTURE_STATE;
+                    break;
+
+                default:
+                    CAMHAL_LOGEB("Adapter state switch LOADED_CAPTURE_STATE Invalid Op! event = 0x%x",
+                                 operation);
+                    ret = INVALID_OPERATION;
+                    break;
+
+                }
+
+            break;
+
+        case VIDEO_CAPTURE_STATE:
+
+            switch ( operation )
+                {
+                case CAMERA_STOP_IMAGE_CAPTURE:
+                    CAMHAL_LOGDB("Adapter state switch CAPTURE_STATE->PREVIEW_STATE event = 0x%x",
+                                 operation);
+                    mNextState = VIDEO_STATE;
+                    break;
+
+                default:
+                    CAMHAL_LOGEB("Adapter state switch CAPTURE_STATE Invalid Op! event = 0x%x",
                                  operation);
                     ret = INVALID_OPERATION;
                     break;

@@ -2712,7 +2712,7 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
                                    pPortParam);
             }
 
-        if( mWaitingForSnapshot )
+        if( mWaitingForSnapshot &&  (mCapturedFrames > 0) )
             {
             typeOfFrame = CameraFrame::SNAPSHOT_FRAME;
             }
@@ -2739,8 +2739,8 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             {
             mSnapshotCount++;
 
-            if (  ( mSnapshotCount == 1 ) &&
-                ( HIGH_SPEED == mCapMode ) )
+            if ( (mSnapshotCount == 1) &&
+                 ((HIGH_SPEED == mCapMode) || (VIDEO_MODE == mCapMode)) )
                 {
                 notifyShutterSubscribers();
                 }
@@ -2763,10 +2763,25 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
        }
     else if( pBuffHeader->nOutputPortIndex == OMX_CAMERA_PORT_IMAGE_OUT_IMAGE )
         {
+        CameraFrame cameraFrame;
+        OMX_COLOR_FORMATTYPE pixFormat;
+        const char *valstr = NULL;
 
-        if ( OMX_COLOR_FormatUnused == mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex].mColorFormat )
+        pixFormat = mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex].mColorFormat;
+        valstr = mParams.getPictureFormat();
+
+        if ( OMX_COLOR_FormatUnused == pixFormat )
             {
             typeOfFrame = CameraFrame::IMAGE_FRAME;
+            }
+        else if ( pixFormat == OMX_COLOR_FormatCbYCrY &&
+                  ((valstr && !strcmp(valstr, CameraParameters::PIXEL_FORMAT_JPEG)) ||
+                   !valstr) )
+            {
+            // signals to callbacks that this needs to be coverted to jpeg
+            // before returning to framework
+            typeOfFrame = CameraFrame::IMAGE_FRAME;
+            cameraFrame.mQuirks |= CameraFrame::ENCODE_RAW_YUV422I_TO_JPEG;
             }
         else
             {
@@ -2804,7 +2819,6 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
 
         mCapturedFrames--;
 
-        CameraFrame cameraFrame;
         stat |= initCameraFrame(cameraFrame,
                                 pBuffHeader,
                                 typeOfFrame,

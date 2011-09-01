@@ -229,6 +229,11 @@ class CameraFrame
             ALL_FRAMES = 0xFFFF   ///Maximum of 16 frame types supported
         };
 
+    enum FrameQuirks
+    {
+        ENCODE_RAW_YUV422I_TO_JPEG = 0x1 << 0,
+    };
+
     //default contrustor
     CameraFrame():
     mCookie(NULL),
@@ -240,7 +245,8 @@ class CameraFrame
     mOffset(0),
     mAlignment(0),
     mFd(0),
-    mLength(0) {}
+    mLength(0),
+    mQuirks(0) {}
 
     //copy constructor
     CameraFrame(const CameraFrame &frame) :
@@ -253,7 +259,8 @@ class CameraFrame
     mOffset(frame.mOffset),
     mAlignment(frame.mAlignment),
     mFd(frame.mFd),
-    mLength(frame.mLength) {}
+    mLength(frame.mLength),
+    mQuirks(frame.mQuirks) {}
 
     void *mCookie;
     void *mBuffer;
@@ -264,6 +271,7 @@ class CameraFrame
     unsigned int mAlignment;
     int mFd;
     size_t mLength;
+    unsigned int mQuirks;
     ///@todo add other member vars like  stride etc
 };
 
@@ -516,6 +524,8 @@ public:
     //Set Burst mode
     void setBurst(bool burst);
 
+    int setParameters(const CameraParameters& params);
+
     //Notifications from CameraHal for video recording case
     status_t startRecording();
     status_t stopRecording();
@@ -523,6 +533,8 @@ public:
     status_t releaseRecordingFrame(const void *opaque);
 
 	status_t useMetaDataBufferMode(bool enable);
+
+    void EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFrame::FrameType type, void* cookie1);
 
     //Internal class definitions
     class NotificationThread : public Thread {
@@ -599,6 +611,8 @@ private:
     bool mMeasurementEnabled;
 
 	bool mUseMetaDataBufferMode;
+
+    CameraParameters mParameters;
 
 };
 
@@ -709,6 +723,8 @@ public:
         ZOOM_STATE                 = ZOOM_ACTIVE | PREVIEW_ACTIVE | INTIALIZED_ACTIVE,
         VIDEO_STATE                = VIDEO_ACTIVE | PREVIEW_ACTIVE | INTIALIZED_ACTIVE,
         VIDEO_ZOOM_STATE           = VIDEO_ACTIVE | ZOOM_ACTIVE | PREVIEW_ACTIVE | INTIALIZED_ACTIVE,
+        VIDEO_LOADED_CAPTURE_STATE = VIDEO_ACTIVE | LOADED_CAPTURE_ACTIVE | PREVIEW_ACTIVE | INTIALIZED_ACTIVE,
+        VIDEO_CAPTURE_STATE        = VIDEO_ACTIVE | CAPTURE_ACTIVE | PREVIEW_ACTIVE | INTIALIZED_ACTIVE,
         AF_ZOOM_STATE              = AF_ACTIVE | ZOOM_ACTIVE | PREVIEW_ACTIVE | INTIALIZED_ACTIVE,
         BRACKETING_ZOOM_STATE      = BRACKETING_ACTIVE | ZOOM_ACTIVE | PREVIEW_ACTIVE | INTIALIZED_ACTIVE,
     };

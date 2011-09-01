@@ -2224,6 +2224,7 @@ status_t CameraHal::takePicture( )
     CameraFrame frame;
     CameraAdapter::BuffersDescriptor desc;
     int burst;
+    const char *valstr = NULL;
     unsigned int bufferCount = 1;
 
     Mutex::Autolock lock(mLock);
@@ -2239,13 +2240,25 @@ status_t CameraHal::takePicture( )
     if(!previewEnabled() && !mDisplayPaused)
         {
         LOG_FUNCTION_NAME_EXIT;
+        CAMHAL_LOGEA("Preview not started...");
         return NO_INIT;
         }
 
-    //If capture has already started, then queue this call for later execution
-    if ( mCameraAdapter->getState() == CameraAdapter::CAPTURE_STATE &&
-         mCameraAdapter->getNextState() != CameraAdapter::PREVIEW_STATE) {
+    // return error if we are already capturing
+    if ( (mCameraAdapter->getState() == CameraAdapter::CAPTURE_STATE &&
+          mCameraAdapter->getNextState() != CameraAdapter::PREVIEW_STATE) ||
+         (mCameraAdapter->getState() == CameraAdapter::VIDEO_CAPTURE_STATE &&
+          mCameraAdapter->getNextState() != CameraAdapter::VIDEO_STATE) ) {
+        CAMHAL_LOGEA("Already capturing an image...");
         return NO_INIT;
+    }
+
+    // we only support video snapshot if we are in video mode (recording hint is set)
+    valstr = mParameters.get(TICameraParameters::KEY_CAP_MODE);
+    if ( (mCameraAdapter->getState() == CameraAdapter::VIDEO_STATE) &&
+         (valstr && strcmp(valstr, TICameraParameters::VIDEO_MODE)) ) {
+        CAMHAL_LOGEA("Trying to capture while recording without recording hint set...");
+        return INVALID_OPERATION;
     }
 
     if ( !mBracketingRunning )
@@ -2273,26 +2286,27 @@ status_t CameraHal::takePicture( )
                  }
              }
 
-        //Pause Preview during capture
-        if ( (NO_ERROR == ret) && ( NULL != mDisplayAdapter.get() ) && ( burst < 1 ) )
-            {
-            mDisplayPaused = true;
-            mPreviewEnabled = false;
-            ret = mDisplayAdapter->pauseDisplay(mDisplayPaused);
-
-#if PPM_INSTRUMENTATION || PPM_INSTRUMENTATION_ABS
-
-            mDisplayAdapter->setSnapshotTimeRef(&mStartCapture);
-
-#endif
-            // since preview is paused we should stop sending preview frames too
-            if(mMsgEnabled & CAMERA_MSG_PREVIEW_FRAME)
-                {
+        // pause preview during normal image capture
+        // do not pause preview if recording (video state)
+        if (NO_ERROR == ret &&
+                NULL != mDisplayAdapter.get() &&
+                burst < 1) {
+            if (mCameraAdapter->getState() != CameraAdapter::VIDEO_STATE) {
+                mDisplayPaused = true;
+                mPreviewEnabled = false;
+                ret = mDisplayAdapter->pauseDisplay(mDisplayPaused);
+                // since preview is paused we should stop sending preview frames too
+                if(mMsgEnabled & CAMERA_MSG_PREVIEW_FRAME) {
                     mAppCallbackNotifier->disableMsgType (CAMERA_MSG_PREVIEW_FRAME);
                 }
             }
 
-        if (  (NO_ERROR == ret) && ( NULL != mCameraAdapter ) )
+#if PPM_INSTRUMENTATION || PPM_INSTRUMENTATION_ABS
+            mDisplayAdapter->setSnapshotTimeRef(&mStartCapture);
+#endif
+        }
+
+        if ( (NO_ERROR == ret) && (NULL != mCameraAdapter) )
             {
             if ( NO_ERROR == ret )
                 ret = mCameraAdapter->sendCommand(CameraAdapter::CAMERA_QUERY_BUFFER_SIZE_IMAGE_CAPTURE,

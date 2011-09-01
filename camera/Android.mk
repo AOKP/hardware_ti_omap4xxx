@@ -13,6 +13,7 @@ OMAP4_CAMERA_HAL_SRC := \
 	ANativeWindowDisplayAdapter.cpp \
 	CameraProperties.cpp \
 	MemoryManager.cpp \
+	Encoder_libjpeg.cpp \
 	SensorListener.cpp
 
 OMAP4_CAMERA_COMMON_SRC:= \
@@ -63,7 +64,8 @@ LOCAL_C_INCLUDES += \
     hardware/ti/omap4xxx/domx/omx_core/inc \
     hardware/ti/omap4xxx/domx/mm_osal/inc \
     frameworks/base/include/media/stagefright \
-    frameworks/base/include/media/stagefright/openmax
+    frameworks/base/include/media/stagefright/openmax \
+    external/jpeg
 
 LOCAL_SHARED_LIBRARIES:= \
     libui \
@@ -78,6 +80,7 @@ LOCAL_SHARED_LIBRARIES:= \
     libgui \
     libdomx \
     libion \
+    libjpeg
 
 LOCAL_CFLAGS := -fno-short-enums -DCOPY_IMAGE_BUFFER
 
