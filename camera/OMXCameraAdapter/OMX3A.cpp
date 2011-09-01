@@ -152,13 +152,6 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
              ( mode == OMX_IMAGE_FocusControlAutoInfinity ) )
             {
             mPending3Asettings |= SetFocus;
-            mParameters3A.Focus = mode;
-            }
-        else
-            {
-            //If we switch from CAF to something else, then disable CAF
-            mPending3Asettings |= SetFocus;
-            mParameters3A.Focus = OMX_IMAGE_FocusControlOff;
             }
 
         mParameters3A.Focus = mode;
