@@ -465,6 +465,9 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
 
     LOG_FUNCTION_NAME;
 
+    BaseCameraAdapter::AdapterState state;
+    BaseCameraAdapter::getState(state);
+
     if ( OMX_StateInvalid == mComponentState )
         {
         CAMHAL_LOGEA("OMX component is in invalid state");
@@ -519,7 +522,7 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
 
         }
 
-    if ( NO_ERROR == ret )
+    if ( NO_ERROR == ret && ((state & AF_ACTIVE) == 0) )
         {
         OMX_INIT_STRUCT_PTR (&focus, OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE);
         focus.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
