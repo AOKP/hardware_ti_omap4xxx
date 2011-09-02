@@ -106,6 +106,7 @@ const char CameraProperties::AUTO_WHITEBALANCE_LOCK[] = "prop-auto-whitebalance-
 const char CameraProperties::AUTO_WHITEBALANCE_LOCK_SUPPORTED[] = "prop-auto-whitebalance-lock-supported";
 const char CameraProperties::MAX_NUM_METERING_AREAS[] = "prop-max-num-metering-areas";
 const char CameraProperties::METERING_AREAS[] = "prop-metering-areas";
+const char CameraProperties::VIDEO_SNAPSHOT_SUPPORTED[] = "prop-video-snapshot-supported";
 
 const char CameraProperties::DEFAULT_VALUE[] = "";
 

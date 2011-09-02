@@ -129,6 +129,8 @@ public:
     static const char METERING_AREAS[];
     static const char MAX_NUM_FOCUS_AREAS[];
 
+    static const char VIDEO_SNAPSHOT_SUPPORTED[];
+
     CameraProperties();
     ~CameraProperties();
 
