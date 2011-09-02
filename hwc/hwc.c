@@ -688,6 +688,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                                    hwc_dev->fb_dev->base.format,
                                    hwc_dev->fb_dev->base.width,
                                    hwc_dev->fb_dev->base.height);
+        dsscomp->ovls[0].cfg.pre_mult_alpha = 1;
         dsscomp->ovls[0].uv = (__u32) hwc_dev->buffers[0];
     }
 
