@@ -178,7 +178,8 @@ static int scaled(hwc_layer_t *layer)
 
 static int sync_id = 0;
 
-#define is_ALPHA(format) ((format) == HAL_PIXEL_FORMAT_BGRA_8888 || (format) == HAL_PIXEL_FORMAT_RGBA_8888)
+#define is_BLENDED(blending) ((blending) != HWC_BLENDING_NONE)
+
 #define is_RGB(format) ((format) == HAL_PIXEL_FORMAT_BGRA_8888 || (format) == HAL_PIXEL_FORMAT_RGB_565 || (format) == HAL_PIXEL_FORMAT_BGRX_8888)
 #define is_BGR(format) ((format) == HAL_PIXEL_FORMAT_RGBX_8888 || (format) == HAL_PIXEL_FORMAT_RGBA_8888)
 #define is_NV12(format) ((format) == HAL_PIXEL_FORMAT_TI_NV12 || (format) == HAL_PIXEL_FORMAT_TI_NV12_PADDED)
@@ -607,7 +608,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         if (can_dss_render_layer(hwc_dev, layer) &&
             mem_used + mem1d(handle) < MAX_TILER_SLOT &&
             /* can't have a transparent overlay in the middle of the framebuffer stack */
-            !(is_ALPHA(handle->iFormat) && fb_z >= 0)) {
+            !(is_BLENDED(layer->blending) && fb_z >= 0)) {
             /* render via DSS overlay */
             mem_used += mem1d(handle);
             layer->compositionType = HWC_OVERLAY;
@@ -663,7 +664,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
             if ((layer->flags & HWC_SKIP_LAYER) || !layer->handle)
                 continue;
-            if (!is_ALPHA(handle->iFormat))
+            if (!is_BLENDED(layer->blending))
                 layer->hints |= HWC_HINT_CLEAR_FB;
         }
     }
