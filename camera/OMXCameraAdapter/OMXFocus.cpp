@@ -62,6 +62,11 @@ status_t OMXCameraAdapter::setParametersFocus(const CameraParameters &params,
                          mFocusAreas.size());
             ret = -EINVAL;
         }
+        else {
+            if ( !mFocusAreas.isEmpty() ) {
+                setTouchFocus();
+            }
+        }
     }
 
     LOG_FUNCTION_NAME;
@@ -93,6 +98,16 @@ status_t OMXCameraAdapter::doAutoFocus()
 
     // If the app calls autoFocus, the camera will stop sending face callbacks.
     pauseFaceDetection(true);
+
+    // This is needed for applying FOCUS_REGION correctly
+    if ( (!mFocusAreas.isEmpty()) && (!mFocusAreas.itemAt(0)->isZeroArea()))
+    {
+    //Disable face priority
+    setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO, false);
+
+    //Enable region algorithm priority
+    setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, true);
+    }
 
     OMX_INIT_STRUCT_PTR (&focusControl, OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE);
     focusControl.eFocusControl = ( OMX_IMAGE_FOCUSCONTROLTYPE ) mParameters3A.Focus;

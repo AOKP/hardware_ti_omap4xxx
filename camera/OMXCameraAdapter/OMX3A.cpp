@@ -499,7 +499,6 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focus;
     size_t top, left, width, height, weight;
-    sp<CameraArea> focusArea = NULL;
 
     LOG_FUNCTION_NAME;
 
@@ -512,14 +511,6 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
         return NO_INIT;
         }
 
-        {
-        Mutex::Autolock lock(mFocusAreasLock);
-
-        if ( !mFocusAreas.isEmpty() )
-            {
-            focusArea = mFocusAreas.itemAt(0);
-            }
-        }
 
     ///Face detection takes precedence over touch AF
     if ( mFaceDetectionRunning )
@@ -534,7 +525,7 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
         ////FIXME: Check if the extended focus control is needed? this overrides caf
         //focusControl.eFocusControl = ( OMX_IMAGE_FOCUSCONTROLTYPE ) OMX_IMAGE_FocusControlExtended;
         }
-    else if ( ( NULL != focusArea.get() ) && ( focusArea->isValid() ) )
+    else if ( (!mFocusAreas.isEmpty()) && (!mFocusAreas.itemAt(0)->isZeroArea()) )
         {
 
         //Disable face priority first
@@ -543,7 +534,6 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
         //Enable region algorithm priority
         setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, true);
 
-        setTouchFocus();
 
         //Do normal focus afterwards
         //FIXME: Check if the extended focus control is needed? this overrides caf
