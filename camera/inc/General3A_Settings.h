@@ -253,7 +253,6 @@ enum E3ASettingsFlags
     SetFlash                = 1 << 15,
     SetExpLock              = 1 << 16,
     SetWBLock               = 1 << 17,
-    SetMeteringAreas        = 1 << 18,
 
     E3aSettingMax,
     E3AsettingsAll = ( ((E3aSettingMax -1 ) << 1) -1 ) /// all possible flags raised

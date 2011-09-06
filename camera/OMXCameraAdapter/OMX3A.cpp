@@ -33,8 +33,6 @@
 #define TRUE "true"
 #define FALSE "false"
 
-#define METERING_AREAS_RANGE 0xFF
-
 namespace android {
 
 status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
@@ -262,30 +260,6 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
           }
       }
 
-    str = params.get(CameraParameters::KEY_METERING_AREAS);
-    if ( (str != NULL) )
-        {
-        size_t MAX_METERING_AREAS;
-        MAX_METERING_AREAS = atoi(params.get(CameraParameters::KEY_MAX_NUM_METERING_AREAS));
-
-        mMeteringAreas.clear();
-
-        CameraArea::parseFocusArea(str, strlen(str), mMeteringAreas);
-
-        if ( MAX_METERING_AREAS > mMeteringAreas.size() )
-            {
-            CAMHAL_LOGDB("Setting Metering Areas %s",
-                    params.get(CameraParameters::KEY_METERING_AREAS));
-
-            mPending3Asettings |= SetMeteringAreas;
-            }
-        else
-            {
-            CAMHAL_LOGEB("Metering areas supported %d, metering areas set %d",
-                         MAX_METERING_AREAS, mMeteringAreas.size());
-            }
-        }
-
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
@@ -505,7 +479,21 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
         //Enable region algorithm priority
         setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, true);
 
-        setTouchFocus();
+        //Set position
+        OMXCameraPortParameters * mPreviewData = NULL;
+        mPreviewData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex];
+        focusArea->transfrom(mPreviewData->mWidth,
+                             mPreviewData->mHeight,
+                             top,
+                             left,
+                             width,
+                             height);
+        setTouchFocus(left,
+                      top,
+                      width,
+                      height,
+                      mPreviewData->mWidth,
+                      mPreviewData->mHeight);
 
         //Do normal focus afterwards
         //FIXME: Check if the extended focus control is needed? this overrides caf
@@ -1086,106 +1074,6 @@ status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggle)
 
 }
 
-status_t OMXCameraAdapter::setMeteringAreas(Gen3A_settings& Gen3A)
-{
-  status_t ret = NO_ERROR;
-  OMX_ERRORTYPE eError = OMX_ErrorNone;
-
-  OMX_ALGOAREASTYPE **meteringAreas;
-  OMX_TI_CONFIG_SHAREDBUFFER sharedBuffer;
-  MemoryManager memMgr;
-  int areasSize = 0;
-
-  LOG_FUNCTION_NAME
-
-  if ( OMX_StateInvalid == mComponentState )
-    {
-      CAMHAL_LOGEA("OMX component is in invalid state");
-      return NO_INIT;
-    }
-
-  areasSize = ((sizeof(OMX_ALGOAREASTYPE)+4095)/4096)*4096;
-  meteringAreas = (OMX_ALGOAREASTYPE**) memMgr.allocateBuffer(0, 0, NULL, areasSize, 1);
-
-  OMXCameraPortParameters * mPreviewData = NULL;
-  mPreviewData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex];
-
-  if (!meteringAreas)
-      {
-      CAMHAL_LOGEB("Error allocating buffer for metering areas %d", eError);
-      return -ENOMEM;
-      }
-
-  OMX_INIT_STRUCT_PTR (meteringAreas[0], OMX_ALGOAREASTYPE);
-
-  meteringAreas[0]->nPortIndex = OMX_ALL;
-  meteringAreas[0]->nNumAreas = mMeteringAreas.size();
-  meteringAreas[0]->nAlgoAreaPurpose = OMX_AlgoAreaExposure;
-
-  for ( unsigned int n = 0; n < mMeteringAreas.size(); n++)
-      {
-      // transform the coordinates to 3A-type coordinates
-      mMeteringAreas.itemAt(n)->transfrom((size_t)mPreviewData->mWidth,
-                                      (size_t)mPreviewData->mHeight,
-                                      (size_t&)meteringAreas[0]->tAlgoAreas[n].nTop,
-                                      (size_t&)meteringAreas[0]->tAlgoAreas[n].nLeft,
-                                      (size_t&)meteringAreas[0]->tAlgoAreas[n].nWidth,
-                                      (size_t&)meteringAreas[0]->tAlgoAreas[n].nHeight);
-
-      meteringAreas[0]->tAlgoAreas[n].nLeft =
-              ( meteringAreas[0]->tAlgoAreas[n].nLeft * METERING_AREAS_RANGE ) / mPreviewData->mWidth;
-      meteringAreas[0]->tAlgoAreas[n].nTop =
-              ( meteringAreas[0]->tAlgoAreas[n].nTop* METERING_AREAS_RANGE ) / mPreviewData->mHeight;
-      meteringAreas[0]->tAlgoAreas[n].nWidth =
-              ( meteringAreas[0]->tAlgoAreas[n].nWidth * METERING_AREAS_RANGE ) / mPreviewData->mWidth;
-      meteringAreas[0]->tAlgoAreas[n].nHeight =
-              ( meteringAreas[0]->tAlgoAreas[n].nHeight * METERING_AREAS_RANGE ) / mPreviewData->mHeight;
-
-      meteringAreas[0]->tAlgoAreas[n].nPriority = mMeteringAreas.itemAt(n)->getWeight();
-
-      CAMHAL_LOGDB("Metering area %d : top = %d left = %d width = %d height = %d prio = %d",
-              n, (int)meteringAreas[0]->tAlgoAreas[n].nTop, (int)meteringAreas[0]->tAlgoAreas[n].nLeft,
-              (int)meteringAreas[0]->tAlgoAreas[n].nWidth, (int)meteringAreas[0]->tAlgoAreas[n].nHeight,
-              (int)meteringAreas[0]->tAlgoAreas[n].nPriority);
-
-      }
-
-  OMX_INIT_STRUCT_PTR (&sharedBuffer, OMX_TI_CONFIG_SHAREDBUFFER);
-
-  sharedBuffer.nPortIndex = OMX_ALL;
-  sharedBuffer.nSharedBuffSize = areasSize;
-  sharedBuffer.pSharedBuff = (OMX_U8 *) meteringAreas[0];
-
-  if ( NULL == sharedBuffer.pSharedBuff )
-      {
-      CAMHAL_LOGEA("No resources to allocate OMX shared buffer");
-      ret = -ENOMEM;
-      goto EXIT;
-      }
-
-      eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
-                                (OMX_INDEXTYPE) OMX_TI_IndexConfigAlgoAreas, &sharedBuffer);
-
-  if ( OMX_ErrorNone != eError )
-      {
-      CAMHAL_LOGEB("Error while setting Focus Areas configuration 0x%x", eError);
-      ret = -EINVAL;
-      }
-  else
-      {
-      CAMHAL_LOGDA("Metering Areas SetConfig successfull.");
-      }
-
- EXIT:
-  if (NULL != meteringAreas)
-      {
-      memMgr.freeBuffer((void*) meteringAreas);
-      meteringAreas = NULL;
-      }
-
-  return ret;
-}
-
 status_t OMXCameraAdapter::apply3Asettings( Gen3A_settings& Gen3A )
 {
     status_t ret = NO_ERROR;
@@ -1300,10 +1188,6 @@ status_t OMXCameraAdapter::apply3Asettings( Gen3A_settings& Gen3A )
                   {
                     ret |= setWhiteBalanceLock(Gen3A);
                     break;
-                  }
-                case SetMeteringAreas:
-                  {
-                    ret |= setMeteringAreas(Gen3A);
                   }
 
                 default:
