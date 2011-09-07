@@ -390,9 +390,7 @@ static void copy2Dto1D(void *dst,
     bounds.bottom = height;
 
     // get the y & uv pointers from the gralloc handle;
-    while (mapper.lock((buffer_handle_t)src,
-                       GRALLOC_USAGE_SW_READ_RARELY | GRALLOC_USAGE_SW_WRITE_NEVER,
-                       bounds, y_uv) < 0) {
+    while (mapper.lock((buffer_handle_t)src, CAMHAL_GRALLOC_USAGE, bounds, y_uv) < 0) {
         // give up after LOCK_BUFFER_TRIES (defined in this file)
         if (++lock_try_count > LOCK_BUFFER_TRIES) {
             return;

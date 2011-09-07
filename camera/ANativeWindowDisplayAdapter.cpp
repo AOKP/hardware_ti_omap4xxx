@@ -551,7 +551,7 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
     }
 
     // Set gralloc usage bits for window.
-    err = mANativeWindow->set_usage(mANativeWindow, GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_EXTERNAL_DISP);
+    err = mANativeWindow->set_usage(mANativeWindow, CAMHAL_GRALLOC_USAGE);
     if (err != 0) {
         LOGE("native_window_set_usage failed: %s (%d)", strerror(-err), -err);
 
@@ -654,11 +654,7 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
 
         mANativeWindow->lock_buffer(mANativeWindow, mBufferHandleMap[i]);
 
-        mapper.lock((buffer_handle_t) mGrallocHandleMap[i],
-                    GRALLOC_USAGE_HW_RENDER |
-                    GRALLOC_USAGE_SW_READ_RARELY |
-                    GRALLOC_USAGE_SW_WRITE_NEVER,
-                    bounds, y_uv);
+        mapper.lock((buffer_handle_t) mGrallocHandleMap[i], CAMHAL_GRALLOC_USAGE, bounds, y_uv);
     }
 
     // return the rest of the buffers back to ANativeWindow
@@ -1168,11 +1164,7 @@ bool ANativeWindowDisplayAdapter::handleFrameReturn()
     bounds.top = 0;
     bounds.right = mFrameWidth;
     bounds.bottom = mFrameHeight;
-    mapper.lock((buffer_handle_t) mGrallocHandleMap[i],
-                GRALLOC_USAGE_HW_RENDER |
-                GRALLOC_USAGE_SW_READ_RARELY |
-                GRALLOC_USAGE_SW_WRITE_NEVER,
-                bounds, y_uv);
+    mapper.lock((buffer_handle_t) mGrallocHandleMap[i], CAMHAL_GRALLOC_USAGE, bounds, y_uv);
 
     mFramesWithCameraAdapterMap.add((int) mGrallocHandleMap[i], i);
 

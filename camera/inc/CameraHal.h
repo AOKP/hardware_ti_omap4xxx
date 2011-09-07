@@ -63,6 +63,12 @@
 #define SHARPNESS_OFFSET 100
 #define CONTRAST_OFFSET 100
 
+#define CAMHAL_GRALLOC_USAGE GRALLOC_USAGE_HW_TEXTURE | \
+                             GRALLOC_USAGE_EXTERNAL_DISP | \
+                             GRALLOC_USAGE_HW_RENDER | \
+                             GRALLOC_USAGE_SW_READ_RARELY | \
+                             GRALLOC_USAGE_SW_WRITE_NEVER
+
 //Enables Absolute PPM measurements in logcat
 #define PPM_INSTRUMENTATION_ABS 1
 
