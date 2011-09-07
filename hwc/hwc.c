@@ -273,6 +273,10 @@ omap4_hwc_setup_layer(omap4_hwc_device_t *hwc_dev, struct dss2_ovl_info *ovl,
 
     //dump_layer(layer);
 
+    if (format == HAL_PIXEL_FORMAT_BGRA_8888 && !is_BLENDED(layer->blending)) {
+        format = HAL_PIXEL_FORMAT_BGRX_8888;
+    }
+
     omap4_hwc_setup_layer_base(oc, index, format, width, height);
 
     /* convert transformation - assuming 0-set config */
