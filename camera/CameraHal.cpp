@@ -1087,12 +1087,6 @@ status_t CameraHal::freePreviewDataBufs()
             mPreviewDataBufs = NULL;
 
             }
-        else
-            {
-            CAMHAL_LOGEA("Couldn't free PreviewDataBufs allocated by memory manager");
-            ret = -EINVAL;
-            }
-
         }
 
     LOG_FUNCTION_NAME_EXIT;
@@ -3136,24 +3130,38 @@ void CameraHal::forceStopPreview()
         mAppCallbackNotifier->stopPreviewCallbacks();
     }
 
-    // since prerequisite for capturing is for camera system
-    // to be previewing...cancel all captures before stopping
-    // preview
-    if ( mCameraAdapter->getState() == CameraAdapter::CAPTURE_STATE &&
-         mCameraAdapter->getNextState() != CameraAdapter::PREVIEW_STATE) {
-        mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_IMAGE_CAPTURE);
-    }
-
     if ( NULL != mCameraAdapter ) {
-        // according to javadoc...FD should be stopped in stopPreview
-        // and application needs to call startFaceDection again
-        // to restart FD
-        mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_FD);
+        CameraAdapter::AdapterState currentState;
+        CameraAdapter::AdapterState nextState;
 
-        cancelAutoFocus();
+        currentState = mCameraAdapter->getState();
+        nextState = mCameraAdapter->getNextState();
 
-        //Stop the source of frames
-        mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_PREVIEW);
+        // since prerequisite for capturing is for camera system
+        // to be previewing...cancel all captures before stopping
+        // preview
+        if ( (currentState == CameraAdapter::CAPTURE_STATE) &&
+             (nextState != CameraAdapter::PREVIEW_STATE)) {
+            mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_IMAGE_CAPTURE);
+        }
+
+        // only need to send these control commands to state machine if we are
+        // passed the LOADED_PREVIEW_STATE
+        if (currentState > CameraAdapter::LOADED_PREVIEW_STATE) {
+           // according to javadoc...FD should be stopped in stopPreview
+           // and application needs to call startFaceDection again
+           // to restart FD
+           mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_FD);
+
+           cancelAutoFocus();
+        }
+
+        // only need to send these control commands to state machine if we are
+        // passed the INITIALIZED_STATE
+        if (currentState > CameraAdapter::INTIALIZED_STATE) {
+           //Stop the source of frames
+           mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_PREVIEW);
+        }
     }
 
     freePreviewBufs();
@@ -3161,6 +3169,7 @@ void CameraHal::forceStopPreview()
 
     mPreviewEnabled = false;
     mDisplayPaused = false;
+    mPreviewStartInProgress = false;
 
     LOG_FUNCTION_NAME_EXIT;
 }
