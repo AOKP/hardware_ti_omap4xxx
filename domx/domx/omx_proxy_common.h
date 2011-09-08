@@ -141,8 +141,10 @@ extern "C"
 		OMX_BUFFERHEADERTYPE *pBufHeader;
 		OMX_U32 pBufHeaderRemote;
 		OMX_PTR pYBuffer;
+		OMX_PTR pMetaDataBuffer;
 #ifdef USE_ION
 		int mmap_fd;
+		int mmap_fd_metadata_buff;
 #endif
 	} PROXY_BUFFER_INFO;
 
