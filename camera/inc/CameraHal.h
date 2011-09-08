@@ -1089,6 +1089,8 @@ private:
 
     void forceStopPreview();
 
+    void selectFPSRange(int framerate, int *min_fps, int *max_fps);
+
     //@}
 
 
