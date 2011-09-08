@@ -139,6 +139,12 @@ public:
         return ( ( 0 != mTop ) || ( 0 != mLeft ) || ( 0 != mBottom ) || ( 0 != mRight) );
         }
 
+    bool isZeroArea()
+    {
+        return  ( (0 == mTop ) && ( 0 == mLeft ) && ( 0 == mBottom )
+                 && ( 0 == mRight ) && ( 0 == mWeight ));
+    }
+
     size_t getWeight()
         {
         return mWeight;

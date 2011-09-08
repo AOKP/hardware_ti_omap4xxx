@@ -72,6 +72,5 @@ const char OMXCameraAdapter::DEFAULT_LOCK_SUPPORTED[] = "true";
 const char OMXCameraAdapter::DEFAULT_LOCK_UNSUPPORTED[] = "false";
 const char OMXCameraAdapter::DEFAULT_VIDEO_SNAPSHOT_SUPPORTED[] = "true";
 
-const size_t OMXCameraAdapter::MAX_FOCUS_AREAS = 1;
 };
 
