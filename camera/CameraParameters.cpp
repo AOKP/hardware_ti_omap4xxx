@@ -112,6 +112,8 @@ const char CameraProperties::DEFAULT_VALUE[] = "";
 
 const char CameraProperties::PARAMS_DELIMITER []= ",";
 
+const char CameraProperties::DEFAULT_VIDEO_FPS_RANGE[]="24000,30000";
+
 // Returns the properties class for a specific Camera
 // Each value is indexed by the CameraProperties::CameraPropertyIndex enum
 int CameraProperties::getProperties(int cameraIndex, CameraProperties::Properties** properties)

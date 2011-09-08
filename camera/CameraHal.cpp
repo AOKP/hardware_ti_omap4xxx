@@ -253,6 +253,7 @@ int CameraHal::setParameters(const CameraParameters& params)
     // Needed for KEY_RECORDING_HINT
     bool restartPreviewRequired = false;
     CameraParameters oldParams(mParameters.flatten());
+    bool videoMode = false;
 
     {
         Mutex::Autolock lock(mLock);
@@ -385,6 +386,7 @@ int CameraHal::setParameters(const CameraParameters& params)
                 CAMHAL_LOGDB("Recording Hint is set to %s", valstr);
                 mParameters.set(CameraParameters::KEY_RECORDING_HINT, valstr);
                 restartPreviewRequired = setVideoModeParameters();
+                videoMode = true;
                 }
             else if(strcmp(valstr, CameraParameters::FALSE) == 0)
                 {
@@ -450,6 +452,14 @@ int CameraHal::setParameters(const CameraParameters& params)
             {
             CAMHAL_LOGDB("FPS Range = %s", valstr);
             params.getPreviewFpsRange(&minFPS, &maxFPS);
+
+            if (videoMode)
+              {
+                mCameraProperties->set(CameraProperties::FRAMERATE_RANGE, CameraProperties::DEFAULT_VIDEO_FPS_RANGE);
+                valstr = mCameraProperties->get(CameraProperties::FRAMERATE_RANGE);
+                mParameters.set(CameraParameters::KEY_PREVIEW_FPS_RANGE, valstr);
+                mParameters.getPreviewFpsRange(&minFPS, &maxFPS);
+              }
 
             if ( ( 0 > minFPS ) || ( 0 > maxFPS ) )
                 {
