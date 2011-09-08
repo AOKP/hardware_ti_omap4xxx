@@ -70,7 +70,7 @@ LOCAL_C_INCLUDES += \
 	$(LOCAL_PATH)/../omx_core/inc \
 	$(LOCAL_PATH)/../mm_osal/inc \
 	$(LOCAL_PATH)/../domx \
-	$(LOCAL_PATH)/../../tiler \
+	$(HARDWARE_TI_OMAP4_BASE)/ion/ \
 	$(LOCAL_PATH)/../domx/omx_rpc/inc
 
 LOCAL_SHARED_LIBRARIES := \
@@ -78,7 +78,7 @@ LOCAL_SHARED_LIBRARIES := \
 	libc \
 	libOMX_Core \
 	liblog \
-	libtimemmgr \
+	libion \
 	libdomx
 
 LOCAL_CFLAGS += -DTMS32060 -D_DB_TIOMAP -DSYSLINK_USE_SYSMGR -DSYSLINK_USE_LOADER
