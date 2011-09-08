@@ -2920,6 +2920,13 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             // before returning to framework
             typeOfFrame = CameraFrame::IMAGE_FRAME;
             cameraFrame.mQuirks |= CameraFrame::ENCODE_RAW_YUV422I_TO_JPEG;
+
+            // populate exif data and pass to subscribers via quirk
+            // subscriber is in charge of freeing exif data
+            ExifElementsTable* exif = new ExifElementsTable();
+            setupEXIF_libjpeg(exif);
+            cameraFrame.mQuirks |= CameraFrame::HAS_EXIF_DATA;
+            cameraFrame.mCookie2 = (void*) exif;
             }
         else
             {

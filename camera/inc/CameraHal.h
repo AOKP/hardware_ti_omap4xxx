@@ -238,11 +238,13 @@ class CameraFrame
     enum FrameQuirks
     {
         ENCODE_RAW_YUV422I_TO_JPEG = 0x1 << 0,
+        HAS_EXIF_DATA = 0x1 << 1,
     };
 
     //default contrustor
     CameraFrame():
     mCookie(NULL),
+    mCookie2(NULL),
     mBuffer(NULL),
     mFrameType(0),
     mTimestamp(0),
@@ -257,6 +259,7 @@ class CameraFrame
     //copy constructor
     CameraFrame(const CameraFrame &frame) :
     mCookie(frame.mCookie),
+    mCookie2(frame.mCookie2),
     mBuffer(frame.mBuffer),
     mFrameType(frame.mFrameType),
     mTimestamp(frame.mTimestamp),
@@ -269,6 +272,7 @@ class CameraFrame
     mQuirks(frame.mQuirks) {}
 
     void *mCookie;
+    void *mCookie2;
     void *mBuffer;
     int mFrameType;
     nsecs_t mTimestamp;
@@ -540,7 +544,7 @@ public:
 
 	status_t useMetaDataBufferMode(bool enable);
 
-    void EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFrame::FrameType type, void* cookie1);
+    void EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFrame::FrameType type, void* cookie1, void* cookie2);
 
     //Internal class definitions
     class NotificationThread : public Thread {

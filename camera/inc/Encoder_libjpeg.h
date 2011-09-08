@@ -27,11 +27,16 @@
 #include <utils/threads.h>
 #include <utils/RefBase.h>
 
+extern "C" {
+#include "jhead.h"
+}
 namespace android {
 
 /**
  * libjpeg encoder class - uses libjpeg to encode yuv
  */
+
+#define MAX_EXIF_TAGS_SUPPORTED 30
 
 typedef void (*encoder_libjpeg_callback_t) (size_t jpeg_size,
                                             uint8_t* src,
@@ -39,6 +44,44 @@ typedef void (*encoder_libjpeg_callback_t) (size_t jpeg_size,
                                             void* cookie1,
                                             void* cookie2,
                                             void* cookie3);
+
+static const char TAG_MODEL[] = "Model";
+static const char TAG_MAKE[] = "Make";
+static const char TAG_FOCALLENGTH[] = "FocalLength";
+static const char TAG_DATETIME[] = "DateTime";
+static const char TAG_IMAGE_WIDTH[] = "ImageWidth";
+static const char TAG_IMAGE_LENGTH[] = "ImageLength";
+static const char TAG_GPS_LAT[] = "GPSLatitude";
+static const char TAG_GPS_LAT_REF[] = "GPSLatitudeRef";
+static const char TAG_GPS_LONG[] = "GPSLongitude";
+static const char TAG_GPS_LONG_REF[] = "GPSLongitudeRef";
+static const char TAG_GPS_ALT[] = "GPSAltitude";
+static const char TAG_GPS_ALT_REF[] = "GPSAltitudeRef";
+static const char TAG_GPS_MAP_DATUM[] = "GPSMapDatum";
+static const char TAG_GPS_PROCESSING_METHOD[] = "GPSProcessingMethod";
+static const char TAG_GPS_VERSION_ID[] = "GPSVersionID";
+static const char TAG_GPS_TIMESTAMP[] = "GPSTimeStamp";
+static const char TAG_GPS_DATESTAMP[] = "GPSDateStamp";
+static const char TAG_ORIENTATION[] = "Orientation";
+
+class ExifElementsTable {
+    public:
+        ExifElementsTable() :
+           gps_tag_count(0), exif_tag_count(0), position(0),
+           jpeg_opened(false) { }
+        ~ExifElementsTable();
+
+        status_t insertElement(const char* tag, const char* value);
+        void insertExifToJpeg(unsigned char* jpeg, size_t jpeg_size);
+        void saveJpeg(unsigned char* picture, size_t jpeg_size);
+        static const char* degreesToExifOrientation(const char*);
+    private:
+        ExifElement_t table[MAX_EXIF_TAGS_SUPPORTED];
+        unsigned int gps_tag_count;
+        unsigned int exif_tag_count;
+        unsigned int position;
+        bool jpeg_opened;
+};
 
 class Encoder_libjpeg : public Thread {
     public:

@@ -41,8 +41,21 @@ extern "C" {
     #include "jerror.h"
 }
 
-namespace android {
+#define ARRAY_SIZE(array) (sizeof((array)) / sizeof((array)[0]))
 
+namespace android {
+struct string_pair {
+    const char* string1;
+    const char* string2;
+};
+
+static string_pair degress_to_exif_lut [] = {
+    // degrees, exif_orientation
+    {"0",   "1"},
+    {"90",  "6"},
+    {"180", "3"},
+    {"270", "8"},
+};
 struct libjpeg_destination_mgr : jpeg_destination_mgr {
     libjpeg_destination_mgr(uint8_t* input, int size);
 
@@ -99,6 +112,86 @@ static void uyvy_to_yuv(uint8_t* dst, uint32_t* src, int width) {
         dst += 6;
         src++;
     }
+}
+
+/* public static functions */
+const char* ExifElementsTable::degreesToExifOrientation(const char* degrees) {
+    for (int i = 0; i < ARRAY_SIZE(degress_to_exif_lut); i++) {
+        if (!strcmp(degrees, degress_to_exif_lut[i].string1)) {
+            return degress_to_exif_lut[i].string2;
+        }
+    }
+    return NULL;
+}
+
+void ExifElementsTable::insertExifToJpeg(unsigned char* jpeg, size_t jpeg_size) {
+    ReadMode_t read_mode = (ReadMode_t)(READ_METADATA | READ_IMAGE);
+
+    ResetJpgfile();
+    if (ReadJpegSectionsFromBuffer(jpeg, jpeg_size, read_mode)) {
+        jpeg_opened = true;
+        create_EXIF(table, exif_tag_count, gps_tag_count);
+    }
+}
+
+void ExifElementsTable::saveJpeg(unsigned char* jpeg, size_t jpeg_size) {
+    if (jpeg_opened) {
+       WriteJpegToBuffer(jpeg, jpeg_size);
+       DiscardData();
+       jpeg_opened = false;
+    }
+}
+
+/* public functions */
+ExifElementsTable::~ExifElementsTable() {
+    int num_elements = gps_tag_count + exif_tag_count;
+
+    for (int i = 0; i < num_elements; i++) {
+        if (table[i].Value) {
+            free(table[i].Value);
+        }
+    }
+
+    if (jpeg_opened) {
+        DiscardData();
+    }
+}
+
+status_t ExifElementsTable::insertElement(const char* tag, const char* value) {
+    int value_length = 0;
+    status_t ret = NO_ERROR;
+
+    if (!value || !tag) {
+        return -EINVAL;
+    }
+
+    if (position >= MAX_EXIF_TAGS_SUPPORTED) {
+        CAMHAL_LOGEA("Max number of EXIF elements already inserted");
+        return NO_MEMORY;
+    }
+
+    value_length = strlen(value);
+
+    if (IsGpsTag(tag)) {
+        table[position].GpsTag = TRUE;
+        table[position].Tag = GpsTagNameToValue(tag);
+        gps_tag_count++;
+    } else {
+        table[position].GpsTag = FALSE;
+        table[position].Tag = TagNameToValue(tag);
+        exif_tag_count++;
+    }
+
+    table[position].DataLength = 0;
+    table[position].Value = (char*) malloc(sizeof(char) * (value_length + 1));
+
+    if (table[position].Value) {
+        strncpy(table[position].Value, value, value_length);
+        table[position].DataLength = value_length + 1;
+    }
+
+    position++;
+    return ret;
 }
 
 /* private member functions */

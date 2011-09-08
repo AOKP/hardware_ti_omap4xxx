@@ -41,13 +41,13 @@ void AppCallbackNotifierEncoderCallback(size_t jpeg_size,
 {
     if (cookie1) {
         AppCallbackNotifier* cb = (AppCallbackNotifier*) cookie1;
-        cb->EncoderDoneCb(jpeg_size, src, type, cookie2);
+        cb->EncoderDoneCb(jpeg_size, src, type, cookie2, cookie3);
     }
 }
 
 /*--------------------NotificationHandler Class STARTS here-----------------------------*/
 
-void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFrame::FrameType type, void* cookie1)
+void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFrame::FrameType type, void* cookie1, void* cookie2)
 {
     camera_memory_t* encoded_mem = NULL;
 
@@ -61,10 +61,30 @@ void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFr
     //            encoded buffer since MemoryHeapBase and MemoryBase are passed as
     //            one camera_memory_t structure. How fix this?
 
-    camera_memory_t* picture = mRequestMemory(-1, jpeg_size, 1, NULL);
+    camera_memory_t* picture = NULL;
 
-    if(picture && picture->data && encoded_mem && encoded_mem->data) {
-        memcpy(picture->data, encoded_mem->data, jpeg_size);
+    if(encoded_mem && encoded_mem->data) {
+        if (cookie2) {
+            ExifElementsTable* exif = (ExifElementsTable*) cookie2;
+            Section_t* exif_section = NULL;
+
+            exif->insertExifToJpeg((unsigned char*) encoded_mem->data, jpeg_size);
+            exif_section = FindSection(M_EXIF);
+
+            if (exif_section) {
+                picture = mRequestMemory(-1, jpeg_size + exif_section->Size, 1, NULL);
+                if (picture && picture->data) {
+                    exif->saveJpeg((unsigned char*) picture->data, jpeg_size + exif_section->Size);
+                }
+            }
+            delete exif;
+            cookie2 = NULL;
+        } else {
+            picture = mRequestMemory(-1, jpeg_size, 1, NULL);
+            if (picture && picture->data) {
+                memcpy(picture->data, encoded_mem->data, jpeg_size);
+            }
+        }
     }
 
     {
@@ -87,6 +107,10 @@ void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFr
 
     if (picture) {
         picture->release(picture);
+    }
+
+    if (cookie2) {
+        delete (ExifElementsTable*) cookie2;
     }
 
     mFrameProvider->returnFrame(src, type);
@@ -629,6 +653,7 @@ void AppCallbackNotifier::notifyFrame()
 
                     int encode_quality = 100;
                     const char* valstr = NULL;
+                    void* exif_data = NULL;
                     camera_memory_t* raw_picture = mRequestMemory(-1, frame->mLength, 1, NULL);
 
                     if(raw_picture) {
@@ -643,7 +668,11 @@ void AppCallbackNotifier::notifyFrame()
                         }
                     }
 
-                    CAMHAL_LOGVB("encoder(%p, %d, %p, %d, %d, %d, %d,%p,%d,%p,%p, %d)",
+                    if (CameraFrame::HAS_EXIF_DATA & frame->mQuirks) {
+                        exif_data = frame->mCookie2;
+                    }
+
+                    CAMHAL_LOGVB("encoder(%p, %d, %p, %d, %d, %d, %d,%p,%d,%p,%p,%p)",
                                  (uint8_t*)frame->mBuffer,
                                  frame->mLength,
                                  (uint8_t*)buf,
@@ -655,7 +684,7 @@ void AppCallbackNotifier::notifyFrame()
                                  frame->mFrameType,
                                  this,
                                  raw_picture,
-                                 NULL);
+                                 exif_data);
 
                     sp<Encoder_libjpeg> encoder = new Encoder_libjpeg((uint8_t*)frame->mBuffer,
                                                                       frame->mLength,
@@ -668,7 +697,7 @@ void AppCallbackNotifier::notifyFrame()
                                                                       (CameraFrame::FrameType)frame->mFrameType,
                                                                       this,
                                                                       raw_picture,
-                                                                      NULL);
+                                                                      exif_data);
                     encoder->run();
                     encoder.clear();
 

@@ -535,6 +535,164 @@ status_t OMXCameraAdapter::setupEXIF()
     return ret;
 }
 
+status_t OMXCameraAdapter::setupEXIF_libjpeg(ExifElementsTable* exifTable)
+{
+    status_t ret = NO_ERROR;
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+    struct timeval sTv;
+    struct tm *pTime;
+    OMXCameraPortParameters * capData = NULL;
+
+    LOG_FUNCTION_NAME;
+
+    capData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex];
+
+    if ((NO_ERROR == ret) && (mEXIFData.mModelValid)) {
+        ret = exifTable->insertElement(TAG_MODEL, mParams.get(TICameraParameters::KEY_EXIF_MODEL));
+    }
+
+     if ((NO_ERROR == ret) && (mEXIFData.mMakeValid)) {
+        ret = exifTable->insertElement(TAG_MAKE, mParams.get(TICameraParameters::KEY_EXIF_MAKE));
+     }
+
+    if ((NO_ERROR == ret)) {
+        ret = exifTable->insertElement(TAG_FOCALLENGTH,
+                                       mParams.get(CameraParameters::KEY_FOCAL_LENGTH));
+    }
+
+    if ((NO_ERROR == ret)) {
+        int status = gettimeofday (&sTv, NULL);
+        pTime = localtime (&sTv.tv_sec);
+        char temp_value[EXIF_DATE_TIME_SIZE + 1];
+        if ((0 == status) && (NULL != pTime)) {
+            snprintf(temp_value, EXIF_DATE_TIME_SIZE,
+                     "%04d:%02d:%02d %02d:%02d:%02d",
+                     pTime->tm_year + 1900,
+                     pTime->tm_mon + 1,
+                     pTime->tm_mday,
+                     pTime->tm_hour,
+                     pTime->tm_min,
+                     pTime->tm_sec );
+
+            ret = exifTable->insertElement(TAG_DATETIME, temp_value);
+        }
+     }
+
+    if ((NO_ERROR == ret)) {
+        char temp_value[5];
+        snprintf(temp_value, sizeof(temp_value)/sizeof(char) - 1, "%lu", capData->mWidth);
+        ret = exifTable->insertElement(TAG_IMAGE_WIDTH, temp_value);
+     }
+
+    if ((NO_ERROR == ret)) {
+        char temp_value[5];
+        snprintf(temp_value, sizeof(temp_value)/sizeof(char) - 1, "%lu", capData->mHeight);
+        ret = exifTable->insertElement(TAG_IMAGE_LENGTH, temp_value);
+     }
+
+    if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mLatValid)) {
+        char temp_value[256]; // arbitrarily long string
+        snprintf(temp_value,
+                 sizeof(temp_value)/sizeof(char) - 1,
+                 "%d/%d,%d/%d,%d/%d",
+                 abs(mEXIFData.mGPSData.mLatDeg), 1,
+                 abs(mEXIFData.mGPSData.mLatMin), 1,
+                 abs(mEXIFData.mGPSData.mLatSec), 1);
+        ret = exifTable->insertElement(TAG_GPS_LAT, temp_value);
+    }
+
+    if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mLatValid)) {
+        ret = exifTable->insertElement(TAG_GPS_LAT_REF, mEXIFData.mGPSData.mLatRef);
+    }
+
+    if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mLongValid)) {
+        char temp_value[256]; // arbitrarily long string
+        snprintf(temp_value,
+                 sizeof(temp_value)/sizeof(char) - 1,
+                 "%d/%d,%d/%d,%d/%d",
+                 abs(mEXIFData.mGPSData.mLongDeg), 1,
+                 abs(mEXIFData.mGPSData.mLongMin), 1,
+                 abs(mEXIFData.mGPSData.mLongSec), 1);
+        ret = exifTable->insertElement(TAG_GPS_LONG, temp_value);
+    }
+
+    if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mLongValid)) {
+        ret = exifTable->insertElement(TAG_GPS_LONG_REF, mEXIFData.mGPSData.mLongRef);
+    }
+
+    if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mAltitudeValid)) {
+        char temp_value[256]; // arbitrarily long string
+        snprintf(temp_value,
+                 sizeof(temp_value)/sizeof(char) - 1,
+                 "%d/%d",
+                 abs( mEXIFData.mGPSData.mAltitude), 1);
+        ret = exifTable->insertElement(TAG_GPS_ALT, temp_value);
+    }
+
+    if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mAltitudeValid)) {
+        char temp_value[5];
+        snprintf(temp_value,
+                 sizeof(temp_value)/sizeof(char) - 1,
+                 "%d", mEXIFData.mGPSData.mAltitudeRef);
+        ret = exifTable->insertElement(TAG_GPS_ALT_REF, temp_value);
+    }
+
+    if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mMapDatumValid)) {
+        ret = exifTable->insertElement(TAG_GPS_MAP_DATUM, mEXIFData.mGPSData.mMapDatum);
+    }
+
+    if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mProcMethodValid)) {
+        char temp_value[GPS_PROCESSING_SIZE];
+
+        memcpy(temp_value, EXIFASCIIPrefix, sizeof(EXIFASCIIPrefix));
+        memcpy(temp_value + sizeof(EXIFASCIIPrefix),
+               mEXIFData.mGPSData.mProcMethod,
+               (GPS_PROCESSING_SIZE - sizeof(EXIFASCIIPrefix)));
+
+        ret = exifTable->insertElement(TAG_GPS_PROCESSING_METHOD, temp_value);
+    }
+
+    if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mVersionIdValid)) {
+        char temp_value[256]; // arbitrarily long string
+        snprintf(temp_value,
+                 sizeof(temp_value)/sizeof(char) - 1,
+                 "%d,%d,%d,%d",
+                 mEXIFData.mGPSData.mVersionId[0],
+                 mEXIFData.mGPSData.mVersionId[1],
+                 mEXIFData.mGPSData.mVersionId[2],
+                 mEXIFData.mGPSData.mVersionId[3]);
+        ret = exifTable->insertElement(TAG_GPS_VERSION_ID, temp_value);
+    }
+
+    if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mTimeStampValid)) {
+        char temp_value[256]; // arbitrarily long string
+        snprintf(temp_value,
+                 sizeof(temp_value)/sizeof(char) - 1,
+                 "%d/%d,%d/%d,%d/%d",
+                 mEXIFData.mGPSData.mTimeStampHour, 1,
+                 mEXIFData.mGPSData.mTimeStampMin, 1,
+                 mEXIFData.mGPSData.mTimeStampSec, 1);
+        ret = exifTable->insertElement(TAG_GPS_TIMESTAMP, temp_value);
+    }
+
+    if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mDatestampValid) ) {
+        ret = exifTable->insertElement(TAG_GPS_DATESTAMP, mEXIFData.mGPSData.mDatestamp);
+    }
+
+    if ((NO_ERROR == ret) && mParams.get(CameraParameters::KEY_ROTATION) ) {
+        const char* exif_orient =
+           ExifElementsTable::degreesToExifOrientation(mParams.get(CameraParameters::KEY_ROTATION));
+
+        if (exif_orient) {
+           ret = exifTable->insertElement(TAG_ORIENTATION, exif_orient);
+        }
+    }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return ret;
+}
+
 status_t OMXCameraAdapter::convertGPSCoord(double coord,
                                            int &deg,
                                            int &min,

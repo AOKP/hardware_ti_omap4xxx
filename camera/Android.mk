@@ -65,7 +65,8 @@ LOCAL_C_INCLUDES += \
     hardware/ti/omap4xxx/domx/mm_osal/inc \
     frameworks/base/include/media/stagefright \
     frameworks/base/include/media/stagefright/openmax \
-    external/jpeg
+    external/jpeg \
+    external/jhead
 
 LOCAL_SHARED_LIBRARIES:= \
     libui \
@@ -79,7 +80,8 @@ LOCAL_SHARED_LIBRARIES:= \
     libgui \
     libdomx \
     libion \
-    libjpeg
+    libjpeg \
+    libexif
 
 LOCAL_CFLAGS := -fno-short-enums -DCOPY_IMAGE_BUFFER
 

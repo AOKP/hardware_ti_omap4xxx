@@ -34,6 +34,7 @@
 #include "General3A_Settings.h"
 
 #include "BaseCameraAdapter.h"
+#include "Encoder_libjpeg.h"
 #include "DebugUtils.h"
 
 
@@ -425,6 +426,7 @@ private:
                                BaseCameraAdapter::AdapterState state);
     status_t convertGPSCoord(double coord, int &deg, int &min, int &sec, int &secDivisor);
     status_t setupEXIF();
+    status_t setupEXIF_libjpeg(ExifElementsTable*);
 
     //Focus functionality
     status_t doAutoFocus();
