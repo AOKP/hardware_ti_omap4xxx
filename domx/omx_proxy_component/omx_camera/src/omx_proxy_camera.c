@@ -72,8 +72,18 @@
 #include "omx_proxy_common.h"
 #include "timm_osal_mutex.h"
 
+#ifdef USE_ION
+#include <unistd.h>
+#include <ion.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/eventfd.h>
+#include <fcntl.h>
+
+#else
 /* Tiler APIs */
 #include <memmgr.h>
+#endif
 
 #define COMPONENT_NAME "OMX.TI.DUCATI1.VIDEO.CAMERA"
 /*Needs to be specific for every configuration wrapper*/
@@ -106,8 +116,16 @@ TIMM_OSAL_PTR cam_mutex = NULL;
 OMX_S32 dccbuf_size = 0;
 
 /* Ducati Mapped Addr  */
+OMX_PTR DCC_Buff = NULL;
+
+#ifdef USE_ION
+OMX_PTR DCC_Buff_ptr = NULL;
+int ion_fd;
+int mmap_fd;
+
+#else
 MemAllocBlock *MemReqDescTiler;
-OMX_PTR TilerAddr = NULL;
+#endif
 
 OMX_S32 read_DCCdir(OMX_PTR, OMX_STRING *, OMX_U16);
 OMX_ERRORTYPE DCC_Init(OMX_HANDLETYPE);
@@ -307,6 +325,7 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 	assert(strlen(COMPONENT_NAME) + 1 < MAX_COMPONENT_NAME_LENGTH);
 	TIMM_OSAL_Memcpy(pComponentPrivate->cCompName, COMPONENT_NAME,
 	    strlen(COMPONENT_NAME) + 1);
+
 	/*Calling Proxy Common Init() */
 	eError = OMX_ProxyCommonInit(hComponent);
 	if (eError != OMX_ErrorNone)
@@ -375,6 +394,9 @@ OMX_ERRORTYPE DCC_Init(OMX_HANDLETYPE hComponent)
 	OMX_PTR ptempbuf;
 	OMX_U16 nIndex = 0;
 	OMX_ERRORTYPE eError = OMX_ErrorNone;
+#ifdef USE_ION
+	int ret;
+#endif
 
 	OMX_S32 status = 0;
 	OMX_STRING dcc_dir[200];
@@ -423,6 +445,26 @@ OMX_ERRORTYPE DCC_Init(OMX_HANDLETYPE hComponent)
         return OMX_ErrorInsufficientResources;
     }
 
+#ifdef USE_ION
+	ion_fd = ion_open();
+	if(ion_fd == 0)
+	{
+		DOMX_ERROR("ion_open failed!!!");
+		return OMX_ErrorInsufficientResources;
+	}
+	dccbuf_size = (dccbuf_size + LINUX_PAGE_SIZE -1) & ~(LINUX_PAGE_SIZE - 1);
+	ret = ion_alloc(ion_fd, dccbuf_size, 0x1000, 1 << ION_HEAP_TYPE_CARVEOUT, &DCC_Buff);
+	if (ret)
+			return OMX_ErrorInsufficientResources;
+
+	if (ion_map(ion_fd, DCC_Buff, dccbuf_size, PROT_READ | PROT_WRITE, MAP_SHARED, 0,
+                  &DCC_Buff_ptr,&mmap_fd) < 0)
+	{
+		DOMX_ERROR("userspace mapping of ION buffers returned error");
+		return OMX_ErrorInsufficientResources;
+	}
+	ptempbuf = DCC_Buff_ptr;
+#else
 	MemReqDescTiler =
 		(MemAllocBlock *) TIMM_OSAL_Malloc((sizeof(MemAllocBlock) * 2),
 		TIMM_OSAL_TRUE, 0, TIMMOSAL_MEM_SEGMENT_EXT);
@@ -433,11 +475,11 @@ OMX_ERRORTYPE DCC_Init(OMX_HANDLETYPE hComponent)
 	MemReqDescTiler[0].fmt = PIXEL_FMT_PAGE;
 	MemReqDescTiler[0].dim.len = dccbuf_size;
 	MemReqDescTiler[0].stride = 0;
-	TilerAddr = MemMgr_Alloc(MemReqDescTiler, 1);
-	PROXY_assert(TilerAddr != NULL,
+	DCC_Buff = MemMgr_Alloc(MemReqDescTiler, 1);
+	PROXY_assert(DCC_Buff != NULL,
 		OMX_ErrorInsufficientResources, "ERROR Allocating 1D TILER BUF");
-
-	ptempbuf = TilerAddr;
+	ptempbuf = DCC_Buff;
+#endif
 	dccbuf_size = read_DCCdir(ptempbuf, dcc_dir, nIndex);
 
 	PROXY_assert(dccbuf_size > 0, OMX_ErrorInsufficientResources,
@@ -475,7 +517,7 @@ OMX_ERRORTYPE send_DCCBufPtr(OMX_HANDLETYPE hComponent)
 	DOMX_ENTER("ENTER");
 
 	uribufparam.nSharedBuffSize = dccbuf_size;
-	uribufparam.pSharedBuff = (OMX_U8 *) TilerAddr;
+	uribufparam.pSharedBuff = (OMX_U8 *) DCC_Buff;
 
 	DOMX_DEBUG("SYSLINK MAPPED ADDR:  0x%x sizeof buffer %d",
 		uribufparam.pSharedBuff, uribufparam.nSharedBuffSize);
@@ -595,11 +637,21 @@ void DCC_DeInit()
 {
 	DOMX_ENTER("ENTER");
 
-	if (TilerAddr)
-		MemMgr_Free(TilerAddr);
-
+	if (DCC_Buff)
+	{
+#ifdef USE_ION
+		munmap(DCC_Buff_ptr, dccbuf_size);
+		close(mmap_fd);
+		ion_free(ion_fd, DCC_Buff);
+		DCC_Buff = NULL;
+#else
+		MemMgr_Free(DCC_Buff);
+#endif
+	}
+#ifndef USE_ION
 	if (MemReqDescTiler)
 		TIMM_OSAL_Free(MemReqDescTiler);
+#endif
 
 	DOMX_EXIT("EXIT");
 }
