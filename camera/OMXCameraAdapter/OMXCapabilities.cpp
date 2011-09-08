@@ -106,11 +106,7 @@ const CapPixelformat OMXCameraAdapter::mPixelformats [] = {
 
 const CapFramerate OMXCameraAdapter::mFramerates [] = {
     { 30, "30" },
-    { 25, "25" },
-    { 24, "24" },
-    { 20, "20" },
     { 15, "15" },
-    { 10, "10" },
 };
 
 const CapZoom OMXCameraAdapter::mZoomStages [] = {
@@ -648,8 +644,8 @@ status_t OMXCameraAdapter::insertVFramerates(CameraProperties::Properties* param
     } else {
         params->set(CameraProperties::FRAMERATE_RANGE_SUPPORTED, supported);
         CAMHAL_LOGDB("framerate ranges %s", supported);
-        params->set(CameraProperties::FRAMERATE_RANGE, defaultRange);
-        CAMHAL_LOGDB("Default framerate range: [%s]", defaultRange);
+        params->set(CameraProperties::FRAMERATE_RANGE, DEFAULT_FRAMERATE_RANGE);
+        CAMHAL_LOGDB("Default framerate range: [%s]", DEFAULT_FRAMERATE_RANGE);
     }
 
     LOG_FUNCTION_NAME;

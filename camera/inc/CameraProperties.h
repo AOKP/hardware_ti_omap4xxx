@@ -130,6 +130,7 @@ public:
     static const char MAX_NUM_FOCUS_AREAS[];
 
     static const char VIDEO_SNAPSHOT_SUPPORTED[];
+    static const char DEFAULT_VIDEO_FPS_RANGE[];
 
     CameraProperties();
     ~CameraProperties();
