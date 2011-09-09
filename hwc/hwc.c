@@ -31,6 +31,8 @@
 #include <utils/Timers.h>
 #include <hardware_legacy/uevent.h>
 
+#define ASPECT_RATIO_TOLERANCE 0.02f
+
 #ifndef FBIO_WAITFORVSYNC
 #define FBIO_WAITFORVSYNC	_IOW('F', 0x20, __u32)
 #endif
@@ -358,23 +360,47 @@ static inline int m_round(float x)
     return (int) (x < 0 ? x - 0.5 : x + 0.5);
 }
 
+/*
+ * assuming xratio:yratio original pixel ratio, calculate the adjusted width
+ * and height for a screen of xres/yres and physical size of width/height.
+ * The adjusted size is the largest that fits into the screen.
+ */
+static void get_max_dimensions(__u32 orig_xres, __u32 orig_yres,
+                               __u32 orig_xratio, __u32 orig_yratio,
+                               __u32 scr_xres, __u32 scr_yres,
+                               __u32 scr_width, __u32 scr_height,
+                               __u32 *adj_xres, __u32 *adj_yres)
+{
+    /* assume full screen (largest size)*/
+    *adj_xres = scr_xres;
+    *adj_yres = scr_yres;
+
+    /* assume 1:1 pixel ratios if none supplied */
+    if (!scr_width || !scr_height) {
+        scr_width = scr_xres;
+        scr_height = scr_yres;
+    }
+    if (!orig_xratio || !orig_yratio) {
+        orig_xratio = 1;
+        orig_yratio = 1;
+    }
+
+    /* trim to keep aspect ratio */
+    float x_factor = orig_xres * orig_xratio * (float) scr_height;
+    float y_factor = orig_yres * orig_yratio * (float) scr_width;
+
+    /* allow for tolerance so we avoid scaling if framebuffer is standard size */
+    if (x_factor < y_factor * (1.f - ASPECT_RATIO_TOLERANCE))
+        *adj_xres = (__u32) (x_factor * *adj_xres / y_factor + 0.5);
+    else if (x_factor * (1.f - ASPECT_RATIO_TOLERANCE) > y_factor)
+        *adj_yres = (__u32) (y_factor * *adj_yres / x_factor + 0.5);
+}
+
 static void set_ext_matrix(omap4_hwc_device_t *hwc_dev, int orig_w, int orig_h)
 {
-    /* target screen aspect ratio */
-    int target_x = hwc_dev->ext_width;
-    int target_y = hwc_dev->ext_height;
-    /* source pixel aspect ratio */
+    /* assume 1:1 lcd pixel ratio */
     int source_x = 1;
     int source_y = 1;
-
-    int target_w = hwc_dev->ext_xres;
-    int target_h = hwc_dev->ext_yres;
-    int cropped_w = target_w;
-    int cropped_h = target_h;
-    if (!target_x || !target_y) {
-        target_x = target_w;
-        target_y = target_h;
-    }
 
     /* reorientation matrix is:
        m = (center-from-target-center) * (scale-to-target) * (mirror) * (rotate) * (center-to-original-center) */
@@ -394,14 +420,14 @@ static void set_ext_matrix(omap4_hwc_device_t *hwc_dev, int orig_w, int orig_h)
         source_y = q;
     }
 
-    /* keep aspect ratio */
-    if (orig_w * source_x * target_y < orig_h * source_y * target_x)
-        cropped_w = orig_w * source_x * target_y * cropped_w / (orig_h * source_y * target_x);
-    else
-        cropped_h = orig_h * source_y * target_x * cropped_h / (orig_w * source_x * target_y);
+    /* get target size */
+    __u32 adj_xres, adj_yres;
+    get_max_dimensions(orig_w, orig_h, source_x, source_y,
+                       hwc_dev->ext_xres, hwc_dev->ext_yres, hwc_dev->ext_width, hwc_dev->ext_height,
+                       &adj_xres, &adj_yres);
 
-    m_scale(hwc_dev->m, orig_w, cropped_w, orig_h, cropped_h);
-    m_translate(hwc_dev->m, target_w >> 1, target_h >> 1);
+    m_scale(hwc_dev->m, orig_w, adj_xres, orig_h, adj_yres);
+    m_translate(hwc_dev->m, hwc_dev->ext_xres >> 1, hwc_dev->ext_yres >> 1);
 }
 
 static void
@@ -1031,33 +1057,95 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
         d.dis.modedb_len = sizeof(d.modedb) / sizeof(*d.modedb);
         int ret = ioctl(hwc_dev->dsscomp_fd, DSSCOMP_QUERY_DISPLAY, &d);
         if (!ret) {
-            __u32 i, best = ~0;
+            __u32 i, best = ~0, best_score = 0;
+            hwc_dev->ext = EXT_ON | 3;
+            hwc_dev->ext_width = d.dis.width_in_mm;
+            hwc_dev->ext_height = d.dis.height_in_mm;
+            hwc_dev->ext_xres = d.dis.timings.x_res;
+            hwc_dev->ext_yres = d.dis.timings.y_res;
             for (i = 0; i < d.dis.modedb_len; i++) {
+                __u32 score = 0;
+                __u32 fb_xres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
+                __u32 fb_yres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.width : hwc_dev->fb_dev->base.height;
+                __u32 fb_area = fb_xres * fb_yres;
+                __u32 mode_area = d.modedb[i].xres * d.modedb[i].yres;
+                __u32 ext_width = d.dis.width_in_mm;
+                __u32 ext_height = d.dis.height_in_mm;
+                __u32 ext_fb_xres, ext_fb_yres;
+
+                if (d.modedb[i].flag & FB_FLAG_RATIO_4_3) {
+                    ext_width = 4;
+                    ext_height = 3;
+                } else if (d.modedb[i].flag & FB_FLAG_RATIO_16_9) {
+                    ext_width = 16;
+                    ext_height = 9;
+                }
+
+                get_max_dimensions(fb_xres, fb_yres, 1, 1, d.modedb[i].xres, d.modedb[i].yres,
+                                   ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
+
+                if (!omap4_hwc_can_scale(fb_xres, fb_yres, ext_fb_xres, ext_fb_yres,
+                                         hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits))
+                    continue;
+
+                /* prefer CEA modes */
+                if (d.modedb[i].flag & (FB_FLAG_RATIO_4_3 | FB_FLAG_RATIO_16_9))
+                    score |= (1 << 30);
+
+                /* prefer to upscale (1% tolerance) */
+                if (ext_fb_xres >= fb_xres * 99 / 100 && ext_fb_yres >= fb_yres * 99 / 100)
+                    score |= (1 << 29);
+
+                /* pick smallest leftover area */
+                score |= (1 << 24) * ((16 * ext_fb_xres * ext_fb_yres + (mode_area >> 1)) / mode_area);
+
+                /* pick closest screen size */
+                if (ext_fb_xres * ext_fb_yres > fb_area)
+                    score |= (1 << 19) * (16 * fb_area / ext_fb_xres / ext_fb_yres);
+                else
+                    score |= (1 << 19) * (16 * ext_fb_xres * ext_fb_yres / fb_area);
+
+                /* pick highest frame rate */
+                score |= (1 << 11) * d.modedb[i].refresh;
+
                 LOGD("#%d: %dx%d %dHz", i, d.modedb[i].xres, d.modedb[i].yres, d.modedb[i].refresh);
-                if (!~best &&
-                    d.modedb[i].xres == hwc_dev->fb_dev->base.height &&
-                    d.modedb[i].yres == hwc_dev->fb_dev->base.width) {
+                if (debug)
+                    LOGD("  score=%u adj.res=%dx%d", score, ext_fb_xres, ext_fb_yres);
+                if (best_score < score) {
+                    hwc_dev->ext_width = ext_width;
+                    hwc_dev->ext_height = ext_height;
+                    hwc_dev->ext_xres = d.modedb[i].xres;
+                    hwc_dev->ext_yres = d.modedb[i].yres;
                     best = i;
+                    best_score = score;
                 }
             }
-            if (~best || d.dis.modedb_len) {
+            if (~best) {
                 struct dsscomp_setup_display_data sdis = { .ix = 1, };
-                best = ~best ? best : 0;
                 sdis.mode = d.dis.modedb[best];
                 LOGD("picking #%d", best);
                 ioctl(hwc_dev->dsscomp_fd, DSSCOMP_SETUP_DISPLAY, &sdis);
-                hwc_dev->ext_xres = sdis.mode.xres;
-                hwc_dev->ext_yres = sdis.mode.yres;
             } else {
-                hwc_dev->ext_xres = d.dis.timings.x_res;
-                hwc_dev->ext_yres = d.dis.timings.y_res;
+                __u32 fb_xres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
+                __u32 fb_yres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.width : hwc_dev->fb_dev->base.height;
+                __u32 ext_width = d.dis.width_in_mm;
+                __u32 ext_height = d.dis.height_in_mm;
+                __u32 ext_fb_xres, ext_fb_yres;
+
+                get_max_dimensions(fb_xres, fb_yres, 1, 1, d.dis.timings.x_res, d.dis.timings.y_res,
+                                   ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
+                if (!omap4_hwc_can_scale(fb_xres, fb_yres, ext_fb_xres, ext_fb_yres,
+                                         hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits)) {
+                    LOGE("DSS scaler cannot support HDMI cloning");
+                    hwc_dev->ext = 0;
+                }
             }
-            hwc_dev->ext_width = d.dis.width_in_mm;
-            hwc_dev->ext_height = d.dis.height_in_mm;
-            hwc_dev->ext = EXT_ON | 3;
-            if (d.dis.channel == OMAP_DSS_CHANNEL_DIGIT)
-                hwc_dev->ext |= EXT_TV;
-            ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
+
+            if (hwc_dev->ext) {
+                if (d.dis.channel == OMAP_DSS_CHANNEL_DIGIT)
+                    hwc_dev->ext |= EXT_TV;
+                ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
+            }
         }
 
         /* FIXME set up hwc_dev->ext based on mirroring needs */
