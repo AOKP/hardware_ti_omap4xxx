@@ -798,6 +798,13 @@ status_t OMXCameraAdapter::startImageCapture()
             ret = mStartCaptureSem.WaitTimeout(OMX_CAPTURE_TIMEOUT);
             }
 
+        //If somethiing bad happened while we wait
+        if (mComponentState == OMX_StateInvalid)
+          {
+            CAMHAL_LOGEA("Invalid State after Image Capture Exitting!!!");
+            goto EXIT;
+          }
+
         if ( NO_ERROR == ret )
             {
             CAMHAL_LOGDA("Shutter callback received");
@@ -883,6 +890,14 @@ status_t OMXCameraAdapter::stopImageCapture()
 
     //Wait here for the capture to be done, in worst case timeout and proceed with cleanup
     ret = mCaptureSem.WaitTimeout(OMX_CAPTURE_TIMEOUT);
+
+    //If somethiing bad happened while we wait
+    if (mComponentState == OMX_StateInvalid)
+      {
+        CAMHAL_LOGEA("Invalid State Image Capture Stop Exitting!!!");
+        goto EXIT;
+      }
+
     if ( NO_ERROR != ret ) {
         ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                            (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
@@ -938,6 +953,14 @@ status_t OMXCameraAdapter::stopImageCapture()
     CAMHAL_LOGDA("Waiting for port disable");
     //Wait for the image port enable event
     ret = mStopCaptureSem.WaitTimeout(OMX_CMD_TIMEOUT);
+
+    //If somethiing bad happened while we wait
+    if (mComponentState == OMX_StateInvalid)
+      {
+        CAMHAL_LOGEA("Invalid State after Disable Image Port Exitting!!!");
+        goto EXIT;
+      }
+
     if ( NO_ERROR == ret ) {
         CAMHAL_LOGDA("Port disabled");
     } else {
@@ -1060,6 +1083,14 @@ status_t OMXCameraAdapter::UseBuffersCapture(void* bufArr, int num)
     //Wait for the image port enable event
     CAMHAL_LOGDA("Waiting for port enable");
     ret = mUseCaptureSem.WaitTimeout(OMX_CMD_TIMEOUT);
+
+    //If somethiing bad happened while we wait
+    if (mComponentState == OMX_StateInvalid)
+      {
+        CAMHAL_LOGEA("Invalid State after Enable Image Port Exitting!!!");
+        goto EXIT;
+      }
+
     if ( ret == NO_ERROR )
         {
         CAMHAL_LOGDA("Port enabled");

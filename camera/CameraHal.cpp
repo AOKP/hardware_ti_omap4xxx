@@ -1503,7 +1503,7 @@ status_t CameraHal::startPreview()
         mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_PREVIEW);
         if(mDisplayAdapter.get() != NULL)
             {
-            mDisplayAdapter->disableDisplay();
+            mDisplayAdapter->disableDisplay(false);
             }
         mAppCallbackNotifier->stop();
         mPreviewStartInProgress = false;

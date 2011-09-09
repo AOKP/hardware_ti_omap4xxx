@@ -45,7 +45,6 @@ namespace android {
 
 static OMXCameraAdapter *gCameraAdapter = NULL;
 Mutex gAdapterLock;
-
 /*--------------------Camera Adapter Class STARTS here-----------------------------*/
 
 status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int sensor_index)
@@ -161,6 +160,14 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
 
              //Wait for the port enable event to occur
              ret = mInitSem.WaitTimeout(OMX_CMD_TIMEOUT);
+
+             //If somethiing bad happened while we wait
+             if (mComponentState == OMX_StateInvalid)
+               {
+                 CAMHAL_LOGEA("Invalid State after Enable Preview Port Exitting!!!");
+                 goto EXIT;
+               }
+
              if ( NO_ERROR == ret )
                  {
                  CAMHAL_LOGDA("-Port enable event arrived");
@@ -1071,6 +1078,14 @@ status_t OMXCameraAdapter::flushBuffers()
 
     ///Wait for the FLUSH event to occur
     ret = mFlushSem.WaitTimeout(OMX_CMD_TIMEOUT);
+
+    //If somethiing bad happened while we wait
+    if (mComponentState == OMX_StateInvalid)
+      {
+        CAMHAL_LOGEA("Invalid State after Flush Exitting!!!");
+        goto EXIT;
+      }
+
     if ( NO_ERROR == ret )
         {
         CAMHAL_LOGDA("Flush event received");
@@ -1217,6 +1232,13 @@ status_t OMXCameraAdapter::UseBuffersPreviewData(void* bufArr, int num)
         {
         ret = mUsePreviewDataSem.WaitTimeout(OMX_CMD_TIMEOUT);
 
+        //If somethiing bad happened while we wait
+        if (mComponentState == OMX_StateInvalid)
+          {
+            CAMHAL_LOGEA("Invalid State after measurement port enable Exitting!!!");
+            return EINVAL;
+          }
+
         if ( NO_ERROR == ret )
             {
             CAMHAL_LOGDA("Port enable event arrived on measurement port");
@@ -1246,9 +1268,9 @@ status_t OMXCameraAdapter::switchToLoaded()
 
     LOG_FUNCTION_NAME;
 
-    if ( mComponentState == OMX_StateLoaded )
+    if ( mComponentState == OMX_StateLoaded  || mComponentState == OMX_StateInvalid)
         {
-        CAMHAL_LOGDA("Already in OMX_Loaded state");
+        CAMHAL_LOGDA("Already in OMX_Loaded state or OMX_StateInvalid state");
         goto EXIT;
         }
 
@@ -1289,6 +1311,14 @@ status_t OMXCameraAdapter::switchToLoaded()
 
     CAMHAL_LOGDA("EXECUTING->IDLE state changed");
     ret = mSwitchToLoadedSem.WaitTimeout(OMX_CMD_TIMEOUT);
+
+    //If somethiing bad happened while we wait
+    if (mComponentState == OMX_StateInvalid)
+      {
+        CAMHAL_LOGEA("Invalid State after EXECUTING->IDLE Exitting!!!");
+        goto EXIT;
+      }
+
     if ( NO_ERROR == ret )
         {
         CAMHAL_LOGDA("EXECUTING->IDLE state changed");
@@ -1332,6 +1362,14 @@ status_t OMXCameraAdapter::switchToLoaded()
 
     CAMHAL_LOGDA("Switching IDLE->LOADED state");
     ret = mSwitchToLoadedSem.WaitTimeout(OMX_CMD_TIMEOUT);
+
+    //If somethiing bad happened while we wait
+    if (mComponentState == OMX_StateInvalid)
+      {
+        CAMHAL_LOGEA("Invalid State after IDLE->LOADED Exitting!!!");
+        goto EXIT;
+      }
+
     if ( NO_ERROR == ret )
         {
         CAMHAL_LOGDA("IDLE->LOADED state changed");
@@ -1375,6 +1413,14 @@ status_t OMXCameraAdapter::switchToLoaded()
     CAMHAL_LOGDA("Enabling Preview port");
     ///Wait for state to switch to idle
     ret = mSwitchToLoadedSem.WaitTimeout(OMX_CMD_TIMEOUT);
+
+    //If somethiing bad happened while we wait
+    if (mComponentState == OMX_StateInvalid)
+      {
+        CAMHAL_LOGEA("Invalid State after Enabling Preview port Exitting!!!");
+        goto EXIT;
+      }
+
     if ( NO_ERROR == ret )
         {
         CAMHAL_LOGDA("Preview port enabled!");
@@ -1646,6 +1692,14 @@ status_t OMXCameraAdapter::UseBuffersPreview(void* bufArr, int num)
     CAMHAL_LOGDA("Registering preview buffers");
 
     ret = mUsePreviewSem.WaitTimeout(OMX_CMD_TIMEOUT);
+
+    //If somethiing bad happened while we wait
+    if (mComponentState == OMX_StateInvalid)
+      {
+        CAMHAL_LOGEA("Invalid State after Registering preview buffers Exitting!!!");
+        goto EXIT;
+      }
+
     if ( NO_ERROR == ret )
         {
         CAMHAL_LOGDA("Preview buffer registration successfull");
@@ -1736,6 +1790,14 @@ status_t OMXCameraAdapter::startPreview()
 
         CAMHAL_LOGDA("+Waiting for component to go into EXECUTING state");
         ret = mStartPreviewSem.WaitTimeout(OMX_CMD_TIMEOUT);
+
+        //If somethiing bad happened while we wait
+        if (mComponentState == OMX_StateInvalid)
+          {
+            CAMHAL_LOGEA("Invalid State after IDLE_EXECUTING Exitting!!!");
+            goto EXIT;
+          }
+
         if ( NO_ERROR == ret )
             {
             CAMHAL_LOGDA("+Great. Component went into executing state!!");
@@ -1917,6 +1979,14 @@ status_t OMXCameraAdapter::stopPreview()
 
     CAMHAL_LOGDA("Disabling preview port");
     ret = mStopPreviewSem.WaitTimeout(OMX_CMD_TIMEOUT);
+
+    //If somethiing bad happened while we wait
+    if (mComponentState == OMX_StateInvalid)
+      {
+        CAMHAL_LOGEA("Invalid State after Disabling preview port Exitting!!!");
+        goto EXIT;
+      }
+
     if ( NO_ERROR == ret )
         {
         CAMHAL_LOGDA("Preview port disabled");
@@ -2454,6 +2524,29 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterEventHandler(OMX_IN OMX_HANDLETY
               {
                 CAMHAL_LOGEA("***Got Fatal Error Notification***\n");
                 mComponentState = OMX_StateInvalid;
+                /*
+                Remove any unhandled events and
+                unblock any waiting semaphores
+                */
+                if ( !mEventSignalQ.isEmpty() )
+                  {
+                    for (int i = 0 ; i < mEventSignalQ.size(); i++ )
+                      {
+                        CAMHAL_LOGEB("***Removing %d EVENTS***** \n", mEventSignalQ.size());
+                        //remove from queue and free msg
+                        TIUTILS::Message *msg = mEventSignalQ.itemAt(i);
+                        if ( NULL != msg )
+                          {
+                            Semaphore *sem  = (Semaphore*) msg->arg3;
+                            mEventSignalQ.removeAt(i);
+                            if ( sem )
+                              {
+                                sem->Signal();
+                              }
+                            free(msg);
+                          }
+                      }
+                  }
                 ///Report Error to App
                 mErrorNotifier->errorNotify(CAMERA_ERROR_UNKNOWN);
               }
@@ -3076,7 +3169,7 @@ bool OMXCameraAdapter::OMXCallbackHandler::Handler()
     return false;
 }
 
-OMXCameraAdapter::OMXCameraAdapter():mComponentState (OMX_StateInvalid)
+OMXCameraAdapter::OMXCameraAdapter():mComponentState (OMX_StateLoaded)
 {
     LOG_FUNCTION_NAME;
 
@@ -3134,10 +3227,13 @@ OMXCameraAdapter::~OMXCameraAdapter()
           {
             TIUTILS::Message *msg = mEventSignalQ.itemAt(i);
             //remove from queue and free msg
-            mEventSignalQ.removeAt(i);
             if ( NULL != msg )
               {
+                Semaphore *sem  = (Semaphore*) msg->arg3;
+                mEventSignalQ.removeAt(i);
+                sem->Signal();
                 free(msg);
+
               }
           }
       }

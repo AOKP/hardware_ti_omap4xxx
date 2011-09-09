@@ -146,14 +146,17 @@ status_t OMXCameraAdapter::doAutoFocus()
     if ( ( focusControl.eFocusControl != OMX_IMAGE_FocusControlAuto ) &&
          ( focusControl.eFocusControl != ( OMX_IMAGE_FOCUSCONTROLTYPE )
                  OMX_IMAGE_FocusControlAutoInfinity ) ) {
-        //ret = mDoAFSem.WaitTimeout(AF_CALLBACK_TIMEOUT);
-        //Disable auto focus callback from Ducati
-        //setFocusCallback(false);
-        //Signal a dummy AF event so that in case the callback from ducati
-        //does come then it doesnt crash after
-        //exiting this function since eventSem will go out of scope.
+
       if(mDoAFSem.WaitTimeout(AF_CALLBACK_TIMEOUT) != NO_ERROR) {
-            //Disable auto focus callback from Ducati
+
+        //If somethiing bad happened while we wait
+        if (mComponentState == OMX_StateInvalid)
+          {
+            CAMHAL_LOGEA("Invalid State after Auto Focus Exitting!!!");
+            return EINVAL;
+          }
+
+           //Disable auto focus callback from Ducati
             setFocusCallback(false);
             CAMHAL_LOGEA("Autofocus callback timeout expired");
             RemoveEvent(mCameraAdapterParameters.mHandleComp,

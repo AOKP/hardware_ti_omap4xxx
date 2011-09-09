@@ -50,7 +50,6 @@ namespace android {
 #define Q16_OFFSET                  16
 
 #define OMX_CMD_TIMEOUT             3000000  //3 sec.
-#define AF_CALLBACK_TIMEOUT         10000000 //10 seconds timeout
 #define OMX_CAPTURE_TIMEOUT         5000000  //5 sec.
 
 #define FOCUS_THRESHOLD             5 //[s.]

@@ -174,12 +174,13 @@ void AppCallbackNotifier::errorNotify(int error)
 
     CAMHAL_LOGEB("AppCallbackNotifier received error %d", error);
 
-    ///Notify errors to application in callback thread. Post error event to event queue
-    TIUTILS::Message msg;
-    msg.command = AppCallbackNotifier::NOTIFIER_CMD_PROCESS_ERROR;
-    msg.arg1 = (void*)error;
-
-    mEventQ.put(&msg);
+    if (  ( NULL != mCameraHal ) &&
+          ( NULL != mNotifyCb ) &&
+          ( mCameraHal->msgTypeEnabled(CAMERA_MSG_ERROR) ) )
+      {
+        CAMHAL_LOGEB("AppCallbackNotifier mNotifyCb %d", error);
+        mNotifyCb(CAMERA_MSG_ERROR, CAMERA_ERROR_UNKNOWN, 0, mCallbackCookie);
+      }
 
     LOG_FUNCTION_NAME_EXIT;
 }
@@ -340,18 +341,6 @@ void AppCallbackNotifier::notifyEvent()
                 }
 
             break;
-
-        case AppCallbackNotifier::NOTIFIER_CMD_PROCESS_ERROR:
-
-            if (  ( NULL != mCameraHal ) &&
-                  ( NULL != mNotifyCb ) &&
-                  ( mCameraHal->msgTypeEnabled(CAMERA_MSG_ERROR) ) )
-                {
-                mNotifyCb(CAMERA_MSG_ERROR, CAMERA_ERROR_UNKNOWN, 0, mCallbackCookie);
-                }
-
-            break;
-
         }
 
     if ( NULL != evt )
