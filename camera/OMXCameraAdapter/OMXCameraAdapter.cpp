@@ -2709,8 +2709,9 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     CameraFrame::FrameType typeOfFrame = CameraFrame::ALL_FRAMES;
     unsigned int refCount = 0;
-    BaseCameraAdapter::AdapterState state;
+    BaseCameraAdapter::AdapterState state, nextState;
     BaseCameraAdapter::getState(state);
+    BaseCameraAdapter::getNextState(nextState);
     sp<CameraFDResult> fdResult = NULL;
 
     res1 = res2 = NO_ERROR;
@@ -2738,8 +2739,10 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
 
         stat |= advanceZoom();
 
-        ///On the fly update to 3A settings not working
-        if( mPending3Asettings )
+        // On the fly update to 3A settings not working
+        // Do not update 3A here if we are in the middle of a capture
+        // or in the middle of transitioning to it
+        if( mPending3Asettings && ((nextState & CAPTURE_ACTIVE) == 0))
             {
             apply3Asettings(mParameters3A);
             }

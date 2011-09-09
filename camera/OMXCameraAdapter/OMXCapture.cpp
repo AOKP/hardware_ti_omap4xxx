@@ -857,6 +857,19 @@ status_t OMXCameraAdapter::stopImageCapture()
     //Disable the callback first
     ret = setShutterCallback(false);
 
+    // if anybody is waiting on the shutter callback
+    // signal them and then recreate the semaphore
+    if ( 0 != mStartCaptureSem.Count() ) {
+        for (int i = mStopCaptureSem.Count(); i > 0; i--) {
+            ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+                               (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
+                               OMX_ALL,
+                               OMX_TI_IndexConfigShutterCallback,
+                               NULL );
+        }
+        mStartCaptureSem.Create(0);
+    }
+
     //release any 3A locks if locked
     ret = set3ALock(OMX_FALSE, OMX_FALSE);
     if(ret!=NO_ERROR)
