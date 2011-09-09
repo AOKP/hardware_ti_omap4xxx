@@ -140,7 +140,6 @@ LOCAL_C_INCLUDES += \
 	$(LOCAL_PATH)/../../hwc \
 	$(HARDWARE_TI_OMAP4_BASE)/camera/inc \
 	frameworks/base/include/media/stagefright \
-	$(HARDWARE_TI_OMAP4_BASE)/tiler/
 
 LOCAL_SHARED_LIBRARIES := \
 	libmm_osal \
@@ -148,7 +147,6 @@ LOCAL_SHARED_LIBRARIES := \
 	libOMX_Core \
 	liblog \
 	libdomx \
-	libtimemmgr \
 	libhardware
 
 LOCAL_CFLAGS += -DLINUX -DTMS32060 -D_DB_TIOMAP -DSYSLINK_USE_SYSMGR -DSYSLINK_USE_LOADER
