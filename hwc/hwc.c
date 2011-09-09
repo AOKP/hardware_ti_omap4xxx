@@ -607,11 +607,12 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 
     /* set up if DSS layers */
     unsigned int mem_used = 0;
-    for (i = 0; list && i < list->numHwLayers && dsscomp->num_ovls < num.max_hw_overlays; i++) {
+    for (i = 0; list && i < list->numHwLayers; i++) {
         hwc_layer_t *layer = &list->hwLayers[i];
         IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
 
-        if (can_dss_render_layer(hwc_dev, layer) &&
+        if (dsscomp->num_ovls < num.max_hw_overlays &&
+            can_dss_render_layer(hwc_dev, layer) &&
             mem_used + mem1d(handle) < MAX_TILER_SLOT &&
             /* can't have a transparent overlay in the middle of the framebuffer stack */
             !(is_BLENDED(layer->blending) && fb_z >= 0)) {
