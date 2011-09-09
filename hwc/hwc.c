@@ -668,6 +668,8 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         for (i = 0; list && i < list->numHwLayers; i++) {
             hwc_layer_t *layer = &list->hwLayers[i];
             IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
+            if (layer->compositionType == HWC_FRAMEBUFFER)
+                continue;
             if ((layer->flags & HWC_SKIP_LAYER) || !layer->handle)
                 continue;
             if (!is_BLENDED(layer->blending))
