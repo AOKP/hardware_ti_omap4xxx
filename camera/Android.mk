@@ -75,7 +75,6 @@ LOCAL_SHARED_LIBRARIES:= \
     libtiutils \
     libmm_osal \
     libOMX_Core \
-    libtimemmgr \
     libcamera_client \
     libgui \
     libdomx \
@@ -122,7 +121,6 @@ LOCAL_SHARED_LIBRARIES:= \
     libutils \
     libcutils \
     libtiutils \
-    libtimemmgr \
     libcamera_client \
     libion \
 

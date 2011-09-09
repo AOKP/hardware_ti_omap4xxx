@@ -27,7 +27,6 @@ LOCAL_SHARED_LIBRARIES := \
 	libnotify \
 	libc \
 	liblog    \
-	libtimemmgr \
 	libd2cmap
 
 LOCAL_MODULE:= libmemmgr_rpc

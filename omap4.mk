@@ -25,7 +25,6 @@ PRODUCT_PACKAGES := \
 	libOMX.TI.DUCATI1.MISC.SAMPLE \
 	libstagefrighthw \
         libI420colorconvert \
-	libtimemmgr \
 	libtiutils \
 	libcamera \
 	libion \
