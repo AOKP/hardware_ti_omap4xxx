@@ -3081,7 +3081,9 @@ status_t OMXCameraAdapter::initCameraFrame( CameraFrame &frame,
     // System monotonic timer, although both derived from the same 32KHz clock.
     // This delta is offsetted to/from ducati timestamp to match with system time so that
     // video timestamps are aligned with Audio with a periodic timestamp intervals.
-    if ( onlyOnce )
+    // Do timeset offset calculation only when recording is in progress, when nTimestamp
+    // will be populated by Camera
+    if ( onlyOnce && mRecording )
         {
         mTimeSourceDelta = (pBuffHeader->nTimeStamp * 1000) - systemTime(SYSTEM_TIME_MONOTONIC);
         onlyOnce = false;
