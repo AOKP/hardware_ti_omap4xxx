@@ -601,7 +601,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     /* setup pipes */
     dsscomp->num_ovls = hwc_dev->use_sgx;
     int z = 0;
-    int fb_z = -1, fb_zmax = 0;
+    int fb_z = -1;
     int scaled_gfx = 0;
     int ix_nv12 = -1;
 
@@ -652,13 +652,12 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         } else if (hwc_dev->use_sgx) {
             if (fb_z < 0) {
                 /* NOTE: we are not handling transparent cutout for now */
-                fb_z = fb_zmax = z;
+                fb_z = z;
                 z++;
             } else {
                 /* move fb z-order up (by lowering dss layers) */
-                while (fb_zmax < z - 1)
-                    dsscomp->ovls[1 + fb_zmax++].cfg.zorder--;
-                fb_z = fb_zmax;
+                while (fb_z < z - 1)
+                    dsscomp->ovls[1 + fb_z++].cfg.zorder--;
             }
         }
     }
