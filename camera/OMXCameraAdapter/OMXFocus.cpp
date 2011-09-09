@@ -31,7 +31,7 @@
 #include "ErrorUtils.h"
 
 #define TOUCH_FOCUS_RANGE 0xFF
-#define AF_CALLBACK_TIMEOUT 10000000 //10 seconds timeout
+#define AF_CALLBACK_TIMEOUT 5000000 //5 seconds timeout
 
 namespace android {
 
@@ -146,15 +146,17 @@ status_t OMXCameraAdapter::doAutoFocus()
     if ( ( focusControl.eFocusControl != OMX_IMAGE_FocusControlAuto ) &&
          ( focusControl.eFocusControl != ( OMX_IMAGE_FOCUSCONTROLTYPE )
                  OMX_IMAGE_FocusControlAutoInfinity ) ) {
-        ret = mDoAFSem.WaitTimeout(AF_CALLBACK_TIMEOUT);
+        //ret = mDoAFSem.WaitTimeout(AF_CALLBACK_TIMEOUT);
         //Disable auto focus callback from Ducati
-        setFocusCallback(false);
+        //setFocusCallback(false);
         //Signal a dummy AF event so that in case the callback from ducati
         //does come then it doesnt crash after
         //exiting this function since eventSem will go out of scope.
-        if(ret != NO_ERROR) {
+      if(mDoAFSem.WaitTimeout(AF_CALLBACK_TIMEOUT) != NO_ERROR) {
+            //Disable auto focus callback from Ducati
+            setFocusCallback(false);
             CAMHAL_LOGEA("Autofocus callback timeout expired");
-            SignalEvent(mCameraAdapterParameters.mHandleComp,
+            RemoveEvent(mCameraAdapterParameters.mHandleComp,
                                         (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
                                         OMX_ALL,
                                         OMX_IndexConfigCommonFocusStatus,
@@ -162,6 +164,8 @@ status_t OMXCameraAdapter::doAutoFocus()
             returnFocusStatus(true);
         } else {
             CAMHAL_LOGDA("Autofocus callback received");
+            //Disable auto focus callback from Ducati
+            setFocusCallback(false);
             ret = returnFocusStatus(false);
         }
 

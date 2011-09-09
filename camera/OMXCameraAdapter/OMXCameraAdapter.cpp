@@ -167,7 +167,7 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
                  }
              else
                  {
-                 ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+                 ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                                     OMX_EventCmdComplete,
                                     OMX_CommandPortEnable,
                                     mCameraAdapterParameters.mPrevPortIndex,
@@ -1077,7 +1077,7 @@ status_t OMXCameraAdapter::flushBuffers()
         }
     else
         {
-        ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+        ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                            OMX_EventCmdComplete,
                            OMX_CommandFlush,
                            OMX_CAMERA_PORT_VIDEO_OUT_PREVIEW,
@@ -1223,7 +1223,7 @@ status_t OMXCameraAdapter::UseBuffersPreviewData(void* bufArr, int num)
             }
         else
             {
-            ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+            ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                                OMX_EventCmdComplete,
                                OMX_CommandPortEnable,
                                mCameraAdapterParameters.mMeasurementPortIndex,
@@ -1295,7 +1295,7 @@ status_t OMXCameraAdapter::switchToLoaded()
         }
     else
         {
-        ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+        ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                            OMX_EventCmdComplete,
                            OMX_CommandStateSet,
                            OMX_StateIdle,
@@ -1338,7 +1338,7 @@ status_t OMXCameraAdapter::switchToLoaded()
         }
     else
         {
-        ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+        ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                            OMX_EventCmdComplete,
                            OMX_CommandStateSet,
                            OMX_StateLoaded,
@@ -1381,7 +1381,7 @@ status_t OMXCameraAdapter::switchToLoaded()
         }
     else
         {
-        ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+        ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                            OMX_EventCmdComplete,
                            OMX_CommandPortEnable,
                            mCameraAdapterParameters.mPrevPortIndex,
@@ -1654,7 +1654,7 @@ status_t OMXCameraAdapter::UseBuffersPreview(void* bufArr, int num)
         {
         if ( mComponentState == OMX_StateLoaded )
             {
-            ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+            ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                                OMX_EventCmdComplete,
                                OMX_CommandStateSet,
                                OMX_StateIdle,
@@ -1742,7 +1742,7 @@ status_t OMXCameraAdapter::startPreview()
             }
         else
             {
-            ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+            ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                                OMX_EventCmdComplete,
                                OMX_CommandStateSet,
                                OMX_StateExecuting,
@@ -1923,7 +1923,7 @@ status_t OMXCameraAdapter::stopPreview()
         }
     else
         {
-        ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+        ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                            OMX_EventCmdComplete,
                            OMX_CommandPortDisable,
                            mCameraAdapterParameters.mPrevPortIndex,
@@ -2543,6 +2543,49 @@ OMX_ERRORTYPE OMXCameraAdapter::SignalEvent(OMX_IN OMX_HANDLETYPE hComponent,
     return OMX_ErrorNone;
 }
 
+OMX_ERRORTYPE OMXCameraAdapter::RemoveEvent(OMX_IN OMX_HANDLETYPE hComponent,
+                                            OMX_IN OMX_EVENTTYPE eEvent,
+                                            OMX_IN OMX_U32 nData1,
+                                            OMX_IN OMX_U32 nData2,
+                                            OMX_IN OMX_PTR pEventData)
+{
+  Mutex::Autolock lock(mEventLock);
+  TIUTILS::Message *msg;
+  LOG_FUNCTION_NAME;
+
+  if ( !mEventSignalQ.isEmpty() )
+    {
+      CAMHAL_LOGDA("Event queue not empty");
+
+      for ( unsigned int i = 0 ; i < mEventSignalQ.size() ; i++ )
+        {
+          msg = mEventSignalQ.itemAt(i);
+          if ( NULL != msg )
+            {
+              if( ( msg->command != 0 || msg->command == ( unsigned int ) ( eEvent ) )
+                  && ( !msg->arg1 || ( OMX_U32 ) msg->arg1 == nData1 )
+                  && ( !msg->arg2 || ( OMX_U32 ) msg->arg2 == nData2 )
+                  && msg->arg3)
+                {
+                  Semaphore *sem  = (Semaphore*) msg->arg3;
+                  CAMHAL_LOGDA("Event matched, signalling sem");
+                  mEventSignalQ.removeAt(i);
+                  free(msg);
+                  break;
+                }
+            }
+        }
+    }
+  else
+    {
+      CAMHAL_LOGEA("Event queue empty!!!");
+    }
+  LOG_FUNCTION_NAME_EXIT;
+
+  return OMX_ErrorNone;
+}
+
+
 status_t OMXCameraAdapter::RegisterForEvent(OMX_IN OMX_HANDLETYPE hComponent,
                                           OMX_IN OMX_EVENTTYPE eEvent,
                                           OMX_IN OMX_U32 nData1,
@@ -2554,7 +2597,6 @@ status_t OMXCameraAdapter::RegisterForEvent(OMX_IN OMX_HANDLETYPE hComponent,
     Mutex::Autolock lock(mEventLock);
 
     LOG_FUNCTION_NAME;
-
     TIUTILS::Message * msg = ( struct TIUTILS::Message * ) malloc(sizeof(struct TIUTILS::Message));
     if ( NULL != msg )
         {

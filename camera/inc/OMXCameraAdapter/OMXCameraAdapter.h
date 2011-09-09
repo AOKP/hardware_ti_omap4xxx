@@ -404,6 +404,11 @@ private:
                                                   OMX_IN OMX_U32 nData1,
                                                   OMX_IN OMX_U32 nData2,
                                                   OMX_IN OMX_PTR pEventData);
+    OMX_ERRORTYPE RemoveEvent(OMX_IN OMX_HANDLETYPE hComponent,
+                              OMX_IN OMX_EVENTTYPE eEvent,
+                              OMX_IN OMX_U32 nData1,
+                              OMX_IN OMX_U32 nData2,
+                              OMX_IN OMX_PTR pEventData);
 
     status_t RegisterForEvent(OMX_IN OMX_HANDLETYPE hComponent,
                                           OMX_IN OMX_EVENTTYPE eEvent,
