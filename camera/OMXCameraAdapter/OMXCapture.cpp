@@ -805,7 +805,7 @@ status_t OMXCameraAdapter::startImageCapture()
             }
         else
             {
-            ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+            ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                                (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
                                OMX_ALL,
                                OMX_TI_IndexConfigShutterCallback,
@@ -871,7 +871,7 @@ status_t OMXCameraAdapter::stopImageCapture()
     //Wait here for the capture to be done, in worst case timeout and proceed with cleanup
     ret = mCaptureSem.WaitTimeout(OMX_CAPTURE_TIMEOUT);
     if ( NO_ERROR != ret ) {
-        ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+        ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                            (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
                            OMX_ALL,
                            OMX_TI_IndexConfigShutterCallback,
@@ -928,7 +928,7 @@ status_t OMXCameraAdapter::stopImageCapture()
     if ( NO_ERROR == ret ) {
         CAMHAL_LOGDA("Port disabled");
     } else {
-        ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+        ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                            OMX_EventCmdComplete,
                            OMX_CommandPortDisable,
                            mCameraAdapterParameters.mImagePortIndex,
@@ -1053,7 +1053,7 @@ status_t OMXCameraAdapter::UseBuffersCapture(void* bufArr, int num)
         }
     else
         {
-        ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+        ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
                            OMX_EventCmdComplete,
                            OMX_CommandPortEnable,
                            mCameraAdapterParameters.mImagePortIndex,

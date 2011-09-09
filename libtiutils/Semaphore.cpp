@@ -217,6 +217,12 @@ status_t Semaphore::WaitTimeout(int timeoutMicroSecs)
         ret = sem_timedwait(mSemaphore, &timeSpec);
         }
 
+    if ( NO_ERROR != ret )
+      {
+        Signal();
+        Create(0);
+      }
+
     return ret;
 }
 

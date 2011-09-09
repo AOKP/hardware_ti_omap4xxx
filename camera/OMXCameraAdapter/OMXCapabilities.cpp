@@ -26,10 +26,6 @@
 #include "ErrorUtils.h"
 #include "TICameraParameters.h"
 
-extern "C" {
-#include "memmgr.h"
-}
-
 namespace android {
 
 #undef LOG_TAG

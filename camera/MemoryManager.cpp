@@ -24,8 +24,6 @@
 
 extern "C" {
 
-#include "memmgr.h"
-#include "tiler.h"
 #include <ion.h>
 
 //#include <timm_osal_interfaces.h>

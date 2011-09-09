@@ -53,3 +53,8 @@ $(call add-clean-step, find $(PRODUCT_OUT) -type f -name "lib*cameraadapter*" -p
 $(call add-clean-step, find $(PRODUCT_OUT) -type f -name "libcamera.so" -print0 | xargs -0 rm -f)
 $(call add-clean-step, find $(PRODUCT_OUT) -type d -name "libcamera_intermediates" -print0 | xargs -0 rm -rf)
 $(call add-clean-step, find $(PRODUCT_OUT) -type d -name "lib*cameraadapter_intermediates" -print0 | xargs -0 rm -rf)
+
+$(call add-clean-step, rm -rf $(PRODUCT_OUT)/symbols/system/lib/libtimemmgr.so)
+$(call add-clean-step, rm -rf $(PRODUCT_OUT)/system/lib/libtimemmgr.so)
+$(call add-clean-step, rm -rf $(PRODUCT_OUT)/obj/lib/libtimemmgr.so)
+$(call add-clean-step, rm -rf $(PRODUCT_OUT)/obj/SHARED_LIBRARIES/libtimemmgr_intermediates)

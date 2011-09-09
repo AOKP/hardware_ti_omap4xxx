@@ -58,14 +58,6 @@
 /******************************************************************
  *   INCLUDE FILES
  ******************************************************************/
-#ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
-/* Opaque color format requires below quirks to be enabled
- * ENABLE_GRALLOC_BUFFER
- * ANDROID_QUIRK_CHANGE_PORT_VALUES
- */
-#include "memmgr.h"
-#include "tiler.h"
-#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -90,7 +82,10 @@
 #define LINUX_PAGE_SIZE 4096
 
 #ifdef ANDROID_QUIRK_CHANGE_PORT_VALUES
-
+/* Opaque color format requires below quirks to be enabled
+ * ENABLE_GRALLOC_BUFFER
+ * ANDROID_QUIRK_CHANGE_PORT_VALUES
+ */
 OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_IN OMX_INDEXTYPE nParamIndex, OMX_INOUT OMX_PTR pParamStruct);
 
@@ -109,12 +104,12 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 #define COLORCONVERT_BUFTYPE_ION     (0x1)
 #define COLORCONVERT_BUFTYPE_GRALLOCOPAQUE (0x2)
 
-int COLORCONVERT_open(void **hCC);
+int COLORCONVERT_open(void **hCC, PROXY_COMPONENT_PRIVATE *pCompPrv);
 int COLORCONVERT_PlatformOpaqueToNV12(void *hCC, void *pSrc[],
 				      void *pDst[], int nWidth,
 				      int nHeight, int nStride,
 				      int nSrcBufType, int nDstBufType);
-int COLORCONVERT_close(void *hCC);
+int COLORCONVERT_close(void *hCC,PROXY_COMPONENT_PRIVATE *pCompPrv);
 
 static OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_AllocateBuffer(OMX_IN OMX_HANDLETYPE hComponent,
     OMX_INOUT OMX_BUFFERHEADERTYPE ** ppBufferHdr, OMX_IN OMX_U32 nPortIndex,
@@ -130,9 +125,9 @@ typedef struct _OMX_PROXY_MPEG4E_PRIVATE
 	OMX_PTR  hBufPipe;
 	OMX_BOOL bAndroidOpaqueFormat;
 	OMX_PTR  hCC;
-	OMX_PTR  pBuf0[OMX_MPEG4E_NUM_INTERNAL_BUF];
-	OMX_PTR  pBuf1[OMX_MPEG4E_NUM_INTERNAL_BUF];
+	IMG_native_handle_t* gralloc_handle[OMX_MPEG4E_NUM_INTERNAL_BUF];
 	OMX_S32  nCurBufIndex;
+	alloc_device_t* mAllocDev;
 }OMX_PROXY_MPEG4E_PRIVATE;
 #endif
 
@@ -396,7 +391,7 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 #ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
 		else if(pPortDef->format.video.eColorFormat == OMX_COLOR_FormatAndroidOpaque)
 		{
-			if(COLORCONVERT_open(&pProxy->hCC) != 0)
+			if(COLORCONVERT_open(&pProxy->hCC,pCompPrv) != 0)
 			{
 				PROXY_assert(0, OMX_ErrorInsufficientResources,
 							"Failed to open Color converting service");
@@ -415,7 +410,7 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_SetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 #ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
 		else if(pPortParams->eColorFormat == OMX_COLOR_FormatAndroidOpaque)
 		{
-			if(COLORCONVERT_open(&pProxy->hCC) != 0)
+			if(COLORCONVERT_open(&pProxy->hCC,pCompPrv) != 0)
 			{
 				PROXY_assert(0, OMX_ErrorInsufficientResources,
 							"Failed to open Color converting service");
@@ -544,7 +539,6 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 #ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
 	OMX_PROXY_MPEG4E_PRIVATE *pProxy = NULL;
 	TIMM_OSAL_ERRORTYPE eOSALStatus = TIMM_OSAL_ERR_NONE;
-	void *pDest[COLORCONVERT_MAX_SUB_BUFFERS]={NULL,NULL,NULL};
 	OMX_U32 nBufIndex = 0, nSize=0, nRet=0;
 #endif
 
@@ -620,19 +614,13 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 						                     sizeof(OMX_PTR), (TIMM_OSAL_U32 *)(&nSize),
 						                     TIMM_OSAL_SUSPEND);
 				PROXY_assert(eOSALStatus == TIMM_OSAL_ERR_NONE, OMX_ErrorBadParameter, NULL);
-                                DOMX_DEBUG(" --TIMM_OSAL_ReadFromPipe() ");
-
-				pDest[0] = pProxy->pBuf0[nBufIndex];
-				pDest[1] = pProxy->pBuf1[nBufIndex];
-
-                                DOMX_DEBUG(" ++COLORCONVERT_PlatformOpaqueToNV12() ");
 
 				/* Get NV12 data after colorconv*/
-				nRet = COLORCONVERT_PlatformOpaqueToNV12(pProxy->hCC, (void **) &pGrallocHandle, pDest,
+				nRet = COLORCONVERT_PlatformOpaqueToNV12(pProxy->hCC, (void **) &pGrallocHandle, (void **) &pProxy->gralloc_handle[nBufIndex],
 									 pGrallocHandle->iWidth,
 									 pGrallocHandle->iHeight,
 									 4096, COLORCONVERT_BUFTYPE_GRALLOCOPAQUE,
-									 COLORCONVERT_BUFTYPE_VIRTUAL);
+									 COLORCONVERT_BUFTYPE_GRALLOCOPAQUE );
 				if(nRet != 0)
 				{
 					eOSALStatus = TIMM_OSAL_WriteToPipe(pProxy->hBufPipe, (void *) &nBufIndex,
@@ -642,8 +630,8 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
                                 DOMX_DEBUG(" --COLORCONVERT_PlatformOpaqueToNV12() ");
 
 				/* Update pBufferHdr with NV12 buffers for OMX component */
-				pBufferHdr->pBuffer= pDest[0];
-				((OMX_TI_PLATFORMPRIVATE *) pBufferHdr->pPlatformPrivate)->pAuxBuf1 = pDest[1];
+				pBufferHdr->pBuffer= pProxy->gralloc_handle[nBufIndex]->fd[0];
+				((OMX_TI_PLATFORMPRIVATE *) pBufferHdr->pPlatformPrivate)->pAuxBuf1 = pProxy->gralloc_handle[nBufIndex]->fd[1];
 			}
 #endif
 #endif
@@ -679,11 +667,11 @@ static OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_AllocateBuffer(OMX_HANDLETYPE hComponent
 	OMX_ERRORTYPE eError = OMX_ErrorNone;
 	PROXY_COMPONENT_PRIVATE *pCompPrv = NULL;
 	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
-	MemAllocBlock blocks[2];
 	OMX_CONFIG_RECTTYPE tParamRect;
 	OMX_PROXY_MPEG4E_PRIVATE *pProxy = NULL;
 	TIMM_OSAL_ERRORTYPE eOSALStatus = TIMM_OSAL_ERR_NONE;
         DOMX_DEBUG(" ++LOCAL_PROXY_MPEG4E_AllocateBuffer");
+	int err, nStride;
 
 	PROXY_require(hComp->pComponentPrivate != NULL, OMX_ErrorBadParameter,
 	    NULL);
@@ -693,8 +681,6 @@ static OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_AllocateBuffer(OMX_HANDLETYPE hComponent
 	if((nPortIndex == OMX_MPEG4E_INPUT_PORT) &&
 	   (pProxy->bAndroidOpaqueFormat))
 	{
-		memset(blocks, 0, sizeof(MemAllocBlock)*2);
-
 		tParamRect.nSize = sizeof(OMX_CONFIG_RECTTYPE);
 		tParamRect.nVersion.s.nVersionMajor = 1;
 		tParamRect.nVersion.s.nVersionMinor = 1;
@@ -703,27 +689,10 @@ static OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_AllocateBuffer(OMX_HANDLETYPE hComponent
 		tParamRect.nPortIndex = nPortIndex;
 
 		eError = PROXY_GetParameter(hComponent, (OMX_INDEXTYPE)OMX_TI_IndexParam2DBufferAllocDimension, &tParamRect);
-		if(eError == OMX_ErrorNone)
-		{
-			blocks[0].fmt = PIXEL_FMT_8BIT;
-			blocks[0].dim.area.width  = tParamRect.nWidth;
-			blocks[0].dim.area.height = tParamRect.nHeight;
-			blocks[0].stride = 0;
+ 		PROXY_assert(eError == OMX_ErrorNone, eError," Error in Proxy GetParameter from 2d index in allocate buffer");
 
-			blocks[1].fmt = PIXEL_FMT_16BIT;
-			blocks[1].dim.area.width  = tParamRect.nWidth >> 1;
-			blocks[1].dim.area.height = tParamRect.nHeight >> 1;
-			blocks[1].stride = 0;
-		}
-                DOMX_DEBUG(" Allocating Buf0 ");
-		pProxy->pBuf0[pProxy->nCurBufIndex] = (OMX_U8*) MemMgr_Alloc(&blocks[0], 1);
-		PROXY_assert((pProxy->pBuf0[pProxy->nCurBufIndex] != NULL),
-			      OMX_ErrorInsufficientResources, "MemMgr_Alloc returns NULL, abort,");
-
-                DOMX_DEBUG(" Allocating Buf1 ");
-		pProxy->pBuf1[pProxy->nCurBufIndex] = (OMX_U8*) MemMgr_Alloc(&blocks[1], 1);
-		PROXY_assert((pProxy->pBuf1[pProxy->nCurBufIndex] != NULL),
-			      OMX_ErrorInsufficientResources, "MemMgr_Alloc returns NULL, abort,");
+		err = pProxy->mAllocDev->alloc(pProxy->mAllocDev,(int) tParamRect.nWidth,(int) tParamRect.nHeight, 
+			(int) HAL_PIXEL_FORMAT_TI_NV12,(int) GRALLOC_USAGE_HW_RENDER, &(pProxy->gralloc_handle[pProxy->nCurBufIndex]), &nStride);
 	}
 
 	eError = PROXY_AllocateBuffer(hComponent, ppBufferHdr, nPortIndex,
@@ -734,14 +703,7 @@ EXIT:
 	{
 		if(eError != OMX_ErrorNone)
 		{
-			if(pProxy->pBuf0[pProxy->nCurBufIndex])
-			MemMgr_Free(pProxy->pBuf0[pProxy->nCurBufIndex]);
-
-			if(pProxy->pBuf1[pProxy->nCurBufIndex])
-			MemMgr_Free(pProxy->pBuf1[pProxy->nCurBufIndex]);
-
-			pProxy->pBuf0[pProxy->nCurBufIndex] = NULL;
-			pProxy->pBuf1[pProxy->nCurBufIndex] = NULL;
+			err = pProxy->mAllocDev->free(pProxy->mAllocDev, pProxy->gralloc_handle[pProxy->nCurBufIndex]);
 		}
 		else
 		{
@@ -776,14 +738,11 @@ static OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_FreeBuffer(OMX_IN OMX_HANDLETYPE hCompon
 		PROXY_require(pProxy->nCurBufIndex >=0,
 			      OMX_ErrorBadParameter, "Buffer index underflow");
 
-		if(pProxy->pBuf0[pProxy->nCurBufIndex])
-		MemMgr_Free(pProxy->pBuf0[pProxy->nCurBufIndex]);
-
-		if(pProxy->pBuf1[pProxy->nCurBufIndex])
-		MemMgr_Free(pProxy->pBuf1[pProxy->nCurBufIndex]);
-
-		pProxy->pBuf0[pProxy->nCurBufIndex] = NULL;
-		pProxy->pBuf1[pProxy->nCurBufIndex] = NULL;
+		if(pProxy->gralloc_handle[pProxy->nCurBufIndex])
+		{
+			pProxy->mAllocDev->free(pProxy->mAllocDev, pProxy->gralloc_handle[pProxy->nCurBufIndex]);
+			pProxy->gralloc_handle[pProxy->nCurBufIndex] = NULL;
+		}
 
 		/*Clear the Bufindex pipe by dummy reads*/
 		TIMM_OSAL_GetPipeReadyMessageCount(pProxy->hBufPipe, (TIMM_OSAL_U32 *)&nCount);
@@ -819,15 +778,10 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_ComponentDeInit(OMX_HANDLETYPE hComponent)
 		/* Cleanup internal buffers in pipe if not freed on FreeBuffer */
 		for(i=0; i<OMX_MPEG4E_NUM_INTERNAL_BUF; i++)
 		{
-			if(pProxy->pBuf0[i] != NULL)
+			if(pProxy->gralloc_handle[pProxy->nCurBufIndex])
 			{
-				MemMgr_Free(pProxy->pBuf0[i]);
-				pProxy->pBuf0[i] = NULL;
-			}
-			if(pProxy->pBuf1[i] != NULL)
-			{
-				MemMgr_Free(pProxy->pBuf1[i]);
-				pProxy->pBuf1[i] = NULL;
+				pProxy->mAllocDev->free(pProxy->mAllocDev, pProxy->gralloc_handle[pProxy->nCurBufIndex]);
+				pProxy->gralloc_handle[pProxy->nCurBufIndex] = NULL;
 			}
 		}
 
@@ -841,6 +795,9 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_ComponentDeInit(OMX_HANDLETYPE hComponent)
 				DOMX_ERROR("Pipe deletion failed");
 			}
 		}
+
+		COLORCONVERT_close(pProxy->hCC,pCompPrv);
+
 		if(pCompPrv->pCompProxyPrv != NULL)
 		{
 			TIMM_OSAL_Free(pCompPrv->pCompProxyPrv);
@@ -856,11 +813,13 @@ EXIT:
 	return eError;
 }
 
-int COLORCONVERT_open(void **hCC)
+int COLORCONVERT_open(void **hCC, PROXY_COMPONENT_PRIVATE *pCompPrv)
 {
 	int nErr = -1;
 	hw_module_t const* module = NULL;
+	OMX_PROXY_MPEG4E_PRIVATE *pProxy = NULL;
 
+	pProxy = (OMX_PROXY_MPEG4E_PRIVATE *) pCompPrv->pCompProxyPrv;
 	nErr = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &module);
 
 	if (nErr == 0)
@@ -872,6 +831,8 @@ int COLORCONVERT_open(void **hCC)
 		 DOMX_ERROR("FATAL: gralloc api hw_get_module() returned error: Can't find \
 			    %s module err = %x", GRALLOC_HARDWARE_MODULE_ID, nErr);
 	}
+
+	gralloc_open(module, &(pProxy->mAllocDev));
 
 	return nErr;
 }
@@ -890,12 +851,22 @@ int COLORCONVERT_PlatformOpaqueToNV12(void *hCC,
 		nErr = module->Blit(module, pSrc[0], pDst, HAL_PIXEL_FORMAT_TI_NV12);
 
 	}
+	else if((nSrcBufType == COLORCONVERT_BUFTYPE_GRALLOCOPAQUE) && (nDstBufType == COLORCONVERT_BUFTYPE_GRALLOCOPAQUE ))
+	{
+		nErr = module->Blit2(module, pSrc[0], pDst[0], nWidth, nHeight, 0, 0);
+	}
 
 	return nErr;
 }
 
-int COLORCONVERT_close(void *hCC)
+int COLORCONVERT_close(void *hCC,PROXY_COMPONENT_PRIVATE *pCompPrv)
 {
+	OMX_PROXY_MPEG4E_PRIVATE *pProxy = NULL;
+	pProxy = (OMX_PROXY_MPEG4E_PRIVATE *) pCompPrv->pCompProxyPrv;
+	if(pProxy && pProxy->mAllocDev)
+	{
+		gralloc_close(pProxy->mAllocDev);
+	}
 	return 0;
 }
 #endif
