@@ -109,6 +109,9 @@ RPC_OMX_ERRORTYPE RPC_InstanceInit(OMX_STRING cComponentName,
 	struct omx_conn_req sReq = { .name = "OMX" };
 	TIMM_OSAL_ERRORTYPE eError = TIMM_OSAL_ERR_NONE;
 	OMX_U32 i = 0;
+
+	*(RPC_OMX_CONTEXT **) phRPCCtx = NULL;
+
 	//pthread_t cbThread;
 
 //	sReq.name = "OMX";
@@ -120,7 +123,6 @@ RPC_OMX_ERRORTYPE RPC_InstanceInit(OMX_STRING cComponentName,
 	RPC_assert(pRPCCtx != NULL, RPC_OMX_ErrorInsufficientResources,
 	    "Malloc failed");
 	TIMM_OSAL_Memset(pRPCCtx, 0, sizeof(RPC_OMX_CONTEXT));
-	*(RPC_OMX_CONTEXT **) phRPCCtx = pRPCCtx;
 
 	/*Assuming that open maintains an internal count for multi instance */
 	DOMX_DEBUG("Calling open on the device");
@@ -164,6 +166,10 @@ RPC_OMX_ERRORTYPE RPC_InstanceInit(OMX_STRING cComponentName,
 	{
 		RPC_InstanceDeInit(pRPCCtx);
 	}
+	else
+	{
+		*(RPC_OMX_CONTEXT **) phRPCCtx = pRPCCtx;
+	}
 	return eRPCError;
 }
 
@@ -188,7 +194,7 @@ RPC_OMX_ERRORTYPE RPC_InstanceDeInit(OMX_HANDLETYPE hRPCCtx)
 	OMX_U64 nKillEvent = 1;
 
 	RPC_assert(hRPCCtx != NULL, RPC_OMX_ErrorUndefined,
-	    "NULL context handle supplied - no further cleanup possible");
+	    "NULL context handle supplied to RPC Deinit");
 
 	if (pRPCCtx->fd_killcb)
 	{
@@ -211,6 +217,7 @@ RPC_OMX_ERRORTYPE RPC_InstanceDeInit(OMX_HANDLETYPE hRPCCtx)
 		}
 		DOMX_DEBUG("Closing the kill fd");
 		status = close(pRPCCtx->fd_killcb);
+		pRPCCtx->fd_killcb = 0;
 		if (status != 0)
 		{
 			DOMX_ERROR("Close failed on kill fd");
@@ -223,6 +230,7 @@ RPC_OMX_ERRORTYPE RPC_InstanceDeInit(OMX_HANDLETYPE hRPCCtx)
 		if (pRPCCtx->pMsgPipe[i])
 		{
 			eError = TIMM_OSAL_DeletePipe(pRPCCtx->pMsgPipe[i]);
+			pRPCCtx->pMsgPipe[i] = NULL;
 			if (eError != TIMM_OSAL_ERR_NONE)
 			{
 				DOMX_ERROR("Pipe deletion failed");
@@ -235,16 +243,18 @@ RPC_OMX_ERRORTYPE RPC_InstanceDeInit(OMX_HANDLETYPE hRPCCtx)
 	if (pRPCCtx->fd_omx)
 	{
 		status = close(pRPCCtx->fd_omx);
+		pRPCCtx->fd_omx = 0;
 		if (status != 0)
 		{
 			DOMX_ERROR("Close failed on omx fd");
 			eRPCError = RPC_OMX_ErrorUndefined;
 		}
 	}
+
 	TIMM_OSAL_Free(pRPCCtx);
 
-      EXIT:
-	return eRPCError;
+	EXIT:
+		return eRPCError;
 }
 
 

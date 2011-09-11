@@ -184,6 +184,7 @@ OMX_ERRORTYPE OMX_ProxyViddecInit(OMX_HANDLETYPE hComponent)
 	    (PROXY_COMPONENT_PRIVATE *) pHandle->pComponentPrivate;
 
 	eError = OMX_ProxyCommonInit(hComponent);	// Calling Proxy Common Init()
+	PROXY_assert(eError == OMX_ErrorNone, eError, "Proxy common init returned error");
 #ifdef ANDROID_QUIRK_CHANGE_PORT_VALUES
 	pHandle->SetParameter = PROXY_VIDDEC_SetParameter;		
         pHandle->GetParameter = PROXY_VIDDEC_GetParameter;

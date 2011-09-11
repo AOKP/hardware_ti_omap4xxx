@@ -333,6 +333,7 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 		DOMX_ERROR("\Error in Initializing Proxy");
 		TIMM_OSAL_Free(pComponentPrivate->cCompName);
 		TIMM_OSAL_Free(pComponentPrivate);
+		goto EXIT;
 	}
 
 	pHandle->ComponentDeInit = ComponentPrivateDeInit;
