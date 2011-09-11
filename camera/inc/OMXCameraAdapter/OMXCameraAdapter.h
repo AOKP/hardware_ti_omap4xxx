@@ -682,6 +682,7 @@ private:
     static const char DEFAULT_EV_STEP[];
     static const char DEFAULT_EXPOSURE_MODE[];
     static const char DEFAULT_FLASH_MODE[];
+    static const char DEFAULT_FOCUS_MODE_PREFERRED[];
     static const char DEFAULT_FOCUS_MODE[];
     static const char DEFAULT_FRAMERATE_RANGE[];
     static const char DEFAULT_IPP[];

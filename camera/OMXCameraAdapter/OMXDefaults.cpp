@@ -38,6 +38,7 @@ const char OMXCameraAdapter::DEFAULT_EV_COMPENSATION[] = "0";
 const char OMXCameraAdapter::DEFAULT_EV_STEP[] = "0.1";
 const char OMXCameraAdapter::DEFAULT_EXPOSURE_MODE[] = "auto";
 const char OMXCameraAdapter::DEFAULT_FLASH_MODE[] = "off";
+const char OMXCameraAdapter::DEFAULT_FOCUS_MODE_PREFERRED[] = "continuous-picture";
 const char OMXCameraAdapter::DEFAULT_FOCUS_MODE[] = "infinity";
 const char OMXCameraAdapter::DEFAULT_FRAMERATE_RANGE[] = "15000,30000";
 const char OMXCameraAdapter::DEFAULT_IPP[] = "ldc-nsf";

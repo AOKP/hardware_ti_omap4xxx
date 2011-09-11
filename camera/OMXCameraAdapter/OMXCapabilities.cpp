@@ -968,7 +968,15 @@ status_t OMXCameraAdapter::insertDefaults(CameraProperties::Properties* params, 
     params->set(CameraProperties::SUPPORTED_EV_STEP, DEFAULT_EV_STEP);
     params->set(CameraProperties::EXPOSURE_MODE, DEFAULT_EXPOSURE_MODE);
     params->set(CameraProperties::FLASH_MODE, DEFAULT_FLASH_MODE);
-    params->set(CameraProperties::FOCUS_MODE, DEFAULT_FOCUS_MODE);
+    char *pos = strstr(params->get(CameraProperties::SUPPORTED_FOCUS_MODES), DEFAULT_FOCUS_MODE_PREFERRED);
+    if ( NULL != pos )
+        {
+        params->set(CameraProperties::FOCUS_MODE, DEFAULT_FOCUS_MODE_PREFERRED);
+        }
+    else
+        {
+        params->set(CameraProperties::FOCUS_MODE, DEFAULT_FOCUS_MODE);
+        }
     params->set(CameraProperties::IPP, DEFAULT_IPP);
     params->set(CameraProperties::GBCE, DEFAULT_GBCE);
     params->set(CameraProperties::ISO_MODE, DEFAULT_ISO_MODE);
@@ -1124,6 +1132,9 @@ status_t OMXCameraAdapter::insertCapabilities(CameraProperties::Properties* para
 
     }
 
+    //NOTE: Ensure that we always call insertDefaults after inserting the supported capabilities
+    //as there are checks inside insertDefaults to make sure a certain default is supported
+    // or not
     if ( NO_ERROR == ret ) {
         ret = insertDefaults(params, caps);
     }
