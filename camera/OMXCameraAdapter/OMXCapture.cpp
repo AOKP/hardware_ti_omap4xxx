@@ -858,7 +858,7 @@ status_t OMXCameraAdapter::stopImageCapture()
     ret = setShutterCallback(false);
 
     //release any 3A locks if locked
-    ret = set3ALock(OMX_FALSE);
+    ret = set3ALock(OMX_FALSE, OMX_FALSE);
     if(ret!=NO_ERROR)
       {
         CAMHAL_LOGEB("Error Releaseing 3A locks%d", ret);

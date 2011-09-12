@@ -268,8 +268,8 @@ status_t OMXCameraAdapter::cancelAutoFocus()
     OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focusMode;
 
     LOG_FUNCTION_NAME;
-    // Unlock 3A locks since they were locked by AF
-    if( set3ALock(OMX_FALSE) != NO_ERROR) {
+    // Unlock 3A locks since they were locked by AF conditionally
+    if( set3ALock(mUserSetExpLock, mUserSetWbLock) != NO_ERROR) {
       CAMHAL_LOGEA("Error Unlocking 3A locks");
     }
     else{
@@ -409,7 +409,7 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
                         focusStatus = true;
                         //Lock the AE and AWB here sinc the focus is locked
                         // Apply 3A locks after AF
-                        if( set3ALock(OMX_TRUE) != NO_ERROR) {
+                        if( set3ALock(OMX_TRUE, OMX_TRUE) != NO_ERROR) {
                             CAMHAL_LOGEA("Error Applying 3A locks");
                         }
                         else

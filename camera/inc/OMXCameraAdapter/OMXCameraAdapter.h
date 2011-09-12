@@ -478,7 +478,7 @@ private:
 
     status_t setExposureLock(Gen3A_settings& Gen3A);
     status_t setWhiteBalanceLock(Gen3A_settings& Gen3A);
-    status_t set3ALock(OMX_BOOL toggle);
+    status_t set3ALock(OMX_BOOL toggleExp, OMX_BOOL toggleWb);
     status_t setMeteringAreas(Gen3A_settings& Gen3A);
 
     //API to set FrameRate using VFR interface
@@ -857,6 +857,9 @@ private:
 
     Semaphore mCaptureSem;
     bool mCaptureSignalled;
+
+    OMX_BOOL mUserSetExpLock;
+    OMX_BOOL mUserSetWbLock;
 
 };
 }; //// namespace

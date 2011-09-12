@@ -222,16 +222,19 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
     if ( (str != NULL) && (!strcmp(str, "true")) )
       {
         OMX_BOOL lock = OMX_FALSE;
+        mUserSetExpLock = OMX_FALSE;
         str = params.get(CameraParameters::KEY_AUTO_EXPOSURE_LOCK);
         if ( (strcmp(str, "true")) == 0)
           {
             CAMHAL_LOGVA("Locking Exposure");
             lock = OMX_TRUE;
+            mUserSetExpLock = OMX_TRUE;
           }
         else
           {
             CAMHAL_LOGVA("UnLocking Exposure");
           }
+
         if (mParameters3A.ExposureLock != lock)
           {
             mParameters3A.ExposureLock = lock;
@@ -244,11 +247,13 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
     if ( (str != NULL) && (!strcmp(str, "true")) )
       {
         OMX_BOOL lock = OMX_FALSE;
+        mUserSetWbLock = OMX_FALSE;
         str = params.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK);
         if ( (strcmp(str, "true")) == 0)
           {
             CAMHAL_LOGVA("Locking WhiteBalance");
             lock = OMX_TRUE;
+            mUserSetWbLock = OMX_TRUE;
           }
         else
           {
@@ -1022,7 +1027,7 @@ status_t OMXCameraAdapter::setExposureLock(Gen3A_settings& Gen3A)
     return ErrorUtils::omxToAndroidError(eError);
 }
 
-status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggle)
+status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggleExp, OMX_BOOL toggleWb)
 {
   OMX_ERRORTYPE eError = OMX_ErrorNone;
   OMX_IMAGE_CONFIG_LOCKTYPE lock;
@@ -1039,8 +1044,8 @@ status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggle)
   OMX_INIT_STRUCT_PTR (&lock, OMX_IMAGE_CONFIG_LOCKTYPE);
   lock.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
 
-  mParameters3A.ExposureLock = toggle;
-  mParameters3A.WhiteBalanceLock = toggle;
+  mParameters3A.ExposureLock = toggleExp;
+  mParameters3A.WhiteBalanceLock = toggleWb;
 
   eError = OMX_GetConfig( mCameraAdapterParameters.mHandleComp,
                           (OMX_INDEXTYPE)OMX_IndexConfigImageExposureLock,
@@ -1055,7 +1060,7 @@ status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggle)
     }
 
   /* Apply locks only when not applied already */
-  if ( lock.bLock  != toggle )
+  if ( lock.bLock  != toggleExp )
     {
       setExposureLock(mParameters3A);
     }
@@ -1073,14 +1078,15 @@ status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggle)
     }
 
   /* Apply locks only when not applied already */
-  if ( lock.bLock != toggle )
+  if ( lock.bLock != toggleWb )
     {
       setWhiteBalanceLock(mParameters3A);
     }
 
-  const char *lock_state = toggle ? TRUE : FALSE;
-  mParams.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, lock_state);
-  mParams.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, lock_state);
+  const char *lock_state_exp = toggleExp ? TRUE : FALSE;
+  const char *lock_state_wb = toggleWb ? TRUE : FALSE;
+  mParams.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, lock_state_exp);
+  mParams.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, lock_state_wb);
 
   return ErrorUtils::omxToAndroidError(eError);
 
