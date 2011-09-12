@@ -576,6 +576,7 @@ private:
     void notifyFrame();
     bool processMessage();
     void releaseSharedVideoBuffers();
+    status_t dummyRaw();
 
 private:
     mutable Mutex mLock;
@@ -620,7 +621,8 @@ private:
     bool mRecording;
     bool mMeasurementEnabled;
 
-	bool mUseMetaDataBufferMode;
+    bool mUseMetaDataBufferMode;
+    bool mRawAvailable;
 
     CameraParameters mParameters;
 

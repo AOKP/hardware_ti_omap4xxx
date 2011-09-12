@@ -147,6 +147,7 @@ status_t AppCallbackNotifier::initialize()
         }
 
     mUseMetaDataBufferMode = true;
+    mRawAvailable = false;
 
     LOG_FUNCTION_NAME_EXIT;
 
@@ -294,6 +295,7 @@ void AppCallbackNotifier::notifyEvent()
                         {
                             mNotifyCb(CAMERA_MSG_SHUTTER, 0, 0, mCallbackCookie);
                         }
+                    mRawAvailable = false;
 
                     break;
 
@@ -570,6 +572,40 @@ static void copy2Dto1D(void *dst,
     mapper.unlock((buffer_handle_t)src);
 }
 
+status_t AppCallbackNotifier::dummyRaw()
+{
+    LOG_FUNCTION_NAME;
+
+    if ( NULL == mRequestMemory ) {
+        CAMHAL_LOGEA("Can't allocate memory for dummy raw callback!");
+        return NO_INIT;
+    }
+
+    if ( ( NULL != mCameraHal ) &&
+         ( NULL != mDataCb) &&
+         ( NULL != mNotifyCb ) ){
+
+        if ( mCameraHal->msgTypeEnabled(CAMERA_MSG_RAW_IMAGE) ) {
+            camera_memory_t *dummyRaw = mRequestMemory(-1, 1, 1, NULL);
+
+            if ( NULL == dummyRaw ) {
+                CAMHAL_LOGEA("Dummy raw buffer allocation failed!");
+                return NO_MEMORY;
+            }
+
+            mDataCb(CAMERA_MSG_RAW_IMAGE, dummyRaw, 0, NULL, mCallbackCookie);
+
+            dummyRaw->release(dummyRaw);
+        } else if ( mCameraHal->msgTypeEnabled(CAMERA_MSG_RAW_IMAGE_NOTIFY) ) {
+            mNotifyCb(CAMERA_MSG_RAW_IMAGE_NOTIFY, 0, 0, mCallbackCookie);
+        }
+    }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return NO_ERROR;
+}
+
 void AppCallbackNotifier::notifyFrame()
 {
     ///Receive and send the frame notifications to app
@@ -612,36 +648,46 @@ void AppCallbackNotifier::notifyFrame()
                 if ( (CameraFrame::RAW_FRAME == frame->mFrameType )&&
                     ( NULL != mCameraHal ) &&
                     ( NULL != mDataCb) &&
-                    ( mCameraHal->msgTypeEnabled(CAMERA_MSG_RAW_IMAGE) ) )
+                    ( NULL != mNotifyCb ) )
                     {
 
+                    if ( mCameraHal->msgTypeEnabled(CAMERA_MSG_RAW_IMAGE) )
+                        {
 #ifdef COPY_IMAGE_BUFFER
 
-                    camera_memory_t* raw_picture = mRequestMemory(-1, frame->mLength, 1, NULL);
+                        camera_memory_t* raw_picture = mRequestMemory(-1, frame->mLength, 1, NULL);
 
-                    if ( NULL != raw_picture )
-                    {
-                        buf = raw_picture->data;
-                        if ( NULL != buf )
-                            {
-                            memcpy(buf,
-                                   ( void * ) ( (unsigned int) frame->mBuffer + frame->mOffset),
-                                   frame->mLength);
-                            }
-                        mFrameProvider->returnFrame(frame->mBuffer,
-                                                    ( CameraFrame::FrameType ) frame->mFrameType);
-                    }
+                        if ( NULL != raw_picture )
+                        {
+                            buf = raw_picture->data;
+                            if ( NULL != buf )
+                                {
+                                memcpy(buf,
+                                       ( void * ) ( (unsigned int) frame->mBuffer + frame->mOffset),
+                                       frame->mLength);
+                                }
+                            mFrameProvider->returnFrame(frame->mBuffer,
+                                                        ( CameraFrame::FrameType ) frame->mFrameType);
+                        }
 
-                    mDataCb(CAMERA_MSG_RAW_IMAGE, raw_picture, 0, NULL, mCallbackCookie);
+                        mDataCb(CAMERA_MSG_RAW_IMAGE, raw_picture, 0, NULL, mCallbackCookie);
+
 #else
 
-                     //TODO: Find a way to map a Tiler buffer to a MemoryHeapBase
+                        //TODO: Find a way to map a Tiler buffer to a MemoryHeapBase
 
 #endif
-                    if(raw_picture)
-                        {
-                        raw_picture->release(raw_picture);
+                        if(raw_picture)
+                            {
+                            raw_picture->release(raw_picture);
+                            }
                         }
+                    else if ( mCameraHal->msgTypeEnabled(CAMERA_MSG_RAW_IMAGE_NOTIFY) )
+                        {
+                        mNotifyCb(CAMERA_MSG_RAW_IMAGE_NOTIFY, 0, 0, mCallbackCookie);
+                        }
+
+                    mRawAvailable = true;
 
                     }
                 else if ( (CameraFrame::IMAGE_FRAME == frame->mFrameType) &&
@@ -707,6 +753,19 @@ void AppCallbackNotifier::notifyFrame()
                              ( NULL != mDataCb) )
                     {
                     Mutex::Autolock lock(mLock);
+
+                    // CTS, MTS requirements: Every 'takePicture()' call
+                    // who registers a raw callback should receive one
+                    // as well. This is  not always the case with
+                    // CameraAdapters though.
+                    if ( !mRawAvailable )
+                        {
+                        dummyRaw();
+                        }
+                    else
+                        {
+                        mRawAvailable = false;
+                        }
 
 #ifdef COPY_IMAGE_BUFFER
 
