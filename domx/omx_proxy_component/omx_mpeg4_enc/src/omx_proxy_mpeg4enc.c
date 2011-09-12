@@ -778,10 +778,10 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_ComponentDeInit(OMX_HANDLETYPE hComponent)
 		/* Cleanup internal buffers in pipe if not freed on FreeBuffer */
 		for(i=0; i<OMX_MPEG4E_NUM_INTERNAL_BUF; i++)
 		{
-			if(pProxy->gralloc_handle[pProxy->nCurBufIndex])
+			if(pProxy->gralloc_handle[i])
 			{
-				pProxy->mAllocDev->free(pProxy->mAllocDev, pProxy->gralloc_handle[pProxy->nCurBufIndex]);
-				pProxy->gralloc_handle[pProxy->nCurBufIndex] = NULL;
+				pProxy->mAllocDev->free(pProxy->mAllocDev, pProxy->gralloc_handle[i]);
+				pProxy->gralloc_handle[i] = NULL;
 			}
 		}
 
@@ -797,14 +797,13 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_ComponentDeInit(OMX_HANDLETYPE hComponent)
 		}
 
 		COLORCONVERT_close(pProxy->hCC,pCompPrv);
+		pProxy->bAndroidOpaqueFormat = OMX_FALSE;
 
 		if(pCompPrv->pCompProxyPrv != NULL)
 		{
 			TIMM_OSAL_Free(pCompPrv->pCompProxyPrv);
 			pCompPrv->pCompProxyPrv = NULL;
 		}
-
-		pProxy->bAndroidOpaqueFormat = OMX_FALSE;
 	}
 
 	eError = PROXY_ComponentDeInit(hComponent);
