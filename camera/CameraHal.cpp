@@ -1402,8 +1402,15 @@ status_t CameraHal::startPreview()
     desc.mCount = ( size_t ) required_buffer_count;
     desc.mMaxQueueable = (size_t) max_queueble_buffers;
 
-    mCameraAdapter->sendCommand(CameraAdapter::CAMERA_USE_BUFFERS_PREVIEW,
-                                ( int ) &desc);
+    ret = mCameraAdapter->sendCommand(CameraAdapter::CAMERA_USE_BUFFERS_PREVIEW,
+                                      ( int ) &desc);
+
+    if ( NO_ERROR != ret )
+        {
+        CAMHAL_LOGEB("Failed to register preview buffers: 0x%x", ret);
+        freePreviewBufs();
+        return ret;
+        }
 
     mAppCallbackNotifier->startPreviewCallbacks(mParameters, mPreviewBufs, mPreviewOffsets, mPreviewFd, mPreviewLength, required_buffer_count);
 
