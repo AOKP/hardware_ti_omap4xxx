@@ -596,9 +596,14 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
     status_t ret = NO_ERROR;
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_CONFIG_CAMOPERATINGMODETYPE camMode;
+    OMX_TI_PARAM_ZSLHISTORYLENTYPE zslHistoryLen;
     OMX_CONFIG_BOOLEANTYPE bCAC;
 
     LOG_FUNCTION_NAME;
+
+    //ZSL have 4 buffers history by default
+    OMX_INIT_STRUCT_PTR (&zslHistoryLen, OMX_TI_PARAM_ZSLHISTORYLENTYPE);
+    zslHistoryLen.nHistoryLen = 4;
 
     //CAC is disabled by default
     OMX_INIT_STRUCT_PTR (&bCAC, OMX_CONFIG_BOOLEANTYPE);
@@ -627,6 +632,7 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
             {
             CAMHAL_LOGDA("Camera mode: HIGH QUALITY_ZSL");
             camMode.eCamOperatingMode = OMX_TI_CaptureImageProfileZeroShutterLag;
+            zslHistoryLen.nHistoryLen = 6;
             }
         else if( OMXCameraAdapter::VIDEO_MODE == mode )
             {
@@ -637,6 +643,22 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
             {
             CAMHAL_LOGEA("Camera mode: INVALID mode passed!");
             return BAD_VALUE;
+            }
+
+        if(ret != -1)
+            {
+            eError =  OMX_SetParameter(mCameraAdapterParameters.mHandleComp,
+                                       ( OMX_INDEXTYPE ) OMX_TI_IndexParamZslHistoryLen,
+                                       &zslHistoryLen);
+            if ( OMX_ErrorNone != eError )
+                {
+                CAMHAL_LOGEB("Error while configuring ZSL History len 0x%x", eError);
+                ret = -1;
+                }
+            else
+                {
+                CAMHAL_LOGDA("ZSL History len configured successfully");
+                }
             }
 
         if(ret != -1)
