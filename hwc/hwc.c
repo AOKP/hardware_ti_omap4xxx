@@ -31,6 +31,10 @@
 #include <utils/Timers.h>
 #include <hardware_legacy/uevent.h>
 
+#ifndef FBIO_WAITFORVSYNC
+#define FBIO_WAITFORVSYNC	_IOW('F', 0x20, __u32)
+#endif
+
 #define min(a, b) ( { typeof(a) __a = (a), __b = (b); __a < __b ? __a : __b; } )
 #define max(a, b) ( { typeof(a) __a = (a), __b = (b); __a > __b ? __a : __b; } )
 
