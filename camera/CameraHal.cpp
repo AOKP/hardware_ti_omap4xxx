@@ -1634,7 +1634,9 @@ void CameraHal::stopPreview()
         return;
         }
 
-    if(mDisplayPaused)
+    bool imageCaptureRunning = (mCameraAdapter->getState() == CameraAdapter::CAPTURE_STATE) &&
+                                    (mCameraAdapter->getNextState() != CameraAdapter::PREVIEW_STATE);
+    if(mDisplayPaused && !imageCaptureRunning)
         {
         // Display is paused, which essentially means there is no preview active.
         // Note: this is done so that when stopPreview is called by client after
