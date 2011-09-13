@@ -224,50 +224,44 @@ void AppCallbackNotifier::errorNotify(int error)
     LOG_FUNCTION_NAME_EXIT;
 }
 
-void AppCallbackNotifier::notificationThread()
+bool AppCallbackNotifier::notificationThread()
 {
     bool shouldLive = true;
     status_t ret;
 
     LOG_FUNCTION_NAME;
 
-    while(shouldLive)
-        {
-        //CAMHAL_LOGDA("Notification Thread waiting for message");
-        ret = TIUTILS::MessageQueue::waitForMsg(&mNotificationThread->msgQ(),
-                                                &mEventQ,
-                                                &mFrameQ,
-                                                AppCallbackNotifier::NOTIFIER_TIMEOUT);
+    //CAMHAL_LOGDA("Notification Thread waiting for message");
+    ret = TIUTILS::MessageQueue::waitForMsg(&mNotificationThread->msgQ(),
+                                            &mEventQ,
+                                            &mFrameQ,
+                                            AppCallbackNotifier::NOTIFIER_TIMEOUT);
 
-        //CAMHAL_LOGDA("Notification Thread received message");
+    //CAMHAL_LOGDA("Notification Thread received message");
 
-        if(mNotificationThread->msgQ().hasMsg())
-            {
-            ///Received a message from CameraHal, process it
-            CAMHAL_LOGDA("Notification Thread received message from Camera HAL");
-            shouldLive = processMessage();
-            if(!shouldLive)
-                {
+    if (mNotificationThread->msgQ().hasMsg()) {
+        ///Received a message from CameraHal, process it
+        CAMHAL_LOGDA("Notification Thread received message from Camera HAL");
+        shouldLive = processMessage();
+        if(!shouldLive) {
                 CAMHAL_LOGDA("Notification Thread exiting.");
-                }
-            }
-        if(mEventQ.hasMsg())
-            {
-            ///Received an event from one of the event providers
-            CAMHAL_LOGDA("Notification Thread received an event from event provider (CameraAdapter)");
-            notifyEvent();
-            }
-        if(mFrameQ.hasMsg())
-            {
-            ///Received a frame from one of the frame providers
-            //CAMHAL_LOGDA("Notification Thread received a frame from frame provider (CameraAdapter)");
-            notifyFrame();
-            }
         }
+    }
 
-    CAMHAL_LOGDA("Notification Thread exited.");
+    if(mEventQ.hasMsg()) {
+        ///Received an event from one of the event providers
+        CAMHAL_LOGDA("Notification Thread received an event from event provider (CameraAdapter)");
+        notifyEvent();
+     }
+
+    if(mFrameQ.hasMsg()) {
+       ///Received a frame from one of the frame providers
+       //CAMHAL_LOGDA("Notification Thread received a frame from frame provider (CameraAdapter)");
+       notifyFrame();
+    }
+
     LOG_FUNCTION_NAME_EXIT;
-
+    return shouldLive;
 }
 
 void AppCallbackNotifier::notifyEvent()
@@ -1189,7 +1183,8 @@ AppCallbackNotifier::~AppCallbackNotifier()
     mNotificationThread->msgQ().put(&msg);
 
     //Exit and cleanup the thread
-    mNotificationThread->requestExitAndWait();
+    mNotificationThread->requestExit();
+    mNotificationThread->join();
 
     //Delete the display thread
     mNotificationThread.clear();

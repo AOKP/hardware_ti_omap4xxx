@@ -523,7 +523,7 @@ public:
     void setMeasurements(bool enable);
 
     //thread loops
-    void notificationThread();
+    bool notificationThread();
 
     ///Notification callback functions
     static void frameCallbackRelay(CameraFrame* caFrame);
@@ -568,8 +568,7 @@ public:
         NotificationThread(AppCallbackNotifier* nh)
             : Thread(false), mAppCallbackNotifier(nh) { }
         virtual bool threadLoop() {
-            mAppCallbackNotifier->notificationThread();
-            return false;
+            return mAppCallbackNotifier->notificationThread();
         }
 
         TIUTILS::MessageQueue &msgQ() { return mNotificationThreadQ;}
