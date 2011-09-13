@@ -756,7 +756,7 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
 {
     omap4_hwc_device_t *hwc_dev = (omap4_hwc_device_t *)dev;
     struct dsscomp_setup_dispc_data *dsscomp = &hwc_dev->dsscomp_data;
-    int err;
+    int err = 0;
     unsigned int i;
 
     pthread_mutex_lock(&hwc_dev->lock);
@@ -819,23 +819,26 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
 
     // LOGD("set %d layers (sgx=%d)\n", dsscomp->num_ovls, hwc_dev->use_sgx);
 
-    if (hwc_dev->use_sgx && dpy && sur) {
+    if (dpy && sur) {
         // list can be NULL which means hwc is temporarily disabled.
         // however, if dpy and sur are null it means we're turning the
         // screen off. no shall not call eglSwapBuffers() in that case.
-        if (!eglSwapBuffers((EGLDisplay)dpy, (EGLSurface)sur)) {
-            LOGE("eglSwapBuffers error");
-            err = HWC_EGL_ERROR;
-            goto err_out;
+
+        if (hwc_dev->use_sgx) {
+            if (!eglSwapBuffers((EGLDisplay)dpy, (EGLSurface)sur)) {
+                LOGE("eglSwapBuffers error");
+                err = HWC_EGL_ERROR;
+                goto err_out;
+            }
         }
-    }
 
-    //dump_dsscomp(dsscomp);
+        //dump_dsscomp(dsscomp);
 
-    err = hwc_dev->fb_dev->Post2((framebuffer_device_t *)hwc_dev->fb_dev,
+        err = hwc_dev->fb_dev->Post2((framebuffer_device_t *)hwc_dev->fb_dev,
                                  hwc_dev->buffers,
                                  hwc_dev->post2_layers,
                                  dsscomp, sizeof(*dsscomp));
+    }
 
     hwc_dev->last_ext_ovls = hwc_dev->ext_ovls;
     hwc_dev->last_int_ovls = hwc_dev->post2_layers;
