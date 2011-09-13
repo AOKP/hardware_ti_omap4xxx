@@ -1198,11 +1198,16 @@ void releaseImageBuffers(void *userData)
 {
     LOG_FUNCTION_NAME;
 
+// Make releaseImageBuffers a no-op for now because it is racing against AppCallbackNotifier
+// in the home screen use-case. Image capture buffers are anyways reallocated on subsequent
+// captures and also released as part of final camera hal cleanup
+#if 0
     if ( NULL != userData )
         {
         CameraHal *c = reinterpret_cast<CameraHal *>(userData);
         c->freeImageBufs();
         }
+#endif
 
     LOG_FUNCTION_NAME_EXIT;
 }
@@ -2665,9 +2670,6 @@ CameraHal::~CameraHal()
     /// Free the callback notifier
     mAppCallbackNotifier.clear();
 
-    /// Free the memory manager
-    mMemoryManager.clear();
-
     /// Free the display adapter
     mDisplayAdapter.clear();
 
@@ -2678,6 +2680,11 @@ CameraHal::~CameraHal()
 
         mCameraAdapter = NULL;
     }
+
+    freeImageBufs();
+
+    /// Free the memory manager
+    mMemoryManager.clear();
 
     LOG_FUNCTION_NAME_EXIT;
 }
@@ -3232,8 +3239,6 @@ void CameraHal::deinitialize()
     if ( mPreviewEnabled || mDisplayPaused ) {
         forceStopPreview();
     }
-
-    freeImageBufs();
 
     mSetPreviewWindowCalled = false;
 
