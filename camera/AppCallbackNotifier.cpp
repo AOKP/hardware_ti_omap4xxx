@@ -53,6 +53,9 @@ void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFr
 
     LOG_FUNCTION_NAME;
 
+    camera_memory_t* picture = NULL;
+
+    {
     Mutex::Autolock lock(mLock);
 
     encoded_mem = (camera_memory_t*) cookie1;
@@ -60,8 +63,6 @@ void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFr
     // TODO(XXX): Need to temporarily allocate another chunk of memory and then memcpy
     //            encoded buffer since MemoryHeapBase and MemoryBase are passed as
     //            one camera_memory_t structure. How fix this?
-
-    camera_memory_t* picture = NULL;
 
     if(encoded_mem && encoded_mem->data) {
         if (cookie2) {
@@ -86,7 +87,11 @@ void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFr
             }
         }
     }
+    }
 
+    // Send the callback to the application only if the notifier is started and the message is enabled
+    if((mNotifierState==AppCallbackNotifier::NOTIFIER_STARTED)
+                && (mCameraHal->msgTypeEnabled(CAMERA_MSG_COMPRESSED_IMAGE)))
     {
         Mutex::Autolock lock(mBurstLock);
 #if 0 //TODO: enable burst mode later
@@ -628,20 +633,15 @@ void AppCallbackNotifier::notifyFrame()
     LOG_FUNCTION_NAME;
 
     if(!mFrameQ.isEmpty())
-        {
-    mFrameQ.get(&msg);
-        }
+    {
+        mFrameQ.get(&msg);
+    }
     else
-        {
-        return;
-        }
-
-    bool ret = true;
-
-    if(mNotifierState != AppCallbackNotifier::NOTIFIER_STARTED)
     {
         return;
     }
+
+    bool ret = true;
 
     frame = NULL;
     switch(msg.command)
@@ -663,7 +663,6 @@ void AppCallbackNotifier::notifyFrame()
                     if ( mCameraHal->msgTypeEnabled(CAMERA_MSG_RAW_IMAGE) )
                         {
 #ifdef COPY_IMAGE_BUFFER
-
                         camera_memory_t* raw_picture = mRequestMemory(-1, frame->mLength, 1, NULL);
 
                         if ( NULL != raw_picture )
@@ -704,7 +703,6 @@ void AppCallbackNotifier::notifyFrame()
                           (NULL != mDataCb) &&
                           (CameraFrame::ENCODE_RAW_YUV422I_TO_JPEG & frame->mQuirks) )
                     {
-                    Mutex::Autolock lock(mLock);
 
                     int encode_quality = 100;
                     const char* valstr = NULL;
@@ -761,7 +759,14 @@ void AppCallbackNotifier::notifyFrame()
                              ( NULL != mCameraHal ) &&
                              ( NULL != mDataCb) )
                     {
+                    camera_memory_t* raw_picture = NULL;
+                    {
                     Mutex::Autolock lock(mLock);
+
+                    if(mNotifierState != AppCallbackNotifier::NOTIFIER_STARTED)
+                    {
+                        return;
+                    }
 
                     // CTS, MTS requirements: Every 'takePicture()' call
                     // who registers a raw callback should receive one
@@ -778,7 +783,7 @@ void AppCallbackNotifier::notifyFrame()
 
 #ifdef COPY_IMAGE_BUFFER
 
-                        camera_memory_t* raw_picture = mRequestMemory(-1, frame->mLength, 1, NULL);
+                        raw_picture = mRequestMemory(-1, frame->mLength, 1, NULL);
 
                         if(raw_picture)
                             {
@@ -800,7 +805,10 @@ void AppCallbackNotifier::notifyFrame()
                         // will be able to execute the client request successfully.
                         mFrameProvider->returnFrame(frame->mBuffer,
                                                     ( CameraFrame::FrameType ) frame->mFrameType);
+                        }
 
+                        if((mNotifierState==AppCallbackNotifier::NOTIFIER_STARTED)
+                            && (mCameraHal->msgTypeEnabled(CAMERA_MSG_COMPRESSED_IMAGE)))
                         {
                             Mutex::Autolock lock(mBurstLock);
 #if 0 //TODO: enable burst mode later
@@ -879,9 +887,16 @@ void AppCallbackNotifier::notifyFrame()
                              ( NULL != mCameraHal ) &&
                              ( NULL != mDataCb) &&
                              ( NULL != mNotifyCb)) {
-                    Mutex::Autolock lock(mLock);
                     //When enabled, measurement data is sent instead of video data
                     if ( !mMeasurementEnabled ) {
+                        {
+                        Mutex::Autolock lock(mLock);
+
+                        if(mNotifierState != AppCallbackNotifier::NOTIFIER_STARTED)
+                        {
+                            return;
+                        }
+
                         if (!mPreviewMemory || !frame->mBuffer) {
                             CAMHAL_LOGDA("Error! One of the buffer is NULL");
                             break;
@@ -911,8 +926,11 @@ void AppCallbackNotifier::notifyFrame()
                                        frame->mLength,
                                        mPreviewPixelFormat);
                         }
+                        }
 
-                        if (mCameraHal->msgTypeEnabled(CAMERA_MSG_POSTVIEW_FRAME)) {
+                        //Send a callback only if the notifier is started and snapshot message is enabled
+                        if ((mNotifierState==AppCallbackNotifier::NOTIFIER_STARTED)
+                                    && (mCameraHal->msgTypeEnabled(CAMERA_MSG_POSTVIEW_FRAME))) {
                             ///Give preview callback to app
                             mDataCb(CAMERA_MSG_POSTVIEW_FRAME, mPreviewMemory, mPreviewBufCount, NULL, mCallbackCookie);
                         }
@@ -923,13 +941,23 @@ void AppCallbackNotifier::notifyFrame()
 
                     mFrameProvider->returnFrame(frame->mBuffer,
                                                 ( CameraFrame::FrameType ) frame->mFrameType);
-                } else if ( ( CameraFrame::PREVIEW_FRAME_SYNC== frame->mFrameType ) &&
+                }
+                else if ( ( CameraFrame::PREVIEW_FRAME_SYNC== frame->mFrameType ) &&
                             ( NULL != mCameraHal ) &&
                             ( NULL != mDataCb) &&
                             ( mCameraHal->msgTypeEnabled(CAMERA_MSG_PREVIEW_FRAME)) ) {
-                    Mutex::Autolock lock(mLock);
+
                     //When enabled, measurement data is sent instead of video data
                     if ( !mMeasurementEnabled ) {
+                        {
+                        Mutex::Autolock lock(mLock);
+
+
+                        if(mNotifierState != AppCallbackNotifier::NOTIFIER_STARTED)
+                        {
+                            return;
+                        }
+
                         if (!mPreviewMemory || !frame->mBuffer) {
                             CAMHAL_LOGDA("Error! One of the buffer is NULL");
                             break;
@@ -959,16 +987,22 @@ void AppCallbackNotifier::notifyFrame()
                                        frame->mLength,
                                        mPreviewPixelFormat);
                         }
+                        }
 
-                        // Give preview callback to app
-                        mDataCb(CAMERA_MSG_PREVIEW_FRAME, mPreviewMemory, mPreviewBufCount, NULL, mCallbackCookie);
+                        //Send a callback only if the notifier is started
+                        if(mNotifierState==AppCallbackNotifier::NOTIFIER_STARTED)
+                        {
+                            // Give preview callback to app
+                            mDataCb(CAMERA_MSG_PREVIEW_FRAME, mPreviewMemory, mPreviewBufCount, NULL, mCallbackCookie);
+                        }
 
                         // increment for next buffer
                         mPreviewBufCount = (mPreviewBufCount+1) % AppCallbackNotifier::MAX_BUFFERS;
                     }
                     mFrameProvider->returnFrame(frame->mBuffer,
                                                 ( CameraFrame::FrameType ) frame->mFrameType);
-                } else if ( ( CameraFrame::FRAME_DATA_SYNC == frame->mFrameType ) &&
+                }
+                else if ( ( CameraFrame::FRAME_DATA_SYNC == frame->mFrameType ) &&
                             ( NULL != mCameraHal ) &&
                             ( NULL != mDataCb) &&
                             ( mCameraHal->msgTypeEnabled(CAMERA_MSG_PREVIEW_FRAME)) ) {
@@ -1360,7 +1394,10 @@ status_t AppCallbackNotifier::stopPreviewCallbacks()
 
     mFrameProvider->disableFrameNotification(CameraFrame::PREVIEW_FRAME_SYNC);
 
+    {
+    Mutex::Autolock lock(mLock);
     mPreviewMemory->release(mPreviewMemory);
+    }
 
     mPreviewing = false;
 
@@ -1608,9 +1645,12 @@ status_t AppCallbackNotifier::stop()
         LOG_FUNCTION_NAME_EXIT;
         return ALREADY_EXISTS;
         }
+    {
+    Mutex::Autolock lock(mLock);
 
     mNotifierState = AppCallbackNotifier::NOTIFIER_STOPPED;
     CAMHAL_LOGDA(" --> AppCallbackNotifier NOTIFIER_STOPPED \n");
+    }
 
     LOG_FUNCTION_NAME_EXIT;
     return NO_ERROR;
