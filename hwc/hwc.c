@@ -84,6 +84,8 @@ struct omap4_hwc_device {
     __u16 ext_height;
     __u32 ext_xres;
     __u32 ext_yres;
+    __u32 last_xres_used;
+    __u32 last_yres_used;
     float m[2][3];
     IMG_framebuffer_device_public_t *fb_dev;
     struct dsscomp_setup_dispc_data dsscomp_data;
@@ -569,6 +571,103 @@ static int omap4_hwc_is_valid_layer(omap4_hwc_device_t *hwc_dev,
     return omap4_hwc_can_scale_layer(hwc_dev, layer, handle);
 }
 
+static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres, __u32 yres)
+{
+    struct _qdis {
+        struct dsscomp_display_info dis;
+        struct dsscomp_videomode modedb[16];
+    } d = { .dis = { .ix = 1 } };
+
+    d.dis.modedb_len = sizeof(d.modedb) / sizeof(*d.modedb);
+    int ret = ioctl(hwc_dev->dsscomp_fd, DSSCOMP_QUERY_DISPLAY, &d);
+    if (ret)
+        return ret;
+
+    __u32 i, best = ~0, best_score = 0;
+    hwc_dev->ext_width = d.dis.width_in_mm;
+    hwc_dev->ext_height = d.dis.height_in_mm;
+    hwc_dev->ext_xres = d.dis.timings.x_res;
+    hwc_dev->ext_yres = d.dis.timings.y_res;
+    __u32 ext_fb_xres, ext_fb_yres;
+    for (i = 0; i < d.dis.modedb_len; i++) {
+        __u32 score = 0;
+        __u32 area = xres * yres;
+        __u32 mode_area = d.modedb[i].xres * d.modedb[i].yres;
+        __u32 ext_width = d.dis.width_in_mm;
+        __u32 ext_height = d.dis.height_in_mm;
+
+        if (d.modedb[i].flag & FB_FLAG_RATIO_4_3) {
+            ext_width = 4;
+            ext_height = 3;
+        } else if (d.modedb[i].flag & FB_FLAG_RATIO_16_9) {
+            ext_width = 16;
+            ext_height = 9;
+        }
+
+        get_max_dimensions(xres, yres, 1, 1, d.modedb[i].xres, d.modedb[i].yres,
+                           ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
+
+        if (!omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
+                                 hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits))
+            continue;
+
+        /* prefer CEA modes */
+        if (d.modedb[i].flag & (FB_FLAG_RATIO_4_3 | FB_FLAG_RATIO_16_9))
+            score |= (1 << 30);
+
+        /* prefer to upscale (1% tolerance) */
+        if (ext_fb_xres >= xres * 99 / 100 && ext_fb_yres >= yres * 99 / 100)
+            score |= (1 << 29);
+
+        /* pick smallest leftover area */
+        score |= (1 << 24) * ((16 * ext_fb_xres * ext_fb_yres + (mode_area >> 1)) / mode_area);
+
+        /* pick closest screen size */
+        if (ext_fb_xres * ext_fb_yres > area)
+            score |= (1 << 19) * (16 * area / ext_fb_xres / ext_fb_yres);
+        else
+            score |= (1 << 19) * (16 * ext_fb_xres * ext_fb_yres / area);
+
+        /* pick highest frame rate */
+        score |= (1 << 11) * d.modedb[i].refresh;
+
+        LOGD("#%d: %dx%d %dHz", i, d.modedb[i].xres, d.modedb[i].yres, d.modedb[i].refresh);
+        if (debug)
+            LOGD("  score=%u adj.res=%dx%d", score, ext_fb_xres, ext_fb_yres);
+        if (best_score < score) {
+            hwc_dev->ext_width = ext_width;
+            hwc_dev->ext_height = ext_height;
+            hwc_dev->ext_xres = d.modedb[i].xres;
+            hwc_dev->ext_yres = d.modedb[i].yres;
+            best = i;
+            best_score = score;
+        }
+    }
+    if (~best) {
+        struct dsscomp_setup_display_data sdis = { .ix = 1, };
+        sdis.mode = d.dis.modedb[best];
+        LOGD("picking #%d", best);
+        ioctl(hwc_dev->dsscomp_fd, DSSCOMP_SETUP_DISPLAY, &sdis);
+    } else {
+        __u32 ext_width = d.dis.width_in_mm;
+        __u32 ext_height = d.dis.height_in_mm;
+        __u32 ext_fb_xres, ext_fb_yres;
+
+        get_max_dimensions(xres, yres, 1, 1, d.dis.timings.x_res, d.dis.timings.y_res,
+                           ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
+        if (!omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
+                                 hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits)) {
+            LOGE("DSS scaler cannot support HDMI cloning");
+            return -1;
+        }
+    }
+    hwc_dev->last_xres_used = xres;
+    hwc_dev->last_yres_used = yres;
+    if (d.dis.channel == OMAP_DSS_CHANNEL_DIGIT)
+        hwc_dev->ext |= EXT_TV;
+    return 0;
+}
+
 struct counts {
     unsigned int possible_overlay_layers;
     unsigned int composited_layers;
@@ -843,8 +942,12 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             ix_front = dsscomp->num_ovls - 1;
 
             /* reset mode if we are coming from docking */
-            if (hwc_dev->ext != hwc_dev->ext_last)
+            if (hwc_dev->ext != hwc_dev->ext_last) {
+                __u32 xres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
+                __u32 yres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.width : hwc_dev->fb_dev->base.height;
+                omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres);
                 set_ext_matrix(hwc_dev, hwc_dev->fb_dev->base.width, hwc_dev->fb_dev->base.height);
+            }
         }
 
         for (ix = ix_back; hwc_dev->ext && ix >= 0 && ix <= ix_front; ix++) {
@@ -858,6 +961,17 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             o->ba = ix;
 
             if (hwc_dev->ext & EXT_DOCK) {
+                /* adjust hdmi mode based on resolution */
+                if (o->cfg.crop.w != hwc_dev->last_xres_used ||
+                    o->cfg.crop.h != hwc_dev->last_yres_used) {
+                    LOGD("set up HDMI for %d*%d\n", o->cfg.crop.w, o->cfg.crop.h);
+                    if (omap4_hwc_set_best_hdmi_mode(hwc_dev, o->cfg.crop.w, o->cfg.crop.h)) {
+                        o->cfg.enabled = 0;
+                        hwc_dev->ext = 0;
+                        continue;
+                    }
+                }
+
                 /* full screen video */
                 o->cfg.win.x = 0;
                 o->cfg.win.y = 0;
@@ -1093,108 +1207,22 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
     pthread_mutex_lock(&hwc_dev->lock);
     hwc_dev->ext = 0;
     if (state) {
-        struct _qdis {
-            struct dsscomp_display_info dis;
-            struct dsscomp_videomode modedb[16];
-        } d = { .dis = { .ix = 1 } };
-        d.dis.modedb_len = sizeof(d.modedb) / sizeof(*d.modedb);
-        int ret = ioctl(hwc_dev->dsscomp_fd, DSSCOMP_QUERY_DISPLAY, &d);
-        if (!ret) {
-            __u32 i, best = ~0, best_score = 0;
-            hwc_dev->ext = EXT_ON | 3;
-            hwc_dev->ext_width = d.dis.width_in_mm;
-            hwc_dev->ext_height = d.dis.height_in_mm;
-            hwc_dev->ext_xres = d.dis.timings.x_res;
-            hwc_dev->ext_yres = d.dis.timings.y_res;
-            for (i = 0; i < d.dis.modedb_len; i++) {
-                __u32 score = 0;
-                __u32 fb_xres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
-                __u32 fb_yres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.width : hwc_dev->fb_dev->base.height;
-                __u32 fb_area = fb_xres * fb_yres;
-                __u32 mode_area = d.modedb[i].xres * d.modedb[i].yres;
-                __u32 ext_width = d.dis.width_in_mm;
-                __u32 ext_height = d.dis.height_in_mm;
-                __u32 ext_fb_xres, ext_fb_yres;
+        hwc_dev->ext = EXT_ON | 3;
+        __u32 xres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
+        __u32 yres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.width : hwc_dev->fb_dev->base.height;
+        int res = omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres);
+        if (!res) {
+            ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
 
-                if (d.modedb[i].flag & FB_FLAG_RATIO_4_3) {
-                    ext_width = 4;
-                    ext_height = 3;
-                } else if (d.modedb[i].flag & FB_FLAG_RATIO_16_9) {
-                    ext_width = 16;
-                    ext_height = 9;
-                }
-
-                get_max_dimensions(fb_xres, fb_yres, 1, 1, d.modedb[i].xres, d.modedb[i].yres,
-                                   ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
-
-                if (!omap4_hwc_can_scale(fb_xres, fb_yres, ext_fb_xres, ext_fb_yres,
-                                         hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits))
-                    continue;
-
-                /* prefer CEA modes */
-                if (d.modedb[i].flag & (FB_FLAG_RATIO_4_3 | FB_FLAG_RATIO_16_9))
-                    score |= (1 << 30);
-
-                /* prefer to upscale (1% tolerance) */
-                if (ext_fb_xres >= fb_xres * 99 / 100 && ext_fb_yres >= fb_yres * 99 / 100)
-                    score |= (1 << 29);
-
-                /* pick smallest leftover area */
-                score |= (1 << 24) * ((16 * ext_fb_xres * ext_fb_yres + (mode_area >> 1)) / mode_area);
-
-                /* pick closest screen size */
-                if (ext_fb_xres * ext_fb_yres > fb_area)
-                    score |= (1 << 19) * (16 * fb_area / ext_fb_xres / ext_fb_yres);
-                else
-                    score |= (1 << 19) * (16 * ext_fb_xres * ext_fb_yres / fb_area);
-
-                /* pick highest frame rate */
-                score |= (1 << 11) * d.modedb[i].refresh;
-
-                LOGD("#%d: %dx%d %dHz", i, d.modedb[i].xres, d.modedb[i].yres, d.modedb[i].refresh);
-                if (debug)
-                    LOGD("  score=%u adj.res=%dx%d", score, ext_fb_xres, ext_fb_yres);
-                if (best_score < score) {
-                    hwc_dev->ext_width = ext_width;
-                    hwc_dev->ext_height = ext_height;
-                    hwc_dev->ext_xres = d.modedb[i].xres;
-                    hwc_dev->ext_yres = d.modedb[i].yres;
-                    best = i;
-                    best_score = score;
-                }
-            }
-            if (~best) {
-                struct dsscomp_setup_display_data sdis = { .ix = 1, };
-                sdis.mode = d.dis.modedb[best];
-                LOGD("picking #%d", best);
-                ioctl(hwc_dev->dsscomp_fd, DSSCOMP_SETUP_DISPLAY, &sdis);
-            } else {
-                __u32 fb_xres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
-                __u32 fb_yres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.width : hwc_dev->fb_dev->base.height;
-                __u32 ext_width = d.dis.width_in_mm;
-                __u32 ext_height = d.dis.height_in_mm;
-                __u32 ext_fb_xres, ext_fb_yres;
-
-                get_max_dimensions(fb_xres, fb_yres, 1, 1, d.dis.timings.x_res, d.dis.timings.y_res,
-                                   ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
-                if (!omap4_hwc_can_scale(fb_xres, fb_yres, ext_fb_xres, ext_fb_yres,
-                                         hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits)) {
-                    LOGE("DSS scaler cannot support HDMI cloning");
-                    hwc_dev->ext = 0;
-                }
-            }
-
-            if (hwc_dev->ext) {
-                if (d.dis.channel == OMAP_DSS_CHANNEL_DIGIT)
-                    hwc_dev->ext |= EXT_TV;
-                ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
-            }
+            /* FIXME set up hwc_dev->ext based on mirroring needs */
+            char value[PROPERTY_VALUE_MAX];
+            property_get("debug.hwc.ext", value, "0");
+            hwc_dev->ext |= atoi(value) & EXT_DOCK;
+            if (hwc_dev->ext & EXT_DOCK)
+                hwc_dev->ext &= ~EXT_TRANSFORM;
+        } else {
+            hwc_dev->ext = 0;
         }
-
-        /* FIXME set up hwc_dev->ext based on mirroring needs */
-        char value[PROPERTY_VALUE_MAX];
-        property_get("debug.hwc.ext", value, "0");
-        hwc_dev->ext |= atoi(value) & EXT_DOCK;
     }
     omap4_hwc_create_ext_matrix(hwc_dev);
     LOGI("external display changed (state=%d, on=%d, dock=%d, tv=%d, trform=%ddeg%s)", state,
