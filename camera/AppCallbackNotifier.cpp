@@ -199,6 +199,15 @@ void AppCallbackNotifier::errorNotify(int error)
 
     CAMHAL_LOGEB("AppCallbackNotifier received error %d", error);
 
+    // If it is a fatal error abort here!
+    if((error == CAMERA_ERROR_FATAL) || (error == CAMERA_ERROR_HARD)) {
+        //We kill media server if we encounter these errors as there is
+        //no point continuing and apps also don't handle errors other
+        //than media server death always.
+        abort();
+        return;
+    }
+
     if (  ( NULL != mCameraHal ) &&
           ( NULL != mNotifyCb ) &&
           ( mCameraHal->msgTypeEnabled(CAMERA_MSG_ERROR) ) )

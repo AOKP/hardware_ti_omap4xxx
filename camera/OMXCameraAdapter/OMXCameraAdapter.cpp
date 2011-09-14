@@ -2548,7 +2548,7 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterEventHandler(OMX_IN OMX_HANDLETY
                       }
                   }
                 ///Report Error to App
-                mErrorNotifier->errorNotify(CAMERA_ERROR_UNKNOWN);
+                mErrorNotifier->errorNotify(CAMERA_ERROR_FATAL);
               }
             break;
 
@@ -3137,7 +3137,7 @@ bool OMXCameraAdapter::CommandHandler::Handler()
             errorNotify = ( ErrorNotifier * ) msg.arg1;
             if ( NULL != errorNotify )
                 {
-                errorNotify->errorNotify(CAMERA_ERROR_UNKNOWN);
+                errorNotify->errorNotify(CAMERA_ERROR_HARD);
                 }
             }
         }
@@ -3217,15 +3217,15 @@ OMXCameraAdapter::~OMXCameraAdapter()
     //Return to OMX Loaded state
     switchToLoaded();
 
-    ///Free the handle for the Camera component
-    if(mCameraAdapterParameters.mHandleComp)
-        {
-        OMX_FreeHandle(mCameraAdapterParameters.mHandleComp);
-        }
-
     ///De-init the OMX
     if( (mComponentState==OMX_StateLoaded) || (mComponentState==OMX_StateInvalid))
         {
+        ///Free the handle for the Camera component
+        if(mCameraAdapterParameters.mHandleComp)
+            {
+            OMX_FreeHandle(mCameraAdapterParameters.mHandleComp);
+            }
+
         OMX_Deinit();
         }
 

@@ -285,6 +285,13 @@ class CameraFrame
     ///@todo add other member vars like  stride etc
 };
 
+enum CameraHalError
+{
+    CAMERA_ERROR_FATAL = 0x1, //Fatal errors can only be recovered by restarting media server
+    CAMERA_ERROR_HARD = 0x2,  // Hard errors are hardware hangs that may be recoverable by resetting the hardware internally within the adapter
+    CAMERA_ERROR_SOFT = 0x4, // Soft errors are non fatal errors that can be recovered from without needing to stop use-case
+};
+
 ///Common Camera Hal Event class which is visible to CameraAdapter,DisplayAdapter and AppCallbackNotifier
 ///@todo Rename this class to CameraEvent
 class CameraHalEvent
