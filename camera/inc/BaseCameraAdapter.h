@@ -152,6 +152,7 @@ protected:
     //A couple of helper functions
     void setFrameRefCount(void* frameBuf, CameraFrame::FrameType frameType, int refCount);
     int getFrameRefCount(void* frameBuf, CameraFrame::FrameType frameType);
+    int setInitFrameRefCount(void* buf, unsigned int mask);
 
     enum FrameState {
         STOPPED = 0,

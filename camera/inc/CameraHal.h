@@ -254,6 +254,7 @@ class CameraFrame
     mAlignment(0),
     mFd(0),
     mLength(0),
+    mFrameMask(0),
     mQuirks(0) {}
 
     //copy constructor
@@ -269,6 +270,7 @@ class CameraFrame
     mAlignment(frame.mAlignment),
     mFd(frame.mFd),
     mLength(frame.mLength),
+    mFrameMask(frame.mFrameMask),
     mQuirks(frame.mQuirks) {}
 
     void *mCookie;
@@ -281,6 +283,7 @@ class CameraFrame
     unsigned int mAlignment;
     int mFd;
     size_t mLength;
+    unsigned mFrameMask;
     unsigned int mQuirks;
     ///@todo add other member vars like  stride etc
 };

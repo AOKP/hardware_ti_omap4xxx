@@ -2806,6 +2806,8 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
     BaseCameraAdapter::getState(state);
     BaseCameraAdapter::getNextState(nextState);
     sp<CameraFDResult> fdResult = NULL;
+    unsigned int mask = 0xFFFF;
+    CameraFrame cameraFrame;
 
     res1 = res2 = NO_ERROR;
     pPortParam = &(mCameraAdapterParameters.mCameraPortParams[pBuffHeader->nOutputPortIndex]);
@@ -2841,67 +2843,46 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             }
 
         ///Prepare the frames to be sent - initialize CameraFrame object and reference count
-        CameraFrame cameraFrameVideo, cameraFramePreview;
-        if ( mRecording )
-            {
-            res1 = initCameraFrame(cameraFrameVideo,
-                                   pBuffHeader,
-                                   CameraFrame::VIDEO_FRAME_SYNC,
-                                   pPortParam);
-            }
-
         if( mWaitingForSnapshot &&  (mCapturedFrames > 0) )
             {
             typeOfFrame = CameraFrame::SNAPSHOT_FRAME;
+            mask = (unsigned int)CameraFrame::SNAPSHOT_FRAME;
             }
         else
             {
-            typeOfFrame = CameraFrame::PREVIEW_FRAME_SYNC;
+              typeOfFrame = CameraFrame::PREVIEW_FRAME_SYNC;
+              mask = (unsigned int)CameraFrame::PREVIEW_FRAME_SYNC;
+              if (mRecording)
+                {
+                  mask |= (unsigned int)CameraFrame::VIDEO_FRAME_SYNC;
+                }
             }
 
         LOGV("FBD pBuffer = 0x%x", pBuffHeader->pBuffer);
 
-        res2 = initCameraFrame(cameraFramePreview,
-                               pBuffHeader,
-                               typeOfFrame,
-                               pPortParam);
-
-        stat |= res1 | res2;
-
-        if ( mRecording )
-            {
-            res1  = sendFrame(cameraFrameVideo);
-            }
-
         if( mWaitingForSnapshot )
-            {
+          {
             mSnapshotCount++;
 
             if ( (mSnapshotCount == 1) &&
                  ((HIGH_SPEED == mCapMode) || (VIDEO_MODE == mCapMode)) )
-                {
+              {
                 notifyShutterSubscribers();
-                }
-            }
+              }
+          }
 
-        res2 = sendFrame(cameraFramePreview);
-
-        stat |= ( ( NO_ERROR == res1 ) || ( NO_ERROR == res2 ) ) ? ( ( int ) NO_ERROR ) : ( -1 );
+        stat = sendCallBacks(cameraFrame, pBuffHeader, mask, pPortParam);
 
         }
     else if( pBuffHeader->nOutputPortIndex == OMX_CAMERA_PORT_VIDEO_OUT_MEASUREMENT )
         {
         typeOfFrame = CameraFrame::FRAME_DATA_SYNC;
-        CameraFrame cameraFrame;
-        stat |= initCameraFrame(cameraFrame,
-                                pBuffHeader,
-                                typeOfFrame,
-                                pPortParam);
-        stat |= sendFrame(cameraFrame);
+        mask = (unsigned int)CameraFrame::FRAME_DATA_SYNC;
+
+        stat = sendCallBacks(cameraFrame, pBuffHeader, mask, pPortParam);
        }
     else if( pBuffHeader->nOutputPortIndex == OMX_CAMERA_PORT_IMAGE_OUT_IMAGE )
         {
-        CameraFrame cameraFrame;
         OMX_COLOR_FORMATTYPE pixFormat;
         const char *valstr = NULL;
 
@@ -2911,6 +2892,7 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
         if ( OMX_COLOR_FormatUnused == pixFormat )
             {
             typeOfFrame = CameraFrame::IMAGE_FRAME;
+            mask = (unsigned int) CameraFrame::IMAGE_FRAME;
             }
         else if ( pixFormat == OMX_COLOR_FormatCbYCrY &&
                   ((valstr && !strcmp(valstr, CameraParameters::PIXEL_FORMAT_JPEG)) ||
@@ -2919,6 +2901,7 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             // signals to callbacks that this needs to be coverted to jpeg
             // before returning to framework
             typeOfFrame = CameraFrame::IMAGE_FRAME;
+            mask = (unsigned int) CameraFrame::IMAGE_FRAME;
             cameraFrame.mQuirks |= CameraFrame::ENCODE_RAW_YUV422I_TO_JPEG;
 
             // populate exif data and pass to subscribers via quirk
@@ -2929,9 +2912,10 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             cameraFrame.mCookie2 = (void*) exif;
             }
         else
-            {
+          {
             typeOfFrame = CameraFrame::RAW_FRAME;
-            }
+            mask = (unsigned int) CameraFrame::RAW_FRAME;
+          }
 
             pPortParam->mImageType = typeOfFrame;
 
@@ -2964,11 +2948,8 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
 
         mCapturedFrames--;
 
-        stat |= initCameraFrame(cameraFrame,
-                                pBuffHeader,
-                                typeOfFrame,
-                                pPortParam);
-        stat |= sendFrame(cameraFrame);
+        stat = sendCallBacks(cameraFrame, pBuffHeader, mask, pPortParam);
+
         }
     else
         {
@@ -3045,6 +3026,50 @@ status_t OMXCameraAdapter::sendFrame(CameraFrame &frame)
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
+}
+
+status_t OMXCameraAdapter::sendCallBacks(CameraFrame frame, OMX_IN OMX_BUFFERHEADERTYPE *pBuffHeader, unsigned int mask, OMXCameraPortParameters *port)
+{
+  status_t ret = NO_ERROR;
+
+  LOG_FUNCTION_NAME;
+
+  if ( NULL == port)
+    {
+      CAMHAL_LOGEA("Invalid portParam");
+      return -EINVAL;
+    }
+
+  if ( NULL == pBuffHeader )
+    {
+      CAMHAL_LOGEA("Invalid Buffer header");
+      return -EINVAL;
+    }
+
+  Mutex::Autolock lock(mSubscriberLock);
+
+  //frame.mFrameType = typeOfFrame;
+  frame.mFrameMask = mask;
+  frame.mBuffer = pBuffHeader->pBuffer;
+  frame.mLength = pBuffHeader->nFilledLen;
+  frame.mAlignment = port->mStride;
+  frame.mOffset = pBuffHeader->nOffset;
+  frame.mWidth = port->mWidth;
+  frame.mHeight = port->mHeight;
+
+  if ( onlyOnce && mRecording )
+    {
+      mTimeSourceDelta = (pBuffHeader->nTimeStamp * 1000) - systemTime(SYSTEM_TIME_MONOTONIC);
+      onlyOnce = false;
+    }
+
+  frame.mTimestamp = (pBuffHeader->nTimeStamp * 1000) - mTimeSourceDelta;
+  setInitFrameRefCount(frame.mBuffer, mask);
+  ret = sendFrameToSubscribers(&frame);
+
+  LOG_FUNCTION_NAME_EXIT;
+
+  return ret;
 }
 
 status_t OMXCameraAdapter::initCameraFrame( CameraFrame &frame,

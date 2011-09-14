@@ -1312,7 +1312,7 @@ status_t OMXCameraAdapter::apply3Asettings( Gen3A_settings& Gen3A )
                   {
                     ret |= setMeteringAreas(Gen3A);
                   }
-
+                  break;
                 default:
                     CAMHAL_LOGEB("this setting (0x%x) is still not supported in CameraAdapter ",
                                  currSett);
