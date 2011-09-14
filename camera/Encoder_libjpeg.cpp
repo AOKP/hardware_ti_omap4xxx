@@ -97,26 +97,63 @@ libjpeg_destination_mgr::libjpeg_destination_mgr(uint8_t* input, int size) {
 /* private static functions */
 
 static void uyvy_to_yuv(uint8_t* dst, uint32_t* src, int width) {
-    // TODO(XXX): optimize later
-    while ((width-=2) >= 0) {
-        uint8_t u0 = (src[0] >> 0) & 0xFF;
-        uint8_t y0 = (src[0] >> 8) & 0xFF;
-        uint8_t v0 = (src[0] >> 16) & 0xFF;
-        uint8_t y1 = (src[0] >> 24) & 0xFF;
-        dst[0] = y0;
-        dst[1] = u0;
-        dst[2] = v0;
-        dst[3] = y1;
-        dst[4] = u0;
-        dst[5] = v0;
-        dst += 6;
-        src++;
+    if (!dst || !src) {
+        return;
+    }
+
+    if (width % 2) {
+        return; // not supporting odd widths
+    }
+
+    // currently, neon routine only supports multiple of 16 width
+    if (width % 16) {
+        while ((width-=2) >= 0) {
+            uint8_t u0 = (src[0] >> 0) & 0xFF;
+            uint8_t y0 = (src[0] >> 8) & 0xFF;
+            uint8_t v0 = (src[0] >> 16) & 0xFF;
+            uint8_t y1 = (src[0] >> 24) & 0xFF;
+            dst[0] = y0;
+            dst[1] = u0;
+            dst[2] = v0;
+            dst[3] = y1;
+            dst[4] = u0;
+            dst[5] = v0;
+            dst += 6;
+            src++;
+        }
+    } else {
+        int n = width;
+        asm volatile (
+        "   pld [%[src], %[src_stride], lsl #2]                         \n\t"
+        "   cmp %[n], #16                                               \n\t"
+        "   blt 5f                                                      \n\t"
+        "0: @ 16 pixel swap                                             \n\t"
+        "   vld2.8  {q0, q1} , [%[src]]! @ q0 = uv q1 = y               \n\t"
+        "   vuzp.8 q0, q2                @ d1 = u d5 = v                \n\t"
+        "   vmov d1, d0                  @ q0 = u0u1u2..u0u1u2...       \n\t"
+        "   vmov d5, d4                  @ q2 = v0v1v2..v0v1v2...       \n\t"
+        "   vzip.8 d0, d1                @ q0 = u0u0u1u1u2u2...         \n\t"
+        "   vzip.8 d4, d5                @ q2 = v0v0v1v1v2v2...         \n\t"
+        "   vswp q0, q1                  @ now q0 = y q1 = u q2 = v     \n\t"
+        "   vst3.8  {d0,d2,d4},[%[dst]]!                                \n\t"
+        "   vst3.8  {d1,d3,d5},[%[dst]]!                                \n\t"
+        "   sub %[n], %[n], #16                                         \n\t"
+        "   cmp %[n], #16                                               \n\t"
+        "   bge 0b                                                      \n\t"
+        "5: @ end                                                       \n\t"
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+        "   vmov s0,s0  @ add noop for errata item                      \n\t"
+#endif
+        : [dst] "+r" (dst), [src] "+r" (src), [n] "+r" (n)
+        : [src_stride] "r" (width)
+        : "cc", "memory", "q0", "q1", "q2"
+        );
     }
 }
 
 /* public static functions */
 const char* ExifElementsTable::degreesToExifOrientation(const char* degrees) {
-    for (int i = 0; i < ARRAY_SIZE(degress_to_exif_lut); i++) {
+    for (unsigned int i = 0; i < ARRAY_SIZE(degress_to_exif_lut); i++) {
         if (!strcmp(degrees, degress_to_exif_lut[i].string1)) {
             return degress_to_exif_lut[i].string2;
         }
