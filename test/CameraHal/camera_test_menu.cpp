@@ -467,7 +467,7 @@ void my_raw_callback(const sp<IMemory>& mem) {
 
     fn[0] = 0;
     sprintf(fn, "/sdcard/img%03d.raw", counter);
-    fd = open(fn, O_CREAT | O_WRONLY | O_SYNC | O_TRUNC, 0777);
+    fd = open(fn, O_CREAT | O_WRONLY | O_TRUNC, 0777);
 
     if (fd < 0)
         goto out;
@@ -511,7 +511,7 @@ void saveFile(const sp<IMemory>& mem) {
 
     fn[0] = 0;
     sprintf(fn, "/sdcard/preview%03d.yuv", counter);
-    fd = open(fn, O_CREAT | O_WRONLY | O_SYNC | O_TRUNC, 0777);
+    fd = open(fn, O_CREAT | O_WRONLY | O_TRUNC, 0777);
     if(fd < 0) {
         LOGE("Unable to open file %s: %s", fn, strerror(fd));
         goto out;
@@ -600,7 +600,7 @@ void my_jpeg_callback(const sp<IMemory>& mem) {
 
     fn[0] = 0;
     sprintf(fn, "%s/img%03d.jpg", dir_path,counter);
-    fd = open(fn, O_CREAT | O_WRONLY | O_SYNC | O_TRUNC, 0777);
+    fd = open(fn, O_CREAT | O_WRONLY | O_TRUNC, 0777);
 
     if(fd < 0) {
         LOGE("Unable to open file %s: %s", fn, strerror(fd));
