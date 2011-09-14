@@ -430,6 +430,7 @@ status_t OMXCameraAdapter::setFlashMode(Gen3A_settings& Gen3A)
     status_t ret = NO_ERROR;
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_IMAGE_PARAM_FLASHCONTROLTYPE flash;
+    OMX_CONFIG_FOCUSASSISTTYPE focusAssist;
 
     LOG_FUNCTION_NAME;
 
@@ -454,6 +455,33 @@ status_t OMXCameraAdapter::setFlashMode(Gen3A_settings& Gen3A)
     else
         {
         CAMHAL_LOGDA("Camera flash mode configured successfully");
+        }
+
+    if ( OMX_ErrorNone == eError )
+        {
+        OMX_INIT_STRUCT_PTR (&focusAssist, OMX_CONFIG_FOCUSASSISTTYPE);
+        focusAssist.nPortIndex = OMX_ALL;
+        if ( flash.eFlashControl == OMX_IMAGE_FlashControlOff )
+            {
+            focusAssist.bFocusAssist = OMX_FALSE;
+            }
+        else
+            {
+            focusAssist.bFocusAssist = OMX_TRUE;
+            }
+
+        CAMHAL_LOGDB("Configuring AF Assist mode 0x%x", focusAssist.bFocusAssist);
+        eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
+                                (OMX_INDEXTYPE) OMX_IndexConfigFocusAssist,
+                                &focusAssist);
+        if ( OMX_ErrorNone != eError )
+            {
+            CAMHAL_LOGEB("Error while configuring AF Assist mode 0x%x", eError);
+            }
+        else
+            {
+            CAMHAL_LOGDA("Camera AF Assist  mode configured successfully");
+            }
         }
 
     LOG_FUNCTION_NAME_EXIT;
