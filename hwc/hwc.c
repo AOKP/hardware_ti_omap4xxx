@@ -172,7 +172,6 @@ static int omap4_hwc_is_valid_format(int format)
         return 1;
 
     default:
-        LOGI("invalid format %d", format);
         return 0;
     }
 }
