@@ -410,15 +410,6 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
                     case OMX_FocusStatusReached:
                         {
                         focusStatus = true;
-                        //Lock the AE and AWB here sinc the focus is locked
-                        // Apply 3A locks after AF
-                        if( set3ALock(OMX_TRUE, OMX_TRUE) != NO_ERROR) {
-                            CAMHAL_LOGEA("Error Applying 3A locks");
-                        }
-                        else
-                            {
-                            CAMHAL_LOGDA("Focus locked. Applied focus locks successfully");
-                            }
                         break;
                         }
                     case OMX_FocusStatusOff:
@@ -429,6 +420,15 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
                         focusStatus = false;
                         break;
                         }
+                }
+            //Lock the AE and AWB here
+            // Apply 3A locks after AF
+            if( set3ALock(OMX_TRUE, OMX_TRUE) != NO_ERROR) {
+                CAMHAL_LOGEA("Error Applying 3A locks");
+            }
+            else
+                {
+                CAMHAL_LOGDA("Focus locked. Applied focus locks successfully");
                 }
 
             stopAutoFocus();
