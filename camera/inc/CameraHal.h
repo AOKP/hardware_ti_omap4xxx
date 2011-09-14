@@ -1096,6 +1096,7 @@ private:
     // instance
     bool isParameterValid(const char *param, const char *supportedParams);
     bool isParameterValid(int param, const char *supportedParams);
+    status_t doesSetParameterNeedUpdate(const char *new_param, const char *old_params, bool &update);
 
     /** Initialize default parameters */
     void initDefaultParameters();

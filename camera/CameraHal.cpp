@@ -252,6 +252,7 @@ int CameraHal::setParameters(const CameraParameters& params)
     status_t ret = NO_ERROR;
     // Needed for KEY_RECORDING_HINT
     bool restartPreviewRequired = false;
+    bool updateRequired = false;
     CameraParameters oldParams(mParameters.flatten());
     bool videoMode = false;
 
@@ -843,6 +844,9 @@ int CameraHal::setParameters(const CameraParameters& params)
             if ((params.getInt(CameraParameters::KEY_ZOOM) >= 0 ) &&
                 (params.getInt(CameraParameters::KEY_ZOOM) <= mMaxZoomSupported )) {
                 CAMHAL_LOGDB("Zoom set %s", valstr);
+                doesSetParameterNeedUpdate(valstr,
+                                           mParameters.get(CameraParameters::KEY_ZOOM),
+                                           updateRequired);
                 mParameters.set(CameraParameters::KEY_ZOOM, valstr);
              } else {
                 CAMHAL_LOGEB("ERROR: Invalid Zoom: %s", valstr);
@@ -853,12 +857,18 @@ int CameraHal::setParameters(const CameraParameters& params)
         if( (valstr = params.get(CameraParameters::KEY_AUTO_EXPOSURE_LOCK)) != NULL )
           {
             CAMHAL_LOGDB("Auto Exposure Lock set %s", params.get(CameraParameters::KEY_AUTO_EXPOSURE_LOCK));
+            doesSetParameterNeedUpdate(valstr,
+                                       mParameters.get(CameraParameters::KEY_AUTO_EXPOSURE_LOCK),
+                                       updateRequired);
             mParameters.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, valstr);
           }
 
         if( (valstr = params.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK)) != NULL )
           {
             CAMHAL_LOGDB("Auto WhiteBalance Lock set %s", params.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK));
+            doesSetParameterNeedUpdate(valstr,
+                                       mParameters.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK),
+                                       updateRequired);
             mParameters.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, valstr);
           }
         if( (valstr = params.get(CameraParameters::KEY_METERING_AREAS)) != NULL )
@@ -870,9 +880,10 @@ int CameraHal::setParameters(const CameraParameters& params)
         CameraParameters adapterParams = mParameters;
 
         // Only send parameters to adapter if preview is already
-        // enabled. Initial setParameters to camera adapter, will
-        // be called in startPreview()
-        if ( NULL != mCameraAdapter && mPreviewEnabled ) {
+        // enabled or doesSetParameterNeedUpdate says so. Initial setParameters to camera adapter,
+        // will be called in startPreview()
+        // TODO(XXX): Need to identify other parameters that need update from camera adapter
+        if ( (NULL != mCameraAdapter) && (mPreviewEnabled || updateRequired) ) {
             ret |= mCameraAdapter->setParameters(adapterParams);
         }
 
@@ -2444,19 +2455,17 @@ status_t CameraHal::cancelPicture( )
  */
 char* CameraHal::getParameters()
 {
-    CameraParameters params;
     String8 params_str8;
     char* params_string;
 
     LOG_FUNCTION_NAME;
 
-    params = mParameters;
     if( NULL != mCameraAdapter )
     {
-        mCameraAdapter->getParameters(params);
+        mCameraAdapter->getParameters(mParameters);
     }
 
-    params_str8 = params.flatten();
+    params_str8 = mParameters.flatten();
     // camera service frees this string...
     params_string = (char*) malloc(sizeof(char) * (params_str8.length()+1));
     strcpy(params_string, params_str8.string());
@@ -2946,6 +2955,19 @@ exit:
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
+}
+
+status_t CameraHal::doesSetParameterNeedUpdate(const char* new_param, const char* old_param, bool& update) {
+    if (!new_param || !old_param) {
+        return -EINVAL;
+    }
+
+    // if params mismatch we should update parameters for camera adapter
+    if ((strcmp(new_param, old_param) != 0)) {
+       update = true;
+    }
+
+   return NO_ERROR;
 }
 
 status_t CameraHal::parseResolution(const char *resStr, int &width, int &height)
