@@ -77,6 +77,7 @@ struct omap4_hwc_device {
     pthread_t hdmi_thread;
     pthread_mutex_t lock;
     int dsscomp_fd;
+    int fb_fd;
     int hdmi_fb_fd;
 
     __u16 ext_width;
@@ -948,8 +949,16 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
                                  hwc_dev->buffers,
                                  hwc_dev->post2_layers,
                                  dsscomp, sizeof(*dsscomp));
-    }
 
+        if (!hwc_dev->use_sgx) {
+            __u32 crt = 0;
+            int err2 = ioctl(hwc_dev->fb_fd, FBIO_WAITFORVSYNC, &crt);
+            if (err2) {
+                LOGE("failed to wait for vsync (%d)", errno);
+                err = err ? : -errno;
+            }
+        }
+    }
     hwc_dev->last_ext_ovls = hwc_dev->ext_ovls;
     hwc_dev->last_int_ovls = hwc_dev->post2_layers;
     if (err)
@@ -1011,6 +1020,8 @@ static int omap4_hwc_device_close(hw_device_t* device)
             close(hwc_dev->dsscomp_fd);
         if (hwc_dev->hdmi_fb_fd >= 0)
             close(hwc_dev->hdmi_fb_fd);
+        if (hwc_dev->fb_fd >= 0)
+            close(hwc_dev->fb_fd);
         /* pthread will get killed when parent process exits */
         pthread_mutex_destroy(&hwc_dev->lock);
         free(hwc_dev);
@@ -1250,8 +1261,25 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     *device = &hwc_dev->base.common;
 
     hwc_dev->dsscomp_fd = open("/dev/dsscomp", O_RDWR);
+    if (hwc_dev->dsscomp_fd < 0) {
+        LOGE("failed to open dsscomp (%d)", errno);
+        err = -errno;
+        goto done;
+    }
 
     hwc_dev->hdmi_fb_fd = open("/dev/graphics/fb1", O_RDWR);
+    if (hwc_dev->hdmi_fb_fd < 0) {
+        LOGE("failed to open hdmi fb (%d)", errno);
+        err = -errno;
+        goto done;
+    }
+
+    hwc_dev->fb_fd = open("/dev/graphics/fb0", O_RDWR);
+    if (hwc_dev->fb_fd < 0) {
+        LOGE("failed to open fb (%d)", errno);
+        err = -errno;
+        goto done;
+    }
 
     hwc_dev->buffers = malloc(sizeof(buffer_handle_t) * MAX_HW_OVERLAYS);
     if (!hwc_dev->buffers) {
@@ -1307,6 +1335,8 @@ done:
             close(hwc_dev->dsscomp_fd);
         if (hwc_dev->hdmi_fb_fd >= 0)
             close(hwc_dev->hdmi_fb_fd);
+        if (hwc_dev->fb_fd >= 0)
+            close(hwc_dev->fb_fd);
         pthread_mutex_destroy(&hwc_dev->lock);
         free(hwc_dev->buffers);
         free(hwc_dev);
