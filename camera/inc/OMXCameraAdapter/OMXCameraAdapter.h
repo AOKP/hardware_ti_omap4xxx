@@ -687,7 +687,8 @@ private:
     static const char DEFAULT_FLASH_MODE[];
     static const char DEFAULT_FOCUS_MODE_PREFERRED[];
     static const char DEFAULT_FOCUS_MODE[];
-    static const char DEFAULT_FRAMERATE_RANGE[];
+    static const char DEFAULT_FRAMERATE_RANGE_IMAGE[];
+    static const char DEFAULT_FRAMERATE_RANGE_VIDEO[];
     static const char DEFAULT_IPP[];
     static const char DEFAULT_GBCE[];
     static const char DEFAULT_ISO_MODE[];

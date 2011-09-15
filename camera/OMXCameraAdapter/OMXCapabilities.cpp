@@ -640,8 +640,10 @@ status_t OMXCameraAdapter::insertVFramerates(CameraProperties::Properties* param
     } else {
         params->set(CameraProperties::FRAMERATE_RANGE_SUPPORTED, supported);
         CAMHAL_LOGDB("framerate ranges %s", supported);
-        params->set(CameraProperties::FRAMERATE_RANGE, DEFAULT_FRAMERATE_RANGE);
-        CAMHAL_LOGDB("Default framerate range: [%s]", DEFAULT_FRAMERATE_RANGE);
+        params->set(CameraProperties::FRAMERATE_RANGE, DEFAULT_FRAMERATE_RANGE_IMAGE);
+        params->set(CameraProperties::FRAMERATE_RANGE_VIDEO, DEFAULT_FRAMERATE_RANGE_VIDEO);
+        params->set(CameraProperties::FRAMERATE_RANGE_IMAGE, DEFAULT_FRAMERATE_RANGE_IMAGE);
+        CAMHAL_LOGDB("Default framerate range: [%s]", DEFAULT_FRAMERATE_RANGE_IMAGE);
     }
 
     LOG_FUNCTION_NAME;

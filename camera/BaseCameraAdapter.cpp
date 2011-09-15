@@ -1209,7 +1209,7 @@ int BaseCameraAdapter::setInitFrameRefCount(void* buf, unsigned int mask)
 
       case CameraFrame::IMAGE_FRAME:
         {
-          setFrameRefCount(buf, CameraFrame::IMAGE_FRAME, (int) mRawSubscribers.size());
+          setFrameRefCount(buf, CameraFrame::IMAGE_FRAME, (int) mImageSubscribers.size());
         }
         break;
       case CameraFrame::RAW_FRAME:

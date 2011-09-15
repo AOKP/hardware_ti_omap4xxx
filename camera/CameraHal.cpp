@@ -255,6 +255,7 @@ int CameraHal::setParameters(const CameraParameters& params)
     bool updateRequired = false;
     CameraParameters oldParams(mParameters.flatten());
     bool videoMode = false;
+    char range[MAX_PROP_VALUE_LENGTH];
 
     {
         Mutex::Autolock lock(mLock);
@@ -443,98 +444,94 @@ int CameraHal::setParameters(const CameraParameters& params)
         }
 
         framerate = params.getPreviewFrameRate();
+        valstr = params.get(CameraParameters::KEY_PREVIEW_FPS_RANGE);
         CAMHAL_LOGDB("FRAMERATE %d", framerate);
+
+        CAMHAL_LOGVB("Passed FRR: %s, Supported FRR %s", valstr
+                        , mCameraProperties->get(CameraProperties::FRAMERATE_RANGE_SUPPORTED));
+        CAMHAL_LOGVB("Passed FR: %d, Supported FR %s", framerate
+                        , mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FRAME_RATES));
+
+
+        //Perform parameter validation
+        if(!isParameterValid(valstr
+                        , mCameraProperties->get(CameraProperties::FRAMERATE_RANGE_SUPPORTED))
+                        || !isParameterValid(framerate,
+                                      mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FRAME_RATES)))
+        {
+            CAMHAL_LOGEA("Invalid frame rate range or frame rate");
+            return -EINVAL;
+        }
 
         // Variable framerate ranges have higher priority over
         // deprecated constant FPS. "KEY_PREVIEW_FPS_RANGE" should
         // be cleared by the client in order for constant FPS to get
         // applied.
-        if ( (valstr = params.get(CameraParameters::KEY_PREVIEW_FPS_RANGE) ) != NULL )
+        if ( strcmp(valstr, mCameraProperties->get(CameraProperties::FRAMERATE_RANGE))  != 0)
           {
-            CAMHAL_LOGDB("FPS Range = %s", valstr);
-            CAMHAL_LOGDB("DEFAULT FPS Range = %s", mCameraProperties->get(CameraProperties::FRAMERATE_RANGE));
-
+            // APP wants to set FPS range
+            //Set framerate = MAXFPS
+            CAMHAL_LOGDA("APP IS CHANGING FRAME RATE RANGE");
             params.getPreviewFpsRange(&minFPS, &maxFPS);
-
-            if (videoMode)
-              {
-                mCameraProperties->set(CameraProperties::FRAMERATE_RANGE, CameraProperties::DEFAULT_VIDEO_FPS_RANGE);
-                valstr = mCameraProperties->get(CameraProperties::FRAMERATE_RANGE);
-                mParameters.set(CameraParameters::KEY_PREVIEW_FPS_RANGE, valstr);
-                mParameters.getPreviewFpsRange(&minFPS, &maxFPS);
-              }
 
             if ( ( 0 > minFPS ) || ( 0 > maxFPS ) )
               {
                 CAMHAL_LOGEA("ERROR: FPS Range is negative!");
-                ret = -EINVAL;
+                return -EINVAL;
               }
 
-            minFPS /= CameraHal::VFR_SCALE;
-            maxFPS /= CameraHal::VFR_SCALE;
+            framerate = maxFPS /CameraHal::VFR_SCALE;
 
-            if ( ( 0 == minFPS ) || ( 0 == maxFPS ) )
-              {
-                CAMHAL_LOGEA("ERROR: FPS Range is invalid!");
-                ret = -EINVAL;
-              }
-
-            if ( maxFPS < minFPS )
-              {
-                CAMHAL_LOGEA("ERROR: Max FPS is smaller than Min FPS!");
-                ret = -EINVAL;
-              }
-
-            if ( strcmp(valstr, mCameraProperties->get(CameraProperties::FRAMERATE_RANGE))  != 0)
-              {
-                // APP wants to set FPS range
-                //Set framerate = MAXFPS
-                CAMHAL_LOGDA("APP IS CHANGING FRAME RATE RANGE");
-                framerate = maxFPS ;
-              }
-            else if ( framerate != atoi(mCameraProperties->get(CameraProperties::PREVIEW_FRAME_RATE)) )
-              {
-                //APP wants to set framerate
-                //Change FPS range to match framerate
-                //MAXFPS = Framerate
-                if ( isParameterValid(framerate,
-                                      mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FRAME_RATES)) )
-                  {
-                    CAMHAL_LOGDA("APP IS CHANGING FRAME RATE");
-                    selectFPSRange(framerate, &minFPS, &maxFPS);
-                  }
-                else
-                  {
-                    CAMHAL_LOGEA("Framerate NOT Supported!");
-                    return -EINVAL;
-                  }
-              }
-
-            CAMHAL_LOGDB("SET FRAMERATE %d", framerate);
-            mParameters.setPreviewFrameRate(framerate);
-
-            CAMHAL_LOGDB("FPS Range [%d, %d]", minFPS, maxFPS);
-            mParameters.set(TICameraParameters::KEY_MINFRAMERATE, minFPS);
-            mParameters.set(TICameraParameters::KEY_MAXFRAMERATE, maxFPS);
-            mParameters.set(CameraParameters::KEY_PREVIEW_FPS_RANGE, valstr);
-          }
-        else if ( isParameterValid(framerate,
-                                   mCameraProperties->get(CameraProperties::SUPPORTED_PREVIEW_FRAME_RATES)) )
-          {
-            minFPS = framerate;
-            maxFPS = framerate;
-            mParameters.setPreviewFrameRate(framerate);
-
-            CAMHAL_LOGDB("FPS Range [%d, %d]", minFPS, maxFPS);
-            mParameters.set(TICameraParameters::KEY_MINFRAMERATE, minFPS);
-            mParameters.set(TICameraParameters::KEY_MAXFRAMERATE, maxFPS);
-            mParameters.set(CameraParameters::KEY_PREVIEW_FPS_RANGE,
-                            params.get(CameraParameters::KEY_PREVIEW_FPS_RANGE));
           }
         else
           {
-            return -EINVAL;
+              if ( framerate != atoi(mCameraProperties->get(CameraProperties::PREVIEW_FRAME_RATE)) )
+              {
+                selectFPSRange(framerate, &minFPS, &maxFPS);
+              }
+              else
+                {
+                    if (videoMode) {
+                        valstr = mCameraProperties->get(CameraProperties::FRAMERATE_RANGE_VIDEO);
+                        CameraParameters temp;
+                        temp.set(CameraParameters::KEY_PREVIEW_FPS_RANGE, valstr);
+                        temp.getPreviewFpsRange(&minFPS, &maxFPS);
+                    }
+                    else {
+                        valstr = mCameraProperties->get(CameraProperties::FRAMERATE_RANGE_IMAGE);
+                        CameraParameters temp;
+                        temp.set(CameraParameters::KEY_PREVIEW_FPS_RANGE, valstr);
+                        temp.getPreviewFpsRange(&minFPS, &maxFPS);
+                    }
+
+                    framerate = maxFPS / CameraHal::VFR_SCALE;
+                }
+
           }
+
+        CAMHAL_LOGDB("FPS Range = %s", valstr);
+        CAMHAL_LOGDB("DEFAULT FPS Range = %s", mCameraProperties->get(CameraProperties::FRAMERATE_RANGE));
+
+        minFPS /= CameraHal::VFR_SCALE;
+        maxFPS /= CameraHal::VFR_SCALE;
+
+        if ( ( 0 == minFPS ) || ( 0 == maxFPS ) )
+          {
+            CAMHAL_LOGEA("ERROR: FPS Range is invalid!");
+            ret = -EINVAL;
+          }
+
+        if ( maxFPS < minFPS )
+          {
+            CAMHAL_LOGEA("ERROR: Max FPS is smaller than Min FPS!");
+            ret = -EINVAL;
+          }
+        CAMHAL_LOGDB("SET FRAMERATE %d", framerate);
+        mParameters.setPreviewFrameRate(framerate);
+
+        CAMHAL_LOGDB("FPS Range [%d, %d]", minFPS, maxFPS);
+        mParameters.set(TICameraParameters::KEY_MINFRAMERATE, minFPS);
+        mParameters.set(TICameraParameters::KEY_MAXFRAMERATE, maxFPS);
 
         if( ( valstr = params.get(TICameraParameters::KEY_GBCE) ) != NULL )
             {
@@ -554,12 +551,6 @@ int CameraHal::setParameters(const CameraParameters& params)
             CAMHAL_LOGDB("AutoConvergence Mode is set = %s", params.get(TICameraParameters::KEY_AUTOCONVERGENCE));
             mParameters.set(TICameraParameters::KEY_AUTOCONVERGENCE, valstr);
             }
-
-    //    if(params.get(TICameraParameters::KEY_AUTOCONVERGENCE_MODE)!=NULL)
-    //        {
-    //        CAMHAL_LOGDB("AutoConvergence Mode is set = %s", params.get(TICameraParameters::KEY_AUTOCONVERGENCE_MODE));
-    //        mParameters.set(TICameraParameters::KEY_AUTOCONVERGENCE_MODE, params.get(TICameraParameters::KEY_AUTOCONVERGENCE_MODE));
-    //        }
 
         if( (valstr = params.get(TICameraParameters::KEY_MANUALCONVERGENCE_VALUES)) !=NULL )
             {
@@ -2465,7 +2456,9 @@ char* CameraHal::getParameters()
         mCameraAdapter->getParameters(mParameters);
     }
 
+
     params_str8 = mParameters.flatten();
+
     // camera service frees this string...
     params_string = (char*) malloc(sizeof(char) * (params_str8.length()+1));
     strcpy(params_string, params_str8.string());

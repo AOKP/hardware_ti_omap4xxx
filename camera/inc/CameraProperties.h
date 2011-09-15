@@ -117,6 +117,8 @@ public:
     static const char VSTAB[];
     static const char VSTAB_VALUES[];
     static const char FRAMERATE_RANGE[];
+    static const char FRAMERATE_RANGE_IMAGE[];
+    static const char FRAMERATE_RANGE_VIDEO[];
     static const char FRAMERATE_RANGE_SUPPORTED[];
 
     static const char DEFAULT_VALUE[];
@@ -130,7 +132,6 @@ public:
     static const char MAX_NUM_FOCUS_AREAS[];
 
     static const char VIDEO_SNAPSHOT_SUPPORTED[];
-    static const char DEFAULT_VIDEO_FPS_RANGE[];
 
     CameraProperties();
     ~CameraProperties();

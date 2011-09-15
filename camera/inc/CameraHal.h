@@ -1142,7 +1142,10 @@ public:
 
     sp<IMemoryHeap> mPictureHeap;
 
-	int* mGrallocHandles;
+    int* mGrallocHandles;
+    bool mFpsRangeChangedByApp;
+
+
 
 
 

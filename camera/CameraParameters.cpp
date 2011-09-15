@@ -90,7 +90,9 @@ const char CameraProperties::REVISION[] = "prop-revision";
 const char CameraProperties::FOCAL_LENGTH[] = "prop-focal-length";
 const char CameraProperties::HOR_ANGLE[] = "prop-horizontal-angle";
 const char CameraProperties::VER_ANGLE[] = "prop-vertical-angle";
-const char CameraProperties::FRAMERATE_RANGE[]="prop-framerate-range-default";
+const char CameraProperties::FRAMERATE_RANGE[] = "prop-framerate-range-default";
+const char CameraProperties::FRAMERATE_RANGE_IMAGE[] = "prop-framerate-range-image-default";
+const char CameraProperties::FRAMERATE_RANGE_VIDEO[]="prop-framerate-range-video-default";
 const char CameraProperties::FRAMERATE_RANGE_SUPPORTED[]="prop-framerate-range-values";
 const char CameraProperties::SENSOR_ORIENTATION[]= "sensor-orientation";
 const char CameraProperties::SENSOR_ORIENTATION_VALUES[]= "sensor-orientation-values";
@@ -111,8 +113,6 @@ const char CameraProperties::VIDEO_SNAPSHOT_SUPPORTED[] = "prop-video-snapshot-s
 const char CameraProperties::DEFAULT_VALUE[] = "";
 
 const char CameraProperties::PARAMS_DELIMITER []= ",";
-
-const char CameraProperties::DEFAULT_VIDEO_FPS_RANGE[]="24000,30000";
 
 // Returns the properties class for a specific Camera
 // Each value is indexed by the CameraProperties::CameraPropertyIndex enum
