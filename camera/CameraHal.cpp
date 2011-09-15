@@ -3199,6 +3199,7 @@ void CameraHal::forceStopPreview()
     if(mAppCallbackNotifier.get() != NULL) {
         //Stop the callback sending
         mAppCallbackNotifier->stop();
+        mAppCallbackNotifier->flushAndReturnFrames();
         mAppCallbackNotifier->stopPreviewCallbacks();
     }
 

@@ -580,6 +580,109 @@ static void copy2Dto1D(void *dst,
     mapper.unlock((buffer_handle_t)src);
 }
 
+void AppCallbackNotifier::copyAndSendPictureFrame(CameraFrame* frame, int32_t msgType)
+{
+    camera_memory_t* picture = NULL;
+    void *dest = NULL, *src = NULL;
+
+    // scope for lock
+    {
+        Mutex::Autolock lock(mLock);
+
+        if(mNotifierState != AppCallbackNotifier::NOTIFIER_STARTED) {
+            goto exit;
+        }
+
+        picture = mRequestMemory(-1, frame->mLength, 1, NULL);
+
+        if (NULL != picture) {
+            dest = picture->data;
+            if (NULL != dest) {
+                src = (void *) ((unsigned int) frame->mBuffer + frame->mOffset);
+                memcpy(dest, src, frame->mLength);
+            }
+        }
+    }
+
+ exit:
+    mFrameProvider->returnFrame(frame->mBuffer, (CameraFrame::FrameType) frame->mFrameType);
+
+    if(picture) {
+        if((mNotifierState == AppCallbackNotifier::NOTIFIER_STARTED) &&
+           mCameraHal->msgTypeEnabled(msgType)) {
+            mDataCb(msgType, picture, 0, NULL, mCallbackCookie);
+        }
+        picture->release(picture);
+    }
+}
+
+void AppCallbackNotifier::copyAndSendPreviewFrame(CameraFrame* frame, int32_t msgType)
+{
+    camera_memory_t* picture = NULL;
+    void* dest = NULL;
+
+    // scope for lock
+    {
+        Mutex::Autolock lock(mLock);
+
+        if(mNotifierState != AppCallbackNotifier::NOTIFIER_STARTED) {
+            goto exit;
+        }
+
+        if (!mPreviewMemory || !frame->mBuffer) {
+            CAMHAL_LOGDA("Error! One of the buffer is NULL");
+            goto exit;
+        }
+
+
+        dest = (void*) mPreviewBufs[mPreviewBufCount];
+
+        CAMHAL_LOGVB("%d:copy2Dto1D(%p, %p, %d, %d, %d, %d, %d,%s)",
+                     __LINE__,
+                      buf,
+                      frame->mBuffer,
+                      frame->mWidth,
+                      frame->mHeight,
+                      frame->mAlignment,
+                      2,
+                      frame->mLength,
+                      mPreviewPixelFormat);
+
+        if ( NULL != dest ) {
+            // data sync frames don't need conversion
+            if (CameraFrame::FRAME_DATA_SYNC == frame->mFrameType) {
+                if ( (mPreviewMemory->size / MAX_BUFFERS) >= frame->mLength ) {
+                    memcpy(dest, (void*) frame->mBuffer, frame->mLength);
+                } else {
+                    memset(dest, 0, (mPreviewMemory->size / MAX_BUFFERS));
+                }
+            } else {
+                copy2Dto1D(dest,
+                           frame->mBuffer,
+                           frame->mWidth,
+                           frame->mHeight,
+                           frame->mAlignment,
+                           frame->mOffset,
+                           2,
+                           frame->mLength,
+                           mPreviewPixelFormat);
+            }
+        }
+    }
+
+ exit:
+    mFrameProvider->returnFrame(frame->mBuffer, (CameraFrame::FrameType) frame->mFrameType);
+
+    if((mNotifierState == AppCallbackNotifier::NOTIFIER_STARTED) &&
+       mCameraHal->msgTypeEnabled(msgType) &&
+       (dest != NULL)) {
+        mDataCb(msgType, mPreviewMemory, mPreviewBufCount, NULL, mCallbackCookie);
+    }
+
+    // increment for next buffer
+    mPreviewBufCount = (mPreviewBufCount + 1) % AppCallbackNotifier::MAX_BUFFERS;
+}
+
 status_t AppCallbackNotifier::dummyRaw()
 {
     LOG_FUNCTION_NAME;
@@ -626,13 +729,13 @@ void AppCallbackNotifier::notifyFrame()
 
     LOG_FUNCTION_NAME;
 
-    if(!mFrameQ.isEmpty())
     {
-        mFrameQ.get(&msg);
-    }
-    else
-    {
-        return;
+        Mutex::Autolock lock(mLock);
+        if(!mFrameQ.isEmpty()) {
+            mFrameQ.get(&msg);
+        } else {
+            return;
+        }
     }
 
     bool ret = true;
@@ -657,37 +760,18 @@ void AppCallbackNotifier::notifyFrame()
                     if ( mCameraHal->msgTypeEnabled(CAMERA_MSG_RAW_IMAGE) )
                         {
 #ifdef COPY_IMAGE_BUFFER
-                        camera_memory_t* raw_picture = mRequestMemory(-1, frame->mLength, 1, NULL);
-
-                        if ( NULL != raw_picture )
-                        {
-                            buf = raw_picture->data;
-                            if ( NULL != buf )
-                                {
-                                memcpy(buf,
-                                       ( void * ) ( (unsigned int) frame->mBuffer + frame->mOffset),
-                                       frame->mLength);
-                                }
-                            mFrameProvider->returnFrame(frame->mBuffer,
-                                                        ( CameraFrame::FrameType ) frame->mFrameType);
-                        }
-
-                        mDataCb(CAMERA_MSG_RAW_IMAGE, raw_picture, 0, NULL, mCallbackCookie);
-
+                        copyAndSendPictureFrame(frame, CAMERA_MSG_RAW_IMAGE);
 #else
-
                         //TODO: Find a way to map a Tiler buffer to a MemoryHeapBase
-
 #endif
-                        if(raw_picture)
-                            {
-                            raw_picture->release(raw_picture);
-                            }
                         }
-                    else if ( mCameraHal->msgTypeEnabled(CAMERA_MSG_RAW_IMAGE_NOTIFY) )
-                        {
-                        mNotifyCb(CAMERA_MSG_RAW_IMAGE_NOTIFY, 0, 0, mCallbackCookie);
+                    else {
+                        if ( mCameraHal->msgTypeEnabled(CAMERA_MSG_RAW_IMAGE_NOTIFY) ) {
+                            mNotifyCb(CAMERA_MSG_RAW_IMAGE_NOTIFY, 0, 0, mCallbackCookie);
                         }
+                        mFrameProvider->returnFrame(frame->mBuffer,
+                                                    (CameraFrame::FrameType) frame->mFrameType);
+                    }
 
                     mRawAvailable = true;
 
@@ -753,81 +837,34 @@ void AppCallbackNotifier::notifyFrame()
                              ( NULL != mCameraHal ) &&
                              ( NULL != mDataCb) )
                     {
-                    camera_memory_t* raw_picture = NULL;
-                    {
-                    Mutex::Autolock lock(mLock);
-
-                    if(mNotifierState != AppCallbackNotifier::NOTIFIER_STARTED)
-                    {
-                        return;
-                    }
 
                     // CTS, MTS requirements: Every 'takePicture()' call
                     // who registers a raw callback should receive one
                     // as well. This is  not always the case with
                     // CameraAdapters though.
-                    if ( !mRawAvailable )
-                        {
+                    if (!mRawAvailable) {
                         dummyRaw();
-                        }
-                    else
-                        {
+                    } else {
                         mRawAvailable = false;
-                        }
+                    }
 
 #ifdef COPY_IMAGE_BUFFER
-
-                        raw_picture = mRequestMemory(-1, frame->mLength, 1, NULL);
-
-                        if(raw_picture)
-                            {
-                            buf = raw_picture->data;
-                            }
-
-                        if ( NULL != buf)
-                            {
-                            memcpy(buf,
-                                   ( void * ) ( (unsigned int) frame->mBuffer + frame->mOffset),
-                                   frame->mLength);
-                            }
-
-                        // CTS Requirement: The camera client should be
-                        // able to restart the preview from within the context
-                        // of a jpeg callback. Here we should return the image
-                        // frame before calling the data callback. This way
-                        // we won't depend on the binder ipc timing and we
-                        // will be able to execute the client request successfully.
-                        mFrameProvider->returnFrame(frame->mBuffer,
-                                                    ( CameraFrame::FrameType ) frame->mFrameType);
-                        }
-
-                        if((mNotifierState==AppCallbackNotifier::NOTIFIER_STARTED)
-                            && (mCameraHal->msgTypeEnabled(CAMERA_MSG_COMPRESSED_IMAGE)))
-                        {
-                            Mutex::Autolock lock(mBurstLock);
+                    {
+                        Mutex::Autolock lock(mBurstLock);
 #if 0 //TODO: enable burst mode later
-                            if ( mBurst )
-                            {
-                                `(CAMERA_MSG_BURST_IMAGE, JPEGPictureMemBase, mCallbackCookie);
-                            }
-                            else
-#endif
-                            {
-                                mDataCb(CAMERA_MSG_COMPRESSED_IMAGE, raw_picture,
-                                        0, NULL,
-                                        mCallbackCookie);
-                            }
+                        if ( mBurst )
+                        {
+                            `(CAMERA_MSG_BURST_IMAGE, JPEGPictureMemBase, mCallbackCookie);
                         }
-#else
-
-                     //TODO: Find a way to map a Tiler buffer to a MemoryHeapBase
-
+                        else
 #endif
-                        if(raw_picture)
-                            {
-                            raw_picture->release(raw_picture);
-                            }
-
+                        {
+                            copyAndSendPictureFrame(frame, CAMERA_MSG_COMPRESSED_IMAGE);
+                        }
+                    }
+#else
+                     //TODO: Find a way to map a Tiler buffer to a MemoryHeapBase
+#endif
                     }
                 else if ( ( CameraFrame::VIDEO_FRAME_SYNC == frame->mFrameType ) &&
                              ( NULL != mCameraHal ) &&
@@ -883,145 +920,29 @@ void AppCallbackNotifier::notifyFrame()
                              ( NULL != mNotifyCb)) {
                     //When enabled, measurement data is sent instead of video data
                     if ( !mMeasurementEnabled ) {
-                        {
-                        Mutex::Autolock lock(mLock);
-
-                        if(mNotifierState != AppCallbackNotifier::NOTIFIER_STARTED)
-                        {
-                            return;
-                        }
-
-                        if (!mPreviewMemory || !frame->mBuffer) {
-                            CAMHAL_LOGDA("Error! One of the buffer is NULL");
-                            break;
-                        }
-
-                        buf = (void*) mPreviewBufs[mPreviewBufCount];
-
-                        CAMHAL_LOGVB("%d:copy2Dto1D(%p, %p, %d, %d, %d, %d, %d,%s)",
-                                     __LINE__,
-                                     buf,
-                                     frame->mBuffer,
-                                     frame->mWidth,
-                                     frame->mHeight,
-                                     frame->mAlignment,
-                                     2,
-                                     frame->mLength,
-                                     mPreviewPixelFormat);
-
-                        if ( NULL != buf ) {
-                            copy2Dto1D(buf,
-                                       frame->mBuffer,
-                                       frame->mWidth,
-                                       frame->mHeight,
-                                       frame->mAlignment,
-                                       frame->mOffset,
-                                       2,
-                                       frame->mLength,
-                                       mPreviewPixelFormat);
-                        }
-                        }
-
-                        //Send a callback only if the notifier is started and snapshot message is enabled
-                        if ((mNotifierState==AppCallbackNotifier::NOTIFIER_STARTED)
-                                    && (mCameraHal->msgTypeEnabled(CAMERA_MSG_POSTVIEW_FRAME))) {
-                            ///Give preview callback to app
-                            mDataCb(CAMERA_MSG_POSTVIEW_FRAME, mPreviewMemory, mPreviewBufCount, NULL, mCallbackCookie);
-                        }
-
-                        // increment for next buffer
-                        mPreviewBufCount = (mPreviewBufCount+1) % AppCallbackNotifier::MAX_BUFFERS;
+                        copyAndSendPreviewFrame(frame, CAMERA_MSG_POSTVIEW_FRAME);
+                    } else {
+                        mFrameProvider->returnFrame(frame->mBuffer,
+                                                    (CameraFrame::FrameType) frame->mFrameType);
                     }
-
-                    mFrameProvider->returnFrame(frame->mBuffer,
-                                                ( CameraFrame::FrameType ) frame->mFrameType);
                 }
                 else if ( ( CameraFrame::PREVIEW_FRAME_SYNC== frame->mFrameType ) &&
                             ( NULL != mCameraHal ) &&
                             ( NULL != mDataCb) &&
                             ( mCameraHal->msgTypeEnabled(CAMERA_MSG_PREVIEW_FRAME)) ) {
-
                     //When enabled, measurement data is sent instead of video data
                     if ( !mMeasurementEnabled ) {
-                        {
-                        Mutex::Autolock lock(mLock);
-
-
-                        if(mNotifierState != AppCallbackNotifier::NOTIFIER_STARTED)
-                        {
-                            return;
-                        }
-
-                        if (!mPreviewMemory || !frame->mBuffer) {
-                            CAMHAL_LOGDA("Error! One of the buffer is NULL");
-                            break;
-                        }
-
-                        buf = (void*) mPreviewBufs[mPreviewBufCount];
-
-                        CAMHAL_LOGVB("%d:copy2Dto1D(%p, %p, %d, %d, %d, %d, %d,%s)",
-                                     __LINE__,
-                                     buf,
-                                     frame->mBuffer,
-                                     frame->mWidth,
-                                     frame->mHeight,
-                                     frame->mAlignment,
-                                     2,
-                                     frame->mLength,
-                                     mPreviewPixelFormat);
-
-                        if ( NULL != buf ) {
-                            copy2Dto1D(buf,
-                                       frame->mBuffer,
-                                       frame->mWidth,
-                                       frame->mHeight,
-                                       frame->mAlignment,
-                                       frame->mOffset,
-                                       2,
-                                       frame->mLength,
-                                       mPreviewPixelFormat);
-                        }
-                        }
-
-                        //Send a callback only if the notifier is started
-                        if(mNotifierState==AppCallbackNotifier::NOTIFIER_STARTED)
-                        {
-                            // Give preview callback to app
-                            mDataCb(CAMERA_MSG_PREVIEW_FRAME, mPreviewMemory, mPreviewBufCount, NULL, mCallbackCookie);
-                        }
-
-                        // increment for next buffer
-                        mPreviewBufCount = (mPreviewBufCount+1) % AppCallbackNotifier::MAX_BUFFERS;
+                        copyAndSendPreviewFrame(frame, CAMERA_MSG_PREVIEW_FRAME);
+                    } else {
+                         mFrameProvider->returnFrame(frame->mBuffer,
+                                                     (CameraFrame::FrameType) frame->mFrameType);
                     }
-                    mFrameProvider->returnFrame(frame->mBuffer,
-                                                ( CameraFrame::FrameType ) frame->mFrameType);
                 }
                 else if ( ( CameraFrame::FRAME_DATA_SYNC == frame->mFrameType ) &&
                             ( NULL != mCameraHal ) &&
                             ( NULL != mDataCb) &&
                             ( mCameraHal->msgTypeEnabled(CAMERA_MSG_PREVIEW_FRAME)) ) {
-                    if (!mPreviewMemory || !frame->mBuffer) {
-                        CAMHAL_LOGDA("Error! One of the buffer is NULL");
-                        break;
-                    }
-
-                    buf = (void*) mPreviewBufs[mPreviewBufCount];
-                    if (buf) {
-                        if ( (mPreviewMemory->size / MAX_BUFFERS) >= frame->mLength ) {
-                            memcpy(buf, ( void * )  frame->mBuffer, frame->mLength);
-                        } else {
-                            memset(buf, 0, (mPreviewMemory->size / MAX_BUFFERS));
-                        }
-                    }
-
-                    // Give preview callback to app
-                    mDataCb(CAMERA_MSG_PREVIEW_FRAME, mPreviewMemory, mPreviewBufCount, NULL, mCallbackCookie);
-
-                    //Increment the buffer count
-                    mPreviewBufCount = (mPreviewBufCount+1) % AppCallbackNotifier::MAX_BUFFERS;
-
-                    mFrameProvider->returnFrame(frame->mBuffer,
-                                                ( CameraFrame::FrameType ) frame->mFrameType);
+                    copyAndSendPreviewFrame(frame, CAMERA_MSG_PREVIEW_FRAME);
                 } else {
                     mFrameProvider->returnFrame(frame->mBuffer,
                                                 ( CameraFrame::FrameType ) frame->mFrameType);
@@ -1082,6 +1003,23 @@ void AppCallbackNotifier::frameCallback(CameraFrame* caFrame)
     LOG_FUNCTION_NAME_EXIT;
 }
 
+void AppCallbackNotifier::flushAndReturnFrames()
+{
+    TIUTILS::Message msg;
+    CameraFrame *frame;
+
+    Mutex::Autolock lock(mLock);
+    while (!mFrameQ.isEmpty()) {
+        mFrameQ.get(&msg);
+        frame = (CameraFrame*) msg.arg1;
+        if (frame) {
+            mFrameProvider->returnFrame(frame->mBuffer,
+                                        (CameraFrame::FrameType) frame->mFrameType);
+        }
+    }
+
+    LOG_FUNCTION_NAME_EXIT;
+}
 
 void AppCallbackNotifier::eventCallbackRelay(CameraHalEvent* chEvt)
 {

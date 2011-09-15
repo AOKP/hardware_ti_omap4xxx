@@ -533,6 +533,7 @@ public:
     static void eventCallbackRelay(CameraHalEvent* chEvt);
     void frameCallback(CameraFrame* caFrame);
     void eventCallback(CameraHalEvent* chEvt);
+    void flushAndReturnFrames();
 
     void setCallbacks(CameraHal *cameraHal,
                         camera_notify_callback notify_cb,
@@ -586,6 +587,8 @@ private:
     bool processMessage();
     void releaseSharedVideoBuffers();
     status_t dummyRaw();
+    void copyAndSendPictureFrame(CameraFrame* frame, int32_t msgType);
+    void copyAndSendPreviewFrame(CameraFrame* frame, int32_t msgType);
 
 private:
     mutable Mutex mLock;
