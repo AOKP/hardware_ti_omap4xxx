@@ -109,6 +109,10 @@ const char CameraProperties::AUTO_WHITEBALANCE_LOCK_SUPPORTED[] = "prop-auto-whi
 const char CameraProperties::MAX_NUM_METERING_AREAS[] = "prop-max-num-metering-areas";
 const char CameraProperties::METERING_AREAS[] = "prop-metering-areas";
 const char CameraProperties::VIDEO_SNAPSHOT_SUPPORTED[] = "prop-video-snapshot-supported";
+const char CameraProperties::VIDEO_SIZE[] = "video-size";
+const char CameraProperties::SUPPORTED_VIDEO_SIZES[] = "video-size-values";
+const char CameraProperties::PREFERRED_PREVIEW_SIZE_FOR_VIDEO[] = "preferred-preview-size-for-video";
+
 
 const char CameraProperties::DEFAULT_VALUE[] = "";
 

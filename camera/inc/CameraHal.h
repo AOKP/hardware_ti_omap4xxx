@@ -43,6 +43,9 @@
 #include "DebugUtils.h"
 #include "SensorListener.h"
 
+#include <ui/GraphicBufferAllocator.h>
+#include <ui/GraphicBuffer.h>
+
 #define MIN_WIDTH           640
 #define MIN_HEIGHT          480
 #define PICTURE_WIDTH   3264 /* 5mp - 2560. 8mp - 3280 */ /* Make sure it is a multiple of 16. */
@@ -73,6 +76,7 @@
 #define PPM_INSTRUMENTATION_ABS 1
 
 #define LOCK_BUFFER_TRIES 5
+#define HAL_PIXEL_FORMAT_NV12 0x100
 
 //Uncomment to enable more verbose/debug logs
 //#define DEBUG_LOG
@@ -565,12 +569,17 @@ public:
     //Notifications from CameraHal for video recording case
     status_t startRecording();
     status_t stopRecording();
-    status_t initSharedVideoBuffers(void *buffers, uint32_t *offsets, int fd, size_t length, size_t count);
+    status_t initSharedVideoBuffers(void *buffers, uint32_t *offsets, int fd, size_t length, size_t count, void *vidBufs);
     status_t releaseRecordingFrame(const void *opaque);
 
 	status_t useMetaDataBufferMode(bool enable);
 
     void EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFrame::FrameType type, void* cookie1, void* cookie2);
+
+    void useVideoBuffers(bool useVideoBuffers);
+
+    bool getUesVideoBuffers();
+    void setVideoRes(int width, int height);
 
     //Internal class definitions
     class NotificationThread : public Thread {
@@ -652,6 +661,11 @@ private:
     bool mRawAvailable;
 
     CameraParameters mParameters;
+
+    bool mUseVideoBuffers;
+
+    int mVideoWidth;
+    int mVideoHeight;
 
 };
 
@@ -1097,7 +1111,7 @@ private:
     status_t allocPreviewBufs(int width, int height, const char* previewFormat, unsigned int bufferCount, unsigned int &max_queueable);
 
     /** Allocate video buffers */
-    status_t allocVideoBufs(int width, int height, const char* previewFormat);
+    status_t allocVideoBufs(uint32_t width, uint32_t height, uint32_t bufferCount);
 
     /** Allocate image capture buffers */
     status_t allocImageBufs(unsigned int width, unsigned int height, size_t length, const char* previewFormat, unsigned int bufferCount);
@@ -1106,7 +1120,7 @@ private:
     status_t freePreviewBufs();
 
     /** Free video bufs */
-    status_t freeVideoBufs();
+    status_t freeVideoBufs(void *bufs);
 
     //Check if a given resolution is supported by the current camera
     //instance
@@ -1132,6 +1146,9 @@ private:
     void forceStopPreview();
 
     void selectFPSRange(int framerate, int *min_fps, int *max_fps);
+
+    void setPreferredPreviewRes(int width, int height);
+    void resetPreviewRes(CameraParameters *mParams, int width, int height);
 
     //@}
 
@@ -1235,6 +1252,10 @@ private:
     uint32_t mPreviewWidth;
     uint32_t mPreviewHeight;
     int32_t mMaxZoomSupported;
+
+    int mVideoWidth;
+    int mVideoHeight;
+
 };
 
 

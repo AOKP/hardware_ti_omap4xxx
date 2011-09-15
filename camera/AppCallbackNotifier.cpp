@@ -27,6 +27,8 @@
 #include <ui/GraphicBuffer.h>
 #include <ui/GraphicBufferMapper.h>
 
+#include "NV12_resize.h"
+
 namespace android {
 
 const int AppCallbackNotifier::NOTIFIER_TIMEOUT = -1;
@@ -869,9 +871,45 @@ void AppCallbackNotifier::notifyFrame()
                                 break;
                                 }
 
-                            videoMetadataBuffer->metadataBufferType = (int) kMetadataBufferTypeCameraSource;
-                            videoMetadataBuffer->handle = frame->mBuffer;
-                            videoMetadataBuffer->offset = frame->mOffset;
+                            if ( mUseVideoBuffers )
+                              {
+                                int vBuf = mVideoMap.valueFor((uint32_t) frame->mBuffer);
+                                GraphicBufferMapper &mapper = GraphicBufferMapper::get();
+                                Rect bounds;
+                                bounds.left = 0;
+                                bounds.top = 0;
+                                bounds.right = mVideoWidth;
+                                bounds.bottom = mVideoHeight;
+
+                                void *y_uv[2];
+                                mapper.lock((buffer_handle_t)vBuf, CAMHAL_GRALLOC_USAGE, bounds, y_uv);
+
+                                structConvImage input =  {frame->mWidth,
+                                                          frame->mHeight,
+                                                          IC_FORMAT_YCbCr420_lp,
+                                                          (mmByte *)frame->mYuv[0],
+                                                          (mmByte *)frame->mYuv[1],
+                                                          frame->mOffset};
+
+                                structConvImage output = {mVideoWidth,
+                                                          mVideoHeight,
+                                                          IC_FORMAT_YCbCr420_lp,
+                                                          (mmByte *)y_uv[0],
+                                                          (mmByte *)y_uv[1],
+                                                          0};
+
+                                VT_resizeFrame_Video_opt2_lp(&input, &output, NULL, 0);
+                                mapper.unlock((buffer_handle_t)vBuf);
+                                videoMetadataBuffer->metadataBufferType = (int) kMetadataBufferTypeCameraSource;
+                                videoMetadataBuffer->handle = (void *)vBuf;
+                                videoMetadataBuffer->offset = 0;
+                              }
+                            else
+                              {
+                                videoMetadataBuffer->metadataBufferType = (int) kMetadataBufferTypeCameraSource;
+                                videoMetadataBuffer->handle = frame->mBuffer;
+                                videoMetadataBuffer->offset = frame->mOffset;
+                              }
 
                             CAMHAL_LOGVB("mDataCbTimestamp : frame->mBuffer=0x%x, videoMetadataBuffer=0x%x, videoMedatadaBufferMemory=0x%x",
                                             frame->mBuffer, videoMetadataBuffer, videoMedatadaBufferMemory);
@@ -1280,6 +1318,30 @@ void AppCallbackNotifier::setBurst(bool burst)
     LOG_FUNCTION_NAME_EXIT;
 }
 
+void AppCallbackNotifier::useVideoBuffers(bool useVideoBuffers)
+{
+  LOG_FUNCTION_NAME;
+
+  mUseVideoBuffers = useVideoBuffers;
+
+  LOG_FUNCTION_NAME_EXIT;
+}
+
+bool AppCallbackNotifier::getUesVideoBuffers()
+{
+    return mUseVideoBuffers;
+}
+
+void AppCallbackNotifier::setVideoRes(int width, int height)
+{
+  LOG_FUNCTION_NAME;
+
+  mVideoWidth = width;
+  mVideoHeight = height;
+
+  LOG_FUNCTION_NAME_EXIT;
+}
+
 int AppCallbackNotifier::setParameters(const CameraParameters& params)
 {
     LOG_FUNCTION_NAME;
@@ -1363,7 +1425,7 @@ status_t AppCallbackNotifier::startRecording()
 }
 
 //Allocate metadata buffers for video recording
-status_t AppCallbackNotifier::initSharedVideoBuffers(void *buffers, uint32_t *offsets, int fd, size_t length, size_t count)
+status_t AppCallbackNotifier::initSharedVideoBuffers(void *buffers, uint32_t *offsets, int fd, size_t length, size_t count, void *vidBufs)
 {
     status_t ret = NO_ERROR;
     LOG_FUNCTION_NAME;
@@ -1393,6 +1455,13 @@ status_t AppCallbackNotifier::initSharedVideoBuffers(void *buffers, uint32_t *of
             mVideoMetadataBufferReverseMap.add((uint32_t)(videoMedatadaBufferMemory->data), bufArr[i]);
             CAMHAL_LOGDB("bufArr[%d]=0x%x, videoMedatadaBufferMemory=0x%x, videoMedatadaBufferMemory->data=0x%x",
                     i, bufArr[i], videoMedatadaBufferMemory, videoMedatadaBufferMemory->data);
+
+            if (vidBufs != NULL)
+              {
+                uint32_t *vBufArr = (uint32_t *) vidBufs;
+                mVideoMap.add(bufArr[i], vBufArr[i]);
+                CAMHAL_LOGVB("bufArr[%d]=0x%x, vBuffArr[%d]=0x%x", i, bufArr[i], i, vBufArr[i]);
+              }
             }
         }
 

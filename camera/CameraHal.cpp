@@ -356,6 +356,8 @@ int CameraHal::setParameters(const CameraParameters& params)
               else
               {
                 mParameters.setPreviewSize(w, h);
+                mVideoWidth = w;
+                mVideoHeight = h;
                }
            }
            else
@@ -389,12 +391,26 @@ int CameraHal::setParameters(const CameraParameters& params)
                 mParameters.set(CameraParameters::KEY_RECORDING_HINT, valstr);
                 restartPreviewRequired = setVideoModeParameters();
                 videoMode = true;
+                int w, h;
+
+                params.getPreviewSize(&w, &h);
+                CAMHAL_LOGVB("%s Preview Width=%d Height=%d\n", __FUNCTION__, w, h);
+                //HACK FOR MMS
+                mVideoWidth = w;
+                mVideoHeight = h;
+                CAMHAL_LOGVB("%s Video Width=%d Height=%d\n", __FUNCTION__, mVideoWidth, mVideoHeight);
+
+                setPreferredPreviewRes(w, h);
+                mParameters.getPreviewSize(&w, &h);
+                CAMHAL_LOGVB("%s Preview Width=%d Height=%d\n", __FUNCTION__, w, h);
+
                 }
             else if(strcmp(valstr, CameraParameters::FALSE) == 0)
                 {
                 CAMHAL_LOGDB("Recording Hint is set to %s", valstr);
                 mParameters.set(CameraParameters::KEY_RECORDING_HINT, valstr);
                 restartPreviewRequired = resetVideoModeParameters();
+                params.getPreviewSize(&mVideoWidth, &mVideoHeight);
                 }
             else
                 {
@@ -411,6 +427,7 @@ int CameraHal::setParameters(const CameraParameters& params)
             CAMHAL_LOGDA("Recording Hint is set to NULL");
             mParameters.set(CameraParameters::KEY_RECORDING_HINT, "");
             restartPreviewRequired = resetVideoModeParameters();
+            params.getPreviewSize(&mVideoWidth, &mVideoHeight);
             }
 
         ///Below parameters can be changed when the preview is running
@@ -1186,6 +1203,54 @@ status_t CameraHal::allocImageBufs(unsigned int width, unsigned int height, size
     return ret;
 }
 
+status_t CameraHal::allocVideoBufs(uint32_t width, uint32_t height, uint32_t bufferCount)
+{
+  status_t ret = NO_ERROR;
+  LOG_FUNCTION_NAME;
+
+  if( NULL != mVideoBufs ){
+    ret = freeVideoBufs(mVideoBufs);
+    mVideoBufs = NULL;
+  }
+
+  if ( NO_ERROR == ret ){
+    int32_t stride;
+    buffer_handle_t *bufsArr = new buffer_handle_t [bufferCount];
+
+    if (bufsArr != NULL){
+      for (int i = 0; i< bufferCount; i++){
+        GraphicBufferAllocator &GrallocAlloc = GraphicBufferAllocator::get();
+        buffer_handle_t buf;
+        ret = GrallocAlloc.alloc(width, height, HAL_PIXEL_FORMAT_NV12, CAMHAL_GRALLOC_USAGE, &buf, &stride);
+        if (ret != NO_ERROR){
+          CAMHAL_LOGEA("Couldn't allocate video buffers using Gralloc");
+          ret = -NO_MEMORY;
+          for (int j=0; j< i; j++){
+            buf = (buffer_handle_t)bufsArr[j];
+            CAMHAL_LOGEB("Freeing Gralloc Buffer 0x%x", buf);
+            GrallocAlloc.free(buf);
+          }
+          delete [] bufsArr;
+          goto exit;
+        }
+        bufsArr[i] = buf;
+        CAMHAL_LOGVB("*** Gralloc Handle =0x%x ***", buf);
+      }
+
+      mVideoBufs = (int32_t *)bufsArr;
+    }
+    else{
+      CAMHAL_LOGEA("Couldn't allocate video buffers ");
+      ret = -NO_MEMORY;
+    }
+  }
+
+ exit:
+  LOG_FUNCTION_NAME;
+
+  return ret;
+}
+
 void endImageCapture( void *userData)
 {
     LOG_FUNCTION_NAME;
@@ -1262,7 +1327,33 @@ status_t CameraHal::freeImageBufs()
     return ret;
 }
 
+status_t CameraHal::freeVideoBufs(void *bufs)
+{
+  status_t ret = NO_ERROR;
 
+  LOG_FUNCTION_NAME;
+
+  buffer_handle_t *pBuf = (buffer_handle_t*)bufs;
+  int count = atoi(mCameraProperties->get(CameraProperties::REQUIRED_PREVIEW_BUFS));
+  if(pBuf == NULL)
+    {
+      CAMHAL_LOGEA("NULL pointer passed to freeVideoBuffer");
+      LOG_FUNCTION_NAME_EXIT;
+      return BAD_VALUE;
+    }
+
+  GraphicBufferAllocator &GrallocAlloc = GraphicBufferAllocator::get();
+
+  for(int i = 0; i < count; i++){
+    buffer_handle_t ptr = *pBuf++;
+    CAMHAL_LOGVB("Free Video Gralloc Handle 0x%x", ptr);
+    GrallocAlloc.free(ptr);
+  }
+
+  LOG_FUNCTION_NAME_EXIT;
+
+  return ret;
+}
 
 /**
    @brief Start preview mode.
@@ -1723,9 +1814,31 @@ status_t CameraHal::startRecording( )
         }
 
     if ( NO_ERROR == ret )
-        {
-         ret = mAppCallbackNotifier->initSharedVideoBuffers(mPreviewBufs, mPreviewOffsets, mPreviewFd, mPreviewLength, atoi(mCameraProperties->get(CameraProperties::REQUIRED_PREVIEW_BUFS)));
-        }
+      {
+        int count = atoi(mCameraProperties->get(CameraProperties::REQUIRED_PREVIEW_BUFS));
+        mParameters.getPreviewSize(&w, &h);
+        CAMHAL_LOGDB("%s Video Width=%d Height=%d", __FUNCTION__, mVideoWidth, mVideoHeight);
+
+        if ((w != mVideoWidth) && (h != mVideoHeight))
+          {
+            ret = allocVideoBufs(mVideoWidth, mVideoHeight, count);
+            if ( NO_ERROR != ret )
+              {
+                CAMHAL_LOGEB("allocImageBufs returned error 0x%x", ret);
+                return ret;
+              }
+
+            mAppCallbackNotifier->useVideoBuffers(true);
+            mAppCallbackNotifier->setVideoRes(mVideoWidth, mVideoHeight);
+            ret = mAppCallbackNotifier->initSharedVideoBuffers(mPreviewBufs, mPreviewOffsets, mPreviewFd, mPreviewLength, count, mVideoBufs);
+          }
+        else
+          {
+            mAppCallbackNotifier->useVideoBuffers(false);
+            mAppCallbackNotifier->setVideoRes(mPreviewWidth, mPreviewHeight);
+            ret = mAppCallbackNotifier->initSharedVideoBuffers(mPreviewBufs, mPreviewOffsets, mPreviewFd, mPreviewLength, count, NULL);
+          }
+      }
 
     if ( NO_ERROR == ret )
         {
@@ -1949,6 +2062,15 @@ void CameraHal::stopRecording()
     mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_VIDEO);
 
     mRecordingEnabled = false;
+
+    if ( mAppCallbackNotifier->getUesVideoBuffers() ){
+      freeVideoBufs(mVideoBufs);
+      if (mVideoBufs){
+        CAMHAL_LOGVB(" FREEING mVideoBufs 0x%x", mVideoBufs);
+        delete [] mVideoBufs;
+      }
+      mVideoBufs = NULL;
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 }
@@ -2192,9 +2314,9 @@ status_t CameraHal::startImageBracketing()
                                  mParameters.getPictureFormat(),
                                  ( mBracketRangeNegative + 1 ));
             if ( NO_ERROR != ret )
-                {
+              {
                 CAMHAL_LOGEB("allocImageBufs returned error 0x%x", ret);
-                }
+              }
             }
 
         if (  (NO_ERROR == ret) && ( NULL != mCameraAdapter ) )
@@ -2455,6 +2577,7 @@ char* CameraHal::getParameters()
 {
     String8 params_str8;
     char* params_string;
+    const char * valstr = NULL;
 
     LOG_FUNCTION_NAME;
 
@@ -2463,8 +2586,20 @@ char* CameraHal::getParameters()
         mCameraAdapter->getParameters(mParameters);
     }
 
+    CameraParameters mParams = mParameters;
 
-    params_str8 = mParameters.flatten();
+    // Handle RECORDING_HINT to Set/Reset Video Mode Parameters
+    valstr = mParameters.get(CameraParameters::KEY_RECORDING_HINT);
+    if(valstr != NULL)
+      {
+        if(strcmp(valstr, CameraParameters::TRUE) == 0)
+          {
+            //HACK FOR MMS MODE
+            resetPreviewRes(&mParams, mVideoWidth, mVideoHeight);
+          }
+      }
+
+    params_str8 = mParams.flatten();
 
     // camera service frees this string...
     params_string = (char*) malloc(sizeof(char) * (params_str8.length()+1));
@@ -2644,6 +2779,8 @@ CameraHal::CameraHal(int cameraId)
     mRecordEnabled = 0;
     mSensorListener = NULL;
     mDynamicPreviewSwitch = false;
+    mVideoWidth = 0;
+    mVideoHeight = 0;
 
 #if PPM_INSTRUMENTATION || PPM_INSTRUMENTATION_ABS
 
@@ -3319,6 +3456,31 @@ void CameraHal::selectFPSRange(int framerate, int *min_fps, int *max_fps)
 
   LOG_FUNCTION_NAME_EXIT;
 
+}
+
+void CameraHal::setPreferredPreviewRes(int width, int height)
+{
+  LOG_FUNCTION_NAME;
+
+  if ( (width == 320) && (height == 240)){
+    mParameters.setPreviewSize(640,480);
+  }
+  if ( (width == 176) && (height == 144)){
+    mParameters.setPreviewSize(704,576);
+  }
+
+  LOG_FUNCTION_NAME_EXIT;
+}
+
+void CameraHal::resetPreviewRes(CameraParameters *mParams, int width, int height)
+{
+  LOG_FUNCTION_NAME;
+
+  if ( (width <= 320) && (height <= 240)){
+    mParams->setPreviewSize(mVideoWidth, mVideoHeight);
+  }
+
+  LOG_FUNCTION_NAME_EXIT;
 }
 
 };

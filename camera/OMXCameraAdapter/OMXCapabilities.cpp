@@ -471,6 +471,32 @@ status_t OMXCameraAdapter::insertPreviewSizes(CameraProperties::Properties* para
     return ret;
 }
 
+status_t OMXCameraAdapter::insertVideoSizes(CameraProperties::Properties* params, OMX_TI_CAPTYPE &caps) {
+    status_t ret = NO_ERROR;
+    char supported[MAX_PROP_VALUE_LENGTH];
+
+    LOG_FUNCTION_NAME;
+
+    memset(supported, '\0', MAX_PROP_VALUE_LENGTH);
+
+    ret = encodeSizeCap(caps.tPreviewResRange,
+                        mPreviewRes,
+                        ARRAY_SIZE(mPreviewRes),
+                        supported,
+                        MAX_PROP_VALUE_LENGTH);
+
+    if ( NO_ERROR != ret ) {
+      CAMHAL_LOGEB("Error inserting supported video sizes 0x%x", ret);
+    } else {
+      remove_last_sep(supported);
+      params->set(CameraProperties::SUPPORTED_VIDEO_SIZES, supported);
+    }
+
+    LOG_FUNCTION_NAME;
+
+    return ret;
+}
+
 status_t OMXCameraAdapter::insertThumbSizes(CameraProperties::Properties* params, OMX_TI_CAPTYPE &caps) {
     status_t ret = NO_ERROR;
     char supported[MAX_PROP_VALUE_LENGTH];
@@ -1006,6 +1032,9 @@ status_t OMXCameraAdapter::insertDefaults(CameraProperties::Properties* params, 
     params->set(CameraProperties::HOR_ANGLE, DEFAULT_HOR_ANGLE);
     params->set(CameraProperties::VER_ANGLE, DEFAULT_VER_ANGLE);
     params->set(CameraProperties::VIDEO_SNAPSHOT_SUPPORTED, DEFAULT_VIDEO_SNAPSHOT_SUPPORTED);
+    params->set(CameraProperties::VIDEO_SIZE, DEFAULT_VIDEO_SIZE);
+    params->set(CameraProperties::PREFERRED_PREVIEW_SIZE_FOR_VIDEO, DEFAULT_PREFERRED_PREVIEW_SIZE_FOR_VIDEO);
+
     LOG_FUNCTION_NAME;
 
     return ret;
@@ -1137,6 +1166,10 @@ status_t OMXCameraAdapter::insertCapabilities(CameraProperties::Properties* para
     //NOTE: Ensure that we always call insertDefaults after inserting the supported capabilities
     //as there are checks inside insertDefaults to make sure a certain default is supported
     // or not
+    if ( NO_ERROR == ret ) {
+      ret = insertVideoSizes(params, caps);
+    }
+
     if ( NO_ERROR == ret ) {
         ret = insertDefaults(params, caps);
     }
