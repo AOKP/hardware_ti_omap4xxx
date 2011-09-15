@@ -645,7 +645,7 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
             return BAD_VALUE;
             }
 
-        if(ret != -1)
+        if( NO_ERROR == ret )
             {
             eError =  OMX_SetParameter(mCameraAdapterParameters.mHandleComp,
                                        ( OMX_INDEXTYPE ) OMX_TI_IndexParamZslHistoryLen,
@@ -653,7 +653,10 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
             if ( OMX_ErrorNone != eError )
                 {
                 CAMHAL_LOGEB("Error while configuring ZSL History len 0x%x", eError);
-                ret = -1;
+                // Don't return status for now
+                // as high history values might lead
+                // to errors on some platforms.
+                // ret = ErrorUtils::omxToAndroidError(eError);
                 }
             else
                 {
@@ -661,7 +664,7 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
                 }
             }
 
-        if(ret != -1)
+        if( NO_ERROR == ret )
             {
             eError =  OMX_SetParameter(mCameraAdapterParameters.mHandleComp,
                                        ( OMX_INDEXTYPE ) OMX_IndexCameraOperatingMode,
@@ -669,7 +672,7 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
             if ( OMX_ErrorNone != eError )
                 {
                 CAMHAL_LOGEB("Error while configuring camera mode 0x%x", eError);
-                ret = -1;
+                ret = ErrorUtils::omxToAndroidError(eError);
                 }
             else
                 {
@@ -677,7 +680,7 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
                 }
             }
 
-        if(ret != -1)
+        if( NO_ERROR == ret )
             {
             //Configure CAC
             eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
@@ -686,7 +689,7 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
             if ( OMX_ErrorNone != eError )
                 {
                 CAMHAL_LOGEB("Error while configuring CAC 0x%x", eError);
-                ret = -1;
+                ret = ErrorUtils::omxToAndroidError(eError);
                 }
             else
                 {
