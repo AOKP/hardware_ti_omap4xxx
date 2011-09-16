@@ -239,11 +239,21 @@ void BaseCameraAdapter::returnFrame(void* frameBuf, CameraFrame::FrameType frame
 
         refCount = getFrameRefCount(frameBuf,  frameType);
 
+        if(frameType == CameraFrame::PREVIEW_FRAME_SYNC)
+            {
+            mFramesWithDisplay--;
+            }
+        else if(frameType == CameraFrame::VIDEO_FRAME_SYNC)
+            {
+            mFramesWithEncoder--;
+            }
+
         if ( 0 < refCount )
             {
 
             refCount--;
             setFrameRefCount(frameBuf, frameType, refCount);
+
 
             if ( ( mRecording ) && (  CameraFrame::VIDEO_FRAME_SYNC == frameType ) )
                 {
@@ -257,15 +267,26 @@ void BaseCameraAdapter::returnFrame(void* frameBuf, CameraFrame::FrameType frame
             }
         else
             {
+            CAMHAL_LOGEA("Frame returned when ref count is already zero!!");
             return;
             }
         }
+
+    CAMHAL_LOGVB("REFCOUNT 0x%x %d", frameBuf, refCount);
 
     if ( NO_ERROR == res )
         {
         //check if someone is holding this buffer
         if ( 0 == refCount )
             {
+#ifdef DEBUG_LOG
+            if(mBuffersWithDucati.indexOfKey((int)frameBuf)>=0)
+                {
+                LOGE("Buffer already with Ducati!! 0x%x", frameBuf);
+                for(int i=0;i<mBuffersWithDucati.size();i++) LOGE("0x%x", mBuffersWithDucati.keyAt(i));
+                }
+            mBuffersWithDucati.add((int)frameBuf,1);
+#endif
             res = fillThisBuffer(frameBuf, frameType);
             }
         }

@@ -31,6 +31,8 @@
 #include <cutils/properties.h>
 #define UNLIKELY( exp ) (__builtin_expect( (exp) != 0, false ))
 static int mDebugFps = 0;
+static int mDebugFcs = 0;
+
 
 #define HERE(Msg) {CAMHAL_LOGEB("--===line %d, %s===--\n", __LINE__, Msg);}
 
@@ -54,6 +56,8 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
     char value[PROPERTY_VALUE_MAX];
     property_get("debug.camera.showfps", value, "0");
     mDebugFps = atoi(value);
+    property_get("debug.camera.framecounts", value, "0");
+    mDebugFcs = atoi(value);
 
     TIMM_OSAL_ERRORTYPE osalError = OMX_ErrorNone;
     OMX_ERRORTYPE eError = OMX_ErrorNone;
@@ -441,6 +445,7 @@ status_t OMXCameraAdapter::fillThisBuffer(void* frameBuf, CameraFrame::FrameType
                     CAMHAL_LOGDB("OMX_FillThisBuffer 0x%x", eError);
                     ret = ErrorUtils::omxToAndroidError(eError);
                     }
+                mFramesWithDucati++;
                 break;
                 }
             }
@@ -1827,6 +1832,10 @@ status_t OMXCameraAdapter::startPreview()
             {
             CAMHAL_LOGEB("OMX_FillThisBuffer-0x%x", eError);
             }
+        mFramesWithDucati++;
+#ifdef DEGUG_LOG
+        mBuffersWithDucati.add((uint32_t)mPreviewData->mBufferHeader[index]->pBuffer,1);
+#endif
         GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
         }
 
@@ -2012,6 +2021,9 @@ status_t OMXCameraAdapter::stopPreview()
 
 
     mFirstTimeInit = true;
+    mFramesWithDucati = 0;
+    mFramesWithDisplay = 0;
+    mFramesWithEncoder = 0;
 
     LOG_FUNCTION_NAME_EXIT;
 
@@ -2864,7 +2876,7 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
                 }
             }
 
-        LOGV("FBD pBuffer = 0x%x", pBuffHeader->pBuffer);
+        //LOGV("FBD pBuffer = 0x%x", pBuffHeader->pBuffer);
 
         if( mWaitingForSnapshot )
           {
@@ -2877,7 +2889,27 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
               }
           }
 
+        if ( mRecording )
+            {
+            mFramesWithEncoder++;
+            }
+
         stat = sendCallBacks(cameraFrame, pBuffHeader, mask, pPortParam);
+        mFramesWithDisplay++;
+
+        mFramesWithDucati--;
+
+#ifdef DEBUG_LOG
+        if(mBuffersWithDucati.indexOfKey((int)pBuffHeader->pBuffer)<0)
+            {
+            LOGE("Buffer was never with Ducati!! 0x%x", pBuffHeader->pBuffer);
+            for(int i=0;i<mBuffersWithDucati.size();i++) LOGE("0x%x", mBuffersWithDucati.keyAt(i));
+            }
+        mBuffersWithDucati.removeItem((int)pBuffHeader->pBuffer);
+#endif
+
+        if(mDebugFcs)
+            CAMHAL_LOGEB("C[%d] D[%d] E[%d]", mFramesWithDucati, mFramesWithDisplay, mFramesWithEncoder);
 
         }
     else if( pBuffHeader->nOutputPortIndex == OMX_CAMERA_PORT_VIDEO_OUT_MEASUREMENT )
@@ -3079,6 +3111,8 @@ status_t OMXCameraAdapter::sendCallBacks(CameraFrame frame, OMX_IN OMX_BUFFERHEA
       ret = sendFrameToSubscribers(&frame);
   }
 
+  CAMHAL_LOGVB("B 0x%x T %llu", frame.mBuffer, pBuffHeader->nTimeStamp);
+
   LOG_FUNCTION_NAME_EXIT;
 
   return ret;
@@ -3241,6 +3275,10 @@ OMXCameraAdapter::OMXCameraAdapter():mComponentState (OMX_StateLoaded)
 
     mUserSetExpLock = OMX_FALSE;
     mUserSetWbLock = OMX_FALSE;
+
+    mFramesWithDucati = 0;
+    mFramesWithDisplay = 0;
+    mFramesWithEncoder = 0;
 
     LOG_FUNCTION_NAME_EXIT;
 }

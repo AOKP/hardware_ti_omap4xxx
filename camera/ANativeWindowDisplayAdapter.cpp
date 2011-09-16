@@ -198,7 +198,7 @@ ANativeWindowDisplayAdapter::~ANativeWindowDisplayAdapter()
         // Unregister with the frame provider
         mFrameProvider->disableFrameNotification(CameraFrame::ALL_FRAMES);
         delete mFrameProvider;
-        mFrameProvider = NULL; 
+        mFrameProvider = NULL;
     }
 
     ///The ANativeWindow object will get destroyed here

@@ -245,6 +245,15 @@ protected:
     void *mReleaseData;
     void *mEndCaptureData;
     bool mRecording;
+
+    uint32_t mFramesWithDucati;
+    uint32_t mFramesWithDisplay;
+    uint32_t mFramesWithEncoder;
+
+#ifdef DEBUG_LOG
+    KeyedVector<int, bool> mBuffersWithDucati;
+#endif
+
 };
 
 };
