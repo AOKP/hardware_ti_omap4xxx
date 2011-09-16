@@ -573,7 +573,8 @@ static int omap4_hwc_is_valid_layer(omap4_hwc_device_t *hwc_dev,
     return omap4_hwc_can_scale_layer(hwc_dev, layer, handle);
 }
 
-static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres, __u32 yres)
+static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres, __u32 yres,
+					__u32 xratio, __u32 yratio)
 {
     struct _qdis {
         struct dsscomp_display_info dis;
@@ -613,7 +614,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         if (mode_area == 0)
             continue;
 
-        get_max_dimensions(xres, yres, 1, 1, d.modedb[i].xres, d.modedb[i].yres,
+        get_max_dimensions(xres, yres, xratio, yratio, d.modedb[i].xres, d.modedb[i].yres,
                            ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
 
         if (!omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
@@ -662,7 +663,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         __u32 ext_height = d.dis.height_in_mm;
         __u32 ext_fb_xres, ext_fb_yres;
 
-        get_max_dimensions(xres, yres, 1, 1, d.dis.timings.x_res, d.dis.timings.y_res,
+        get_max_dimensions(xres, yres, xratio, yratio, d.dis.timings.x_res, d.dis.timings.y_res,
                            ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
         if (!omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
                                  hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits)) {
@@ -954,7 +955,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             if (hwc_dev->ext != hwc_dev->ext_last) {
                 __u32 xres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
                 __u32 yres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.width : hwc_dev->fb_dev->base.height;
-                omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres);
+                omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1, 1);
                 set_ext_matrix(hwc_dev, hwc_dev->fb_dev->base.width, hwc_dev->fb_dev->base.height);
             }
         }
@@ -970,24 +971,29 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             o->ba = ix;
 
             if (hwc_dev->ext & EXT_DOCK) {
+                /* full screen video */
+                o->cfg.win.x = 0;
+                o->cfg.win.y = 0;
+                if (o->cfg.rotation & 1) {
+                    __u16 t = o->cfg.win.w;
+                    o->cfg.win.w = o->cfg.win.h;
+                    o->cfg.win.h = t;
+                }
+                o->cfg.rotation = 0;
+                o->cfg.mirror = 0;
+
                 /* adjust hdmi mode based on resolution */
                 if (o->cfg.crop.w != hwc_dev->last_xres_used ||
                     o->cfg.crop.h != hwc_dev->last_yres_used) {
                     LOGD("set up HDMI for %d*%d\n", o->cfg.crop.w, o->cfg.crop.h);
-                    if (omap4_hwc_set_best_hdmi_mode(hwc_dev, o->cfg.crop.w, o->cfg.crop.h)) {
+                    if (omap4_hwc_set_best_hdmi_mode(hwc_dev, o->cfg.crop.w, o->cfg.crop.h,
+                                                     o->cfg.win.w * o->cfg.crop.h,
+                                                     o->cfg.win.h * o->cfg.crop.w)) {
                         o->cfg.enabled = 0;
                         hwc_dev->ext = 0;
                         continue;
                     }
                 }
-
-                /* full screen video */
-                o->cfg.win.x = 0;
-                o->cfg.win.y = 0;
-                o->cfg.win.w = o->cfg.crop.w;
-                o->cfg.win.h = o->cfg.crop.h;
-                o->cfg.rotation = 0;
-                o->cfg.mirror = 0;
 
                 set_ext_matrix(hwc_dev, o->cfg.win.w, o->cfg.win.h);
             }
@@ -1219,7 +1225,7 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
         hwc_dev->ext = EXT_ON | 3;
         __u32 xres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
         __u32 yres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.width : hwc_dev->fb_dev->base.height;
-        int res = omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres);
+        int res = omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1, 1);
         if (!res) {
             ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
 
