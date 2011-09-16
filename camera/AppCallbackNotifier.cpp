@@ -27,7 +27,6 @@
 #include <ui/GraphicBuffer.h>
 #include <ui/GraphicBufferMapper.h>
 
-#define LOCK_BUFFER_TRIES 5
 namespace android {
 
 const int AppCallbackNotifier::NOTIFIER_TIMEOUT = -1;
@@ -401,31 +400,11 @@ static void copy2Dto1D(void *dst,
     unsigned char *bufferDst, *bufferSrc;
     unsigned char *bufferDstEnd, *bufferSrcEnd;
     uint16_t *bufferSrc_UV;
-    void *y_uv[2];     //y_uv[0]=> y pointer; y_uv[1]=>uv pointer
-    int lock_try_count = 0;
 
-    GraphicBufferMapper &mapper = GraphicBufferMapper::get();
-    Rect bounds;
+    unsigned int *y_uv = (unsigned int *)src;
 
-    bounds.left = offset % stride;
-    bounds.top = offset / stride;
-    bounds.right = width;
-    bounds.bottom = height;
-
-    // get the y & uv pointers from the gralloc handle;
-    while (mapper.lock((buffer_handle_t)src, CAMHAL_GRALLOC_USAGE, bounds, y_uv) < 0) {
-        // give up after LOCK_BUFFER_TRIES (defined in this file)
-        if (++lock_try_count > LOCK_BUFFER_TRIES) {
-            return;
-        }
-
-        // sleep for 50 ms before we try to lock again.
-        // somebody else has a write lock on this buffer
-        usleep(50000);
-    }
-
-    CAMHAL_LOGDB("copy2Dto1D() y= %p ; uv=%p.",y_uv[0],y_uv[1]);
-    CAMHAL_LOGDB("pixelFormat,= %d; offset=%d",*pixelFormat,offset);
+    CAMHAL_LOGVB("copy2Dto1D() y= %p ; uv=%p.",y_uv[0], y_uv[1]);
+    CAMHAL_LOGVB("pixelFormat,= %d; offset=%d",*pixelFormat,offset);
 
     if (pixelFormat!=NULL) {
         if (strcmp(pixelFormat, CameraParameters::PIXEL_FORMAT_YUV422I) == 0) {
@@ -560,7 +539,6 @@ static void copy2Dto1D(void *dst,
                     );
                 }
             }
-            mapper.unlock((buffer_handle_t)src);
             return ;
 
         } else if(strcmp(pixelFormat, CameraParameters::PIXEL_FORMAT_RGB565) == 0) {
@@ -577,7 +555,6 @@ static void copy2Dto1D(void *dst,
     for ( int i = 0 ; i < height ; i++,  bufferSrc += alignedRow, bufferDst += row) {
         memcpy(bufferDst, bufferSrc, row);
     }
-    mapper.unlock((buffer_handle_t)src);
 }
 
 void AppCallbackNotifier::copyAndSendPictureFrame(CameraFrame* frame, int32_t msgType)
@@ -657,8 +634,13 @@ void AppCallbackNotifier::copyAndSendPreviewFrame(CameraFrame* frame, int32_t ms
                     memset(dest, 0, (mPreviewMemory->size / MAX_BUFFERS));
                 }
             } else {
+              if ((NULL == frame->mYuv[0]) || (NULL == frame->mYuv[1])){
+                CAMHAL_LOGEA("Error! One of the YUV Pointer is NULL");
+                goto exit;
+              }
+              else{
                 copy2Dto1D(dest,
-                           frame->mBuffer,
+                           frame->mYuv,
                            frame->mWidth,
                            frame->mHeight,
                            frame->mAlignment,
@@ -666,6 +648,7 @@ void AppCallbackNotifier::copyAndSendPreviewFrame(CameraFrame* frame, int32_t ms
                            2,
                            frame->mLength,
                            mPreviewPixelFormat);
+              }
             }
         }
     }
@@ -989,9 +972,9 @@ void AppCallbackNotifier::frameCallback(CameraFrame* caFrame)
         frame = new CameraFrame(*caFrame);
         if ( NULL != frame )
             {
-            msg.command = AppCallbackNotifier::NOTIFIER_CMD_PROCESS_FRAME;
-            msg.arg1 = frame;
-            mFrameQ.put(&msg);
+              msg.command = AppCallbackNotifier::NOTIFIER_CMD_PROCESS_FRAME;
+              msg.arg1 = frame;
+              mFrameQ.put(&msg);
             }
         else
             {

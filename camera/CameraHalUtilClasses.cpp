@@ -68,6 +68,17 @@ int FrameProvider::returnFrame(void *frameBuf, CameraFrame::FrameType frameType)
     return ret;
 }
 
+void FrameProvider::addFramePointers(void *frameBuf, void *buf)
+{
+  mFrameNotifier->addFramePointers(frameBuf, buf);
+  return;
+}
+
+void FrameProvider::removeFramePointers()
+{
+  mFrameNotifier->removeFramePointers();
+  return;
+}
 
 /*--------------------FrameProvider Class ENDS here-----------------------------*/
 

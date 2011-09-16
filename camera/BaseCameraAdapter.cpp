@@ -220,6 +220,38 @@ void BaseCameraAdapter::disableMsgType(int32_t msgs, void* cookie)
     LOG_FUNCTION_NAME_EXIT;
 }
 
+void BaseCameraAdapter::addFramePointers(void *frameBuf, void *buf)
+{
+  unsigned int *pBuf = (unsigned int *)buf;
+  Mutex::Autolock lock(mSubscriberLock);
+
+  if ((frameBuf != NULL) && ( pBuf != NULL) )
+    {
+      CameraFrame *frame = new CameraFrame;
+      frame->mBuffer = frameBuf;
+      frame->mYuv[0] = pBuf[0];
+      frame->mYuv[1] = pBuf[1];
+      mFrameQueue.add(frameBuf, frame);
+
+      CAMHAL_LOGVB("Adding Frame=0x%x Y=0x%x UV=0x%x", frame->mBuffer, frame->mYuv[0], frame->mYuv[1]);
+    }
+}
+
+void BaseCameraAdapter::removeFramePointers()
+{
+  Mutex::Autolock lock(mSubscriberLock);
+
+  int size = mFrameQueue.size();
+  CAMHAL_LOGVB("Removing %d Frames = ", size);
+  for (int i = 0; i < size; i++)
+    {
+      CameraFrame *frame = (CameraFrame *)mFrameQueue.valueAt(i);
+      CAMHAL_LOGVB("Free Frame=0x%x Y=0x%x UV=0x%x", frame->mBuffer, frame->mYuv[0], frame->mYuv[1]);
+      delete frame;
+    }
+  mFrameQueue.clear();
+}
+
 void BaseCameraAdapter::returnFrame(void* frameBuf, CameraFrame::FrameType frameType)
 {
     status_t res = NO_ERROR;
@@ -1174,6 +1206,18 @@ status_t BaseCameraAdapter::__sendFrameToSubscribers(CameraFrame* frame,
     frame_callback callback = NULL;
 
     frame->mFrameType = frameType;
+
+    if ( (frameType == CameraFrame::PREVIEW_FRAME_SYNC) || (frameType == CameraFrame::VIDEO_FRAME_SYNC)){
+        if (mFrameQueue.size() > 0){
+          CameraFrame *lframe = (CameraFrame *)mFrameQueue.valueFor(frame->mBuffer);
+          frame->mYuv[0] = lframe->mYuv[0];
+          frame->mYuv[1] = lframe->mYuv[1];
+        }
+        else{
+          CAMHAL_LOGEA("Empty Frame Queue");
+          return -EINVAL;
+        }
+      }
 
     if (NULL != subscribers) {
         refCount = getFrameRefCount(frame->mBuffer, frameType);

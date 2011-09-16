@@ -425,6 +425,7 @@ int ANativeWindowDisplayAdapter::disableDisplay(bool cancel_buffer)
 
     // Unregister with the frame provider here
     mFrameProvider->disableFrameNotification(CameraFrame::PREVIEW_FRAME_SYNC);
+    mFrameProvider->removeFramePointers();
 
     if ( NULL != mDisplayThread.get() )
         {
@@ -655,6 +656,7 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
         mANativeWindow->lock_buffer(mANativeWindow, mBufferHandleMap[i]);
 
         mapper.lock((buffer_handle_t) mGrallocHandleMap[i], CAMHAL_GRALLOC_USAGE, bounds, y_uv);
+        mFrameProvider->addFramePointers(mGrallocHandleMap[i] , y_uv);
     }
 
     // return the rest of the buffers back to ANativeWindow
@@ -672,6 +674,11 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
             goto fail;
         }
         mFramesWithCameraAdapterMap.removeItem((int) mGrallocHandleMap[i]);
+        //LOCK UNLOCK TO GET YUV POINTERS
+        void *y_uv[2];
+        mapper.lock((buffer_handle_t) mGrallocHandleMap[i], CAMHAL_GRALLOC_USAGE, bounds, y_uv);
+        mFrameProvider->addFramePointers(mGrallocHandleMap[i] , y_uv);
+        mapper.unlock((buffer_handle_t) mGrallocHandleMap[i]);
     }
 
     mFirstInit = true;
@@ -1061,7 +1068,6 @@ status_t ANativeWindowDisplayAdapter::PostFrame(ANativeWindowDisplayAdapter::Dis
 
         // unlock buffer before sending to display
         mapper.unlock((buffer_handle_t) mGrallocHandleMap[i]);
-
         ret = mANativeWindow->enqueue_buffer(mANativeWindow, mBufferHandleMap[i]);
         if (ret != 0) {
             LOGE("Surface::queueBuffer returned error %d", ret);
@@ -1171,7 +1177,18 @@ bool ANativeWindowDisplayAdapter::handleFrameReturn()
     bounds.top = 0;
     bounds.right = mFrameWidth;
     bounds.bottom = mFrameHeight;
-    mapper.lock((buffer_handle_t) mGrallocHandleMap[i], CAMHAL_GRALLOC_USAGE, bounds, y_uv);
+
+    int lock_try_count = 0;
+    while (mapper.lock((buffer_handle_t) mGrallocHandleMap[i], CAMHAL_GRALLOC_USAGE, bounds, y_uv) < 0){
+      if (++lock_try_count > LOCK_BUFFER_TRIES){
+        if ( NULL != mErrorNotifier.get() ){
+          mErrorNotifier->errorNotify(CAMERA_ERROR_UNKNOWN);
+        }
+        return false;
+      }
+      CAMHAL_LOGEA("Gralloc Lock FrameReturn Error: Sleeping 15ms");
+      usleep(15000);
+    }
 
     mFramesWithCameraAdapterMap.add((int) mGrallocHandleMap[i], i);
 

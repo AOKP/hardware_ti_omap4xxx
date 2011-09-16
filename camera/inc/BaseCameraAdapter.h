@@ -40,6 +40,8 @@ public:
     virtual void enableMsgType(int32_t msgs, frame_callback callback=NULL, event_callback eventCb=NULL, void* cookie=NULL);
     virtual void disableMsgType(int32_t msgs, void* cookie);
     virtual void returnFrame(void * frameBuf, CameraFrame::FrameType frameType);
+    virtual void addFramePointers(void *frameBuf, void *y_uv);
+    virtual void removeFramePointers();
 
     //APIs to configure Camera adapter and get the current parameter set
     virtual status_t setParameters(const CameraParameters& params) = 0;
@@ -254,6 +256,7 @@ protected:
     KeyedVector<int, bool> mBuffersWithDucati;
 #endif
 
+    KeyedVector<void *, CameraFrame *> mFrameQueue;
 };
 
 };
