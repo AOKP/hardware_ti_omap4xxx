@@ -1058,67 +1058,71 @@ status_t OMXCameraAdapter::setExposureLock(Gen3A_settings& Gen3A)
 
 status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggleExp, OMX_BOOL toggleWb)
 {
-  OMX_ERRORTYPE eError = OMX_ErrorNone;
-  OMX_IMAGE_CONFIG_LOCKTYPE lock;
-  char* index = FALSE;
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+    OMX_IMAGE_CONFIG_LOCKTYPE lock;
+    char* index = FALSE;
 
-  LOG_FUNCTION_NAME
+    LOG_FUNCTION_NAME
 
-  if ( OMX_StateInvalid == mComponentState )
+    if ( OMX_StateInvalid == mComponentState )
     {
       CAMHAL_LOGEA("OMX component is in invalid state");
       return NO_INIT;
     }
 
-  OMX_INIT_STRUCT_PTR (&lock, OMX_IMAGE_CONFIG_LOCKTYPE);
-  lock.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
+    OMX_INIT_STRUCT_PTR (&lock, OMX_IMAGE_CONFIG_LOCKTYPE);
+    lock.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
 
-  mParameters3A.ExposureLock = toggleExp;
-  mParameters3A.WhiteBalanceLock = toggleWb;
+    mParameters3A.ExposureLock = toggleExp;
+    mParameters3A.WhiteBalanceLock = toggleWb;
 
-  eError = OMX_GetConfig( mCameraAdapterParameters.mHandleComp,
-                          (OMX_INDEXTYPE)OMX_IndexConfigImageExposureLock,
-                          &lock);
-  if ( OMX_ErrorNone != eError )
-    {
-      CAMHAL_LOGEB("Error GetConfig Exposure Lock error = 0x%x", eError);
-    }
-  else
-    {
-      CAMHAL_LOGDA("Exposure Lock GetConfig successfull");
-    }
+    eError = OMX_GetConfig( mCameraAdapterParameters.mHandleComp,
+                            (OMX_INDEXTYPE)OMX_IndexConfigImageExposureLock,
+                            &lock);
 
-  /* Apply locks only when not applied already */
-  if ( lock.bLock  != toggleExp )
+    if ( OMX_ErrorNone != eError )
     {
-      setExposureLock(mParameters3A);
+        CAMHAL_LOGEB("Error GetConfig Exposure Lock error = 0x%x", eError);
+        goto EXIT;
     }
+    else
+    {
+        const char *lock_state_exp = toggleExp ? TRUE : FALSE;
+        CAMHAL_LOGDA("Exposure Lock GetConfig successfull");
 
-  eError = OMX_GetConfig( mCameraAdapterParameters.mHandleComp,
-                          (OMX_INDEXTYPE)OMX_IndexConfigImageWhiteBalanceLock,
-                          &lock);
-  if ( OMX_ErrorNone != eError )
-    {
-      CAMHAL_LOGEB("Error GetConfig WhiteBalance Lock error = 0x%x", eError);
-    }
-  else
-    {
-      CAMHAL_LOGDA("WhiteBalance Lock GetConfig successfull");
+        /* Apply locks only when not applied already */
+        if ( lock.bLock  != toggleExp )
+        {
+            setExposureLock(mParameters3A);
+        }
+
+        mParams.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, lock_state_exp);
     }
 
-  /* Apply locks only when not applied already */
-  if ( lock.bLock != toggleWb )
+    eError = OMX_GetConfig( mCameraAdapterParameters.mHandleComp,
+                            (OMX_INDEXTYPE)OMX_IndexConfigImageWhiteBalanceLock,
+                            &lock);
+
+    if ( OMX_ErrorNone != eError )
     {
-      setWhiteBalanceLock(mParameters3A);
+        CAMHAL_LOGEB("Error GetConfig WhiteBalance Lock error = 0x%x", eError);
+        goto EXIT;
     }
+    else
+    {
+        const char *lock_state_wb = toggleWb ? TRUE : FALSE;
+        CAMHAL_LOGDA("WhiteBalance Lock GetConfig successfull");
 
-  const char *lock_state_exp = toggleExp ? TRUE : FALSE;
-  const char *lock_state_wb = toggleWb ? TRUE : FALSE;
-  mParams.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, lock_state_exp);
-  mParams.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, lock_state_wb);
+        /* Apply locks only when not applied already */
+        if ( lock.bLock != toggleWb )
+        {
+            setWhiteBalanceLock(mParameters3A);
+        }
 
-  return ErrorUtils::omxToAndroidError(eError);
-
+        mParams.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, lock_state_wb);
+    }
+ EXIT:
+    return ErrorUtils::omxToAndroidError(eError);
 }
 
 status_t OMXCameraAdapter::setMeteringAreas(Gen3A_settings& Gen3A)
