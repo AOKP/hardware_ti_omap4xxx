@@ -504,6 +504,8 @@ static int omap4_hwc_can_scale(int src_w, int src_h, int dst_w, int dst_h, int i
 {
     __u32 fclk = limits->fclk / 1000;
     __u32 pclk = dis->timings.pixel_clock;
+    if (!pclk)
+        return 0;
 
     /* ERRATAs */
     /* cannot render 1-width layers on DSI video mode panels - we just disallow all 1-width LCD layers */
@@ -583,6 +585,10 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
     if (ret)
         return ret;
 
+    if (d.dis.timings.x_res * d.dis.timings.y_res == 0 ||
+        xres * yres == 0)
+        return -EINVAL;
+
     __u32 i, best = ~0, best_score = 0;
     hwc_dev->ext_width = d.dis.width_in_mm;
     hwc_dev->ext_height = d.dis.height_in_mm;
@@ -603,6 +609,9 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
             ext_width = 16;
             ext_height = 9;
         }
+
+        if (mode_area == 0)
+            continue;
 
         get_max_dimensions(xres, yres, 1, 1, d.modedb[i].xres, d.modedb[i].yres,
                            ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
