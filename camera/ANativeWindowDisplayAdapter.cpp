@@ -826,6 +826,7 @@ int ANativeWindowDisplayAdapter::freeBuffer(void* buf)
     if ( NULL != buf )
     {
         delete [] buffers;
+        mGrallocHandleMap = NULL;
     }
 
     if( mBufferHandleMap != NULL)
@@ -1001,6 +1002,12 @@ status_t ANativeWindowDisplayAdapter::PostFrame(ANativeWindowDisplayAdapter::Dis
     ///@todo Insert logic to drop frames here based on refresh rate of
     ///display or rendering rate whichever is lower
     ///Queue the buffer to overlay
+
+    if (!mGrallocHandleMap || !dispFrame.mBuffer) {
+        CAMHAL_LOGEA("NULL sent to PostFrame");
+        return -EINVAL;
+    }
+
     for ( i = 0; i < mBufferCount; i++ )
         {
         if ( ((int) dispFrame.mBuffer ) == (int)mGrallocHandleMap[i] )

@@ -2405,7 +2405,7 @@ void OMXCameraAdapter::onOrientationEvent(uint32_t orientation, uint32_t tilt)
 {
     LOG_FUNCTION_NAME;
 
-    static const int DEGREES_TILT_IGNORE = 45;
+    static const unsigned int DEGREES_TILT_IGNORE = 45;
     int device_orientation = 0;
     int mount_orientation = 0;
     const char *facing_direction = NULL;
@@ -2530,7 +2530,7 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterEventHandler(OMX_IN OMX_HANDLETY
                 */
                 if ( !mEventSignalQ.isEmpty() )
                   {
-                    for (int i = 0 ; i < mEventSignalQ.size(); i++ )
+                    for (unsigned int i = 0 ; i < mEventSignalQ.size(); i++ )
                       {
                         CAMHAL_LOGEB("***Removing %d EVENTS***** \n", mEventSignalQ.size());
                         //remove from queue and free msg
@@ -2811,6 +2811,12 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
 
     res1 = res2 = NO_ERROR;
     pPortParam = &(mCameraAdapterParameters.mCameraPortParams[pBuffHeader->nOutputPortIndex]);
+
+    if ( !pBuffHeader || !pBuffHeader->pBuffer ) {
+        CAMHAL_LOGEA("NULL Buffer from OMX");
+        return OMX_ErrorNone;
+    }
+
     if (pBuffHeader->nOutputPortIndex == OMX_CAMERA_PORT_VIDEO_OUT_PREVIEW)
         {
 
@@ -3064,8 +3070,14 @@ status_t OMXCameraAdapter::sendCallBacks(CameraFrame frame, OMX_IN OMX_BUFFERHEA
     }
 
   frame.mTimestamp = (pBuffHeader->nTimeStamp * 1000) - mTimeSourceDelta;
-  setInitFrameRefCount(frame.mBuffer, mask);
-  ret = sendFrameToSubscribers(&frame);
+
+  ret = setInitFrameRefCount(frame.mBuffer, mask);
+
+  if (ret != NO_ERROR) {
+     CAMHAL_LOGEA("Error in setInitFrameRefCount %d", ret);
+  } else {
+      ret = sendFrameToSubscribers(&frame);
+  }
 
   LOG_FUNCTION_NAME_EXIT;
 

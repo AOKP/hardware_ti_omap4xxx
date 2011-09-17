@@ -154,6 +154,14 @@ protected:
     int getFrameRefCount(void* frameBuf, CameraFrame::FrameType frameType);
     int setInitFrameRefCount(void* buf, unsigned int mask);
 
+// private member functions
+private:
+    status_t __sendFrameToSubscribers(CameraFrame* frame,
+                                      KeyedVector<int, frame_callback> *subscribers,
+                                      CameraFrame::FrameType frameType);
+
+// protected data types and variables
+protected:
     enum FrameState {
         STOPPED = 0,
         RUNNING

@@ -1083,10 +1083,6 @@ status_t BaseCameraAdapter::notifyFaceSubscribers(sp<CameraFDResult> &faces)
 status_t BaseCameraAdapter::sendFrameToSubscribers(CameraFrame *frame)
 {
     status_t ret = NO_ERROR;
-    frame_callback callback;
-    uint32_t i = 0;
-    KeyedVector<int, frame_callback> *subscribers = NULL;
-    size_t refCount = 0;
     unsigned int mask;
 
     if ( NULL == frame )
@@ -1104,122 +1100,32 @@ status_t BaseCameraAdapter::sendFrameToSubscribers(CameraFrame *frame)
 #if PPM_INSTRUMENTATION || PPM_INSTRUMENTATION_ABS
             CameraHal::PPM("Shot to Jpeg: ", &mStartCapture);
 #endif
-            subscribers = &mImageSubscribers;
-            frame->mFrameType = CameraFrame::IMAGE_FRAME;
-            if (NULL != subscribers)
-              {
-                refCount = getFrameRefCount(frame->mBuffer, CameraFrame::IMAGE_FRAME);
-                CAMHAL_LOGVB("Type of Frame: 0x%x address: 0x%x refCount start %d",
-                             frame->mFrameType,
-                             ( uint32_t ) frame->mBuffer,
-                             refCount);
-                for ( i = 0 ; i < refCount; i++ )
-                  {
-                    frame->mCookie = ( void * ) subscribers->keyAt(i);
-                    callback = (frame_callback) subscribers->valueAt(i);
-                    callback(frame);
-                  }
-              }
+            ret = __sendFrameToSubscribers(frame, &mImageSubscribers, CameraFrame::IMAGE_FRAME);
           }
           break;
         case CameraFrame::RAW_FRAME:
           {
-            subscribers = &mRawSubscribers;
-            frame->mFrameType = CameraFrame::RAW_FRAME;
-            if (NULL != subscribers)
-              {
-                refCount = getFrameRefCount(frame->mBuffer, CameraFrame::RAW_FRAME);
-                CAMHAL_LOGVB("Type of Frame: 0x%x address: 0x%x refCount start %d",
-                             frame->mFrameType,
-                             ( uint32_t ) frame->mBuffer,
-                             refCount);
-                for ( i = 0 ; i < refCount; i++ )
-                  {
-                    frame->mCookie = ( void * ) subscribers->keyAt(i);
-                    callback = (frame_callback) subscribers->valueAt(i);
-                    callback(frame);
-                  }
-              }
+            ret = __sendFrameToSubscribers(frame, &mRawSubscribers, CameraFrame::RAW_FRAME);
           }
           break;
         case CameraFrame::PREVIEW_FRAME_SYNC:
           {
-            subscribers = &mFrameSubscribers;
-            frame->mFrameType = CameraFrame::PREVIEW_FRAME_SYNC;
-            if (NULL != subscribers)
-              {
-                refCount = getFrameRefCount(frame->mBuffer, CameraFrame::PREVIEW_FRAME_SYNC);
-                CAMHAL_LOGVB("Type of Frame: 0x%x address: 0x%x refCount start %d",
-                             frame->mFrameType,
-                             ( uint32_t ) frame->mBuffer,
-                             refCount);
-                for ( i = 0 ; i < refCount; i++ )
-                  {
-                    frame->mCookie = ( void * ) subscribers->keyAt(i);
-                    callback = (frame_callback) subscribers->valueAt(i);
-                    callback(frame);
-                  }
-              }
+            ret = __sendFrameToSubscribers(frame, &mFrameSubscribers, CameraFrame::PREVIEW_FRAME_SYNC);
           }
           break;
         case CameraFrame::SNAPSHOT_FRAME:
           {
-            subscribers = &mFrameSubscribers;
-            frame->mFrameType = CameraFrame::SNAPSHOT_FRAME;
-            if (NULL != subscribers)
-              {
-                refCount = getFrameRefCount(frame->mBuffer, CameraFrame::SNAPSHOT_FRAME);
-                CAMHAL_LOGVB("Type of Frame: 0x%x address: 0x%x refCount start %d",
-                             frame->mFrameType,
-                             ( uint32_t ) frame->mBuffer,
-                             refCount);
-                for ( i = 0 ; i < refCount; i++ )
-                  {
-                    frame->mCookie = ( void * ) subscribers->keyAt(i);
-                    callback = (frame_callback) subscribers->valueAt(i);
-                    callback(frame);
-                  }
-              }
+            ret = __sendFrameToSubscribers(frame, &mFrameSubscribers, CameraFrame::SNAPSHOT_FRAME);
           }
           break;
         case CameraFrame::VIDEO_FRAME_SYNC:
           {
-            subscribers = &mVideoSubscribers;
-            frame->mFrameType = CameraFrame::VIDEO_FRAME_SYNC;
-            if (NULL != subscribers)
-              {
-                refCount = getFrameRefCount(frame->mBuffer, CameraFrame::VIDEO_FRAME_SYNC);
-                CAMHAL_LOGVB("Type of Frame: 0x%x address: 0x%x refCount start %d",
-                             frame->mFrameType,
-                             ( uint32_t ) frame->mBuffer,
-                             refCount);
-                for ( i = 0 ; i < refCount; i++ )
-                  {
-                    frame->mCookie = ( void * ) subscribers->keyAt(i);
-                    callback = (frame_callback) subscribers->valueAt(i);
-                    callback(frame);
-                  }
-              }
+            ret = __sendFrameToSubscribers(frame, &mVideoSubscribers, CameraFrame::VIDEO_FRAME_SYNC);
           }
           break;
         case CameraFrame::FRAME_DATA_SYNC:
           {
-            subscribers = &mFrameDataSubscribers;
-            frame->mFrameType = CameraFrame::FRAME_DATA_SYNC;
-            if (NULL != subscribers)
-              {
-                refCount = getFrameRefCount(frame->mBuffer, CameraFrame::FRAME_DATA_SYNC);
-                CAMHAL_LOGVB("Type of Frame: 0x%x address: 0x%x refCount start %d",
-                             frame->mFrameType,
-                             ( uint32_t ) frame->mBuffer,
-                             refCount);
-                for ( i = 0 ; i < refCount; i++ )
-                  {
-                    frame->mCookie = ( void * ) subscribers->keyAt(i);
-                    callback = (frame_callback) subscribers->valueAt(i);
-                    callback(frame);
-                  }
-              }
+            ret = __sendFrameToSubscribers(frame, &mFrameDataSubscribers, CameraFrame::FRAME_DATA_SYNC);
           }
           break;
         default:
@@ -1227,10 +1133,64 @@ status_t BaseCameraAdapter::sendFrameToSubscribers(CameraFrame *frame)
         break;
         }//SWITCH
         frame->mFrameMask &= ~mask;
+
+        if (ret != NO_ERROR) {
+            goto EXIT;
+        }
       }//IF
     }//FOR
+
+ EXIT:
     return ret;
 }
+
+status_t BaseCameraAdapter::__sendFrameToSubscribers(CameraFrame* frame,
+                                                     KeyedVector<int, frame_callback> *subscribers,
+                                                     CameraFrame::FrameType frameType)
+{
+    size_t refCount = 0;
+    status_t ret = NO_ERROR;
+    frame_callback callback = NULL;
+
+    frame->mFrameType = frameType;
+
+    if (NULL != subscribers) {
+        refCount = getFrameRefCount(frame->mBuffer, frameType);
+
+        if (refCount == 0) {
+            CAMHAL_LOGEB("Invalid ref count of 0");
+            return -EINVAL;
+        }
+
+        if (refCount > subscribers->size()) {
+            CAMHAL_LOGEB("Invalid ref count for frame type: 0x%x", frameType);
+            return -EINVAL;
+        }
+
+        CAMHAL_LOGVB("Type of Frame: 0x%x address: 0x%x refCount start %d",
+                     frame->mFrameType,
+                     ( uint32_t ) frame->mBuffer,
+                     refCount);
+
+        for ( unsigned int i = 0 ; i < refCount; i++ ) {
+            frame->mCookie = ( void * ) subscribers->keyAt(i);
+            callback = (frame_callback) subscribers->valueAt(i);
+
+            if (!callback) {
+                CAMHAL_LOGEB("callback not set for frame type: 0x%x", frameType);
+                return -EINVAL;
+            }
+
+            callback(frame);
+        }
+    } else {
+        CAMHAL_LOGEB("Subscribers is null??");
+        return -EINVAL;
+    }
+
+    return ret;
+}
+
 int BaseCameraAdapter::setInitFrameRefCount(void* buf, unsigned int mask)
 {
   int ret = NO_ERROR;
