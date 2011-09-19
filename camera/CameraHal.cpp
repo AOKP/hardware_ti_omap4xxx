@@ -1930,12 +1930,21 @@ status_t CameraHal::restartPreview()
  */
 void CameraHal::stopRecording()
 {
+    CameraAdapter::AdapterState currentState;
+
     LOG_FUNCTION_NAME;
+
+    Mutex::Autolock lock(mLock);
 
     if (!mRecordingEnabled )
         {
         return;
         }
+
+    currentState = mCameraAdapter->getState();
+    if (currentState == CameraAdapter::VIDEO_CAPTURE_STATE) {
+        mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_IMAGE_CAPTURE);
+    }
 
     mAppCallbackNotifier->stopRecording();
 
