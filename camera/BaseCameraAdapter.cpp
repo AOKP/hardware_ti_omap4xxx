@@ -1179,7 +1179,7 @@ status_t BaseCameraAdapter::__sendFrameToSubscribers(CameraFrame* frame,
         refCount = getFrameRefCount(frame->mBuffer, frameType);
 
         if (refCount == 0) {
-            CAMHAL_LOGEB("Invalid ref count of 0");
+            CAMHAL_LOGDA("Invalid ref count of 0");
             return -EINVAL;
         }
 
@@ -1205,7 +1205,7 @@ status_t BaseCameraAdapter::__sendFrameToSubscribers(CameraFrame* frame,
             callback(frame);
         }
     } else {
-        CAMHAL_LOGEB("Subscribers is null??");
+        CAMHAL_LOGEA("Subscribers is null??");
         return -EINVAL;
     }
 

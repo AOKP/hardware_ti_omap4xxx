@@ -3106,7 +3106,7 @@ status_t OMXCameraAdapter::sendCallBacks(CameraFrame frame, OMX_IN OMX_BUFFERHEA
   ret = setInitFrameRefCount(frame.mBuffer, mask);
 
   if (ret != NO_ERROR) {
-     CAMHAL_LOGEA("Error in setInitFrameRefCount %d", ret);
+     CAMHAL_LOGDB("Error in setInitFrameRefCount %d", ret);
   } else {
       ret = sendFrameToSubscribers(&frame);
   }
