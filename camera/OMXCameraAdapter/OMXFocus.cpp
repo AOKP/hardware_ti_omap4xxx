@@ -272,7 +272,7 @@ status_t OMXCameraAdapter::cancelAutoFocus()
 
     LOG_FUNCTION_NAME;
     // Unlock 3A locks since they were locked by AF conditionally
-    if( set3ALock(mUserSetExpLock, mUserSetWbLock) != NO_ERROR) {
+    if( set3ALock(mUserSetExpLock, mUserSetWbLock, OMX_FALSE) != NO_ERROR) {
       CAMHAL_LOGEA("Error Unlocking 3A locks");
     }
     else{
@@ -397,12 +397,6 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
             {
             focusStatus = false;
             }
-        ///FIXME: The ducati seems to return focus as false always if continuous focus is enabled
-        ///So, return focus as locked always until this is fixed.
-        else if(mParameters3A.Focus == OMX_IMAGE_FocusControlAuto )
-            {
-            focusStatus = true;
-            }
         else
             {
             switch (eFocusStatus.eFocusStatus)
@@ -423,7 +417,7 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
                 }
             //Lock the AE and AWB here
             // Apply 3A locks after AF
-            if( set3ALock(OMX_TRUE, OMX_TRUE) != NO_ERROR) {
+            if( set3ALock(OMX_TRUE, OMX_TRUE, OMX_TRUE) != NO_ERROR) {
                 CAMHAL_LOGEA("Error Applying 3A locks");
             }
             else

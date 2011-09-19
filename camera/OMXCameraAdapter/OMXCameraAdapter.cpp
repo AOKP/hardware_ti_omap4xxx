@@ -1914,7 +1914,7 @@ status_t OMXCameraAdapter::stopPreview()
     }
 
     //Release 3A locks
-    ret = set3ALock(OMX_FALSE, OMX_FALSE);
+    ret = set3ALock(OMX_FALSE, OMX_FALSE, OMX_FALSE);
     if(ret!=NO_ERROR)
       {
         CAMHAL_LOGEB("Error Releaseing 3A locks%d", ret);

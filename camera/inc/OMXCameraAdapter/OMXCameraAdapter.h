@@ -478,8 +478,9 @@ private:
     status_t setEffect(Gen3A_settings& Gen3A);
 
     status_t setExposureLock(Gen3A_settings& Gen3A);
+    status_t setFocusLock(Gen3A_settings& Gen3A);
     status_t setWhiteBalanceLock(Gen3A_settings& Gen3A);
-    status_t set3ALock(OMX_BOOL toggleExp, OMX_BOOL toggleWb);
+    status_t set3ALock(OMX_BOOL toggleExp, OMX_BOOL toggleWb, OMX_BOOL toggleFocus);
     status_t setMeteringAreas(Gen3A_settings& Gen3A);
 
     //API to set FrameRate using VFR interface

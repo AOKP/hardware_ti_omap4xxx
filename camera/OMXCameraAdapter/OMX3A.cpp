@@ -366,6 +366,9 @@ status_t OMXCameraAdapter::apply3ADefaults(Gen3A_settings &Gen3A)
     Gen3A.ExposureLock = OMX_FALSE;
     ret |= setExposureLock(Gen3A);
 
+    Gen3A.FocusLock = OMX_FALSE;
+    ret |= setFocusLock(Gen3A);
+
     Gen3A.WhiteBalanceLock = OMX_FALSE;
     ret |= setWhiteBalanceLock(Gen3A);
 
@@ -1056,11 +1059,41 @@ status_t OMXCameraAdapter::setExposureLock(Gen3A_settings& Gen3A)
     return ErrorUtils::omxToAndroidError(eError);
 }
 
-status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggleExp, OMX_BOOL toggleWb)
+status_t OMXCameraAdapter::setFocusLock(Gen3A_settings& Gen3A)
 {
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_IMAGE_CONFIG_LOCKTYPE lock;
-    char* index = FALSE;
+
+    LOG_FUNCTION_NAME
+
+    if ( OMX_StateInvalid == mComponentState ) {
+        CAMHAL_LOGEA("OMX component is in invalid state");
+        return NO_INIT;
+    }
+
+    OMX_INIT_STRUCT_PTR (&lock, OMX_IMAGE_CONFIG_LOCKTYPE);
+    lock.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
+
+    lock.bLock = Gen3A.FocusLock;
+    eError = OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
+                           (OMX_INDEXTYPE)OMX_IndexConfigImageFocusLock,
+                           &lock);
+
+    if ( OMX_ErrorNone != eError ) {
+        CAMHAL_LOGEB("Error while configuring Focus Lock error = 0x%x", eError);
+    } else {
+        CAMHAL_LOGDB("Focus Lock configured successfully %d ", lock.bLock);
+    }
+
+    LOG_FUNCTION_NAME_EXIT
+
+    return ErrorUtils::omxToAndroidError(eError);
+}
+
+status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggleExp, OMX_BOOL toggleWb, OMX_BOOL toggleFocus)
+{
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+    OMX_IMAGE_CONFIG_LOCKTYPE lock;
 
     LOG_FUNCTION_NAME
 
@@ -1074,6 +1107,7 @@ status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggleExp, OMX_BOOL toggleWb)
     lock.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
 
     mParameters3A.ExposureLock = toggleExp;
+    mParameters3A.FocusLock = toggleFocus;
     mParameters3A.WhiteBalanceLock = toggleWb;
 
     eError = OMX_GetConfig( mCameraAdapterParameters.mHandleComp,
@@ -1099,6 +1133,30 @@ status_t OMXCameraAdapter::set3ALock(OMX_BOOL toggleExp, OMX_BOOL toggleWb)
         mParams.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, lock_state_exp);
     }
 
+    OMX_INIT_STRUCT_PTR (&lock, OMX_IMAGE_CONFIG_LOCKTYPE);
+    lock.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
+    eError = OMX_GetConfig( mCameraAdapterParameters.mHandleComp,
+                            (OMX_INDEXTYPE)OMX_IndexConfigImageFocusLock,
+                            &lock);
+
+    if ( OMX_ErrorNone != eError )
+    {
+        CAMHAL_LOGEB("Error GetConfig Focus Lock error = 0x%x", eError);
+        goto EXIT;
+    }
+    else
+    {
+        CAMHAL_LOGDB("Focus Lock GetConfig successfull bLock(%d)", lock.bLock);
+
+        /* Apply locks only when not applied already */
+        if ( lock.bLock  != toggleFocus )
+        {
+            setFocusLock(mParameters3A);
+        }
+    }
+
+    OMX_INIT_STRUCT_PTR (&lock, OMX_IMAGE_CONFIG_LOCKTYPE);
+    lock.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
     eError = OMX_GetConfig( mCameraAdapterParameters.mHandleComp,
                             (OMX_INDEXTYPE)OMX_IndexConfigImageWhiteBalanceLock,
                             &lock);

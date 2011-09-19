@@ -229,6 +229,7 @@ class Gen3A_settings{
 
     unsigned int Brightness;
     OMX_BOOL ExposureLock;
+    OMX_BOOL FocusLock;
     OMX_BOOL WhiteBalanceLock;
 };
 
