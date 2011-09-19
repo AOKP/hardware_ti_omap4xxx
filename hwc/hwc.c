@@ -1305,6 +1305,17 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
             goto done;
     }
 
+    /* blank and unblnk fd to make sure display is proppery programmed on boot
+     * this is needed because the bootloader can not be trusted
+     */
+    ret = ioctl(hwc_dev->fb_fd, FBIOBLANK, FB_BLANK_POWERDOWN);
+    if (ret)
+        LOGW("failed to blank disolay");
+
+    ret = ioctl(hwc_dev->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
+    if (ret)
+        LOGW("failed to blank disolay");
+
     /* get debug properties */
 
     /* see if hwc is enabled at all */
