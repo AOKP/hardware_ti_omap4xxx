@@ -30,6 +30,13 @@
 
 #define FACE_DETECTION_THRESHOLD 80
 
+// constants used for face smooth filtering
+static const int HorizontalFilterThreshold = 40;
+static const int VerticalFilterThreshold = 40;
+static const int HorizontalFaceSizeThreshold = 30;
+static const int VerticalFaceSizeThreshold = 30;
+
+
 namespace android {
 
 status_t OMXCameraAdapter::setParametersFD(const CameraParameters &params,
@@ -61,12 +68,11 @@ status_t OMXCameraAdapter::startFaceDetection()
         goto out;
     }
 
+    // Note: White balance will not be face prioritized, since
+    // the algorithm needs full frame statistics, and not face
+    // regions alone.
 
-    //Note: White balance will not be face prioritized, since
-    //the algorithm needs full frame statistics, and not face
-    //regions alone.
-
-
+    faceDetectionNumFacesLastOutput = 0;
  out:
     return ret;
 }
@@ -95,6 +101,7 @@ status_t OMXCameraAdapter::stopFaceDetection()
         apply3Asettings(mParameters3A);
     }
 
+    faceDetectionNumFacesLastOutput = 0;
  out:
     return ret;
 }
@@ -105,6 +112,7 @@ void OMXCameraAdapter::pauseFaceDetection(bool pause)
     // pausing will only take affect if fd is already running
     if (mFaceDetectionRunning) {
         mFaceDetectionPaused = pause;
+        faceDetectionNumFacesLastOutput = 0;
     }
 }
 
@@ -125,7 +133,7 @@ status_t OMXCameraAdapter::setFaceDetection(bool enable, OMX_U32 orientation)
 
     if ( NO_ERROR == ret )
         {
-        if ( orientation < 0 || orientation > 270 ) {
+        if ( orientation > 270 ) {
             orientation = 0;
         }
 
@@ -368,6 +376,20 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
         / *               (r, b)
           */
 
+        if (mDeviceOrientation == 180) {
+            orient_mult = -1;
+            trans_left = 2; // right is now left
+            trans_top = 3; // bottom is now top
+            trans_right = 0; // left is now right
+            trans_bot = 1; // top is not bottom
+        } else {
+            orient_mult = 1;
+            trans_left = 0; // left
+            trans_top = 1; // top
+            trans_right = 2; // right
+            trans_bot = 3; // bottom
+        }
+
         int j = 0, i = 0;
         for ( ; j < faceData->ulFaceCount ; j++)
             {
@@ -382,23 +404,12 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
              continue;
 
             if (mDeviceOrientation == 180) {
-                orient_mult = -1;
-                trans_left = 2; // right is now left
-                trans_top = 3; // bottom is now top
-                trans_right = 0; // left is now right
-                trans_bot = 1; // top is not bottom
                 // from sensor pov, the left pos is the right corner of the face in pov of frame
-                nLeft  = faceData->tFacePosition[j].nLeft + faceData->tFacePosition[j].nWidth;
+                nLeft = faceData->tFacePosition[j].nLeft + faceData->tFacePosition[j].nWidth;
                 nTop =  faceData->tFacePosition[j].nTop + faceData->tFacePosition[j].nHeight;
             } else {
-                orient_mult = 1;
-                trans_left = 0; // left
-                trans_top = 1; // top
-                trans_right = 2; // right
-                trans_bot = 3; // bottom
-                nLeft  = faceData->tFacePosition[j].nLeft;
+                nLeft = faceData->tFacePosition[j].nLeft;
                 nTop =  faceData->tFacePosition[j].nTop;
-
             }
 
             tmp = ( double ) nLeft / ( double ) previewWidth;
@@ -435,6 +446,52 @@ status_t OMXCameraAdapter::encodeFaceCoordinates(const OMX_FACEDETECTIONTYPE *fa
         faceResult->number_of_faces = i;
         faceResult->faces = faces;
 
+        for (int i = 0; i  < faceResult->number_of_faces; i++)
+        {
+            int centerX = (faces[i].rect[trans_left] + faces[i].rect[trans_right] ) / 2;
+            int centerY = (faces[i].rect[trans_top] + faces[i].rect[trans_bot] ) / 2;
+
+            int sizeX = (faces[i].rect[trans_right] - faces[i].rect[trans_left] ) ;
+            int sizeY = (faces[i].rect[trans_bot] - faces[i].rect[trans_top] ) ;
+
+            for (int j = 0; j < faceDetectionNumFacesLastOutput; j++)
+            {
+                int tempCenterX = (faceDetectionLastOutput[j].rect[trans_left] +
+                                  faceDetectionLastOutput[j].rect[trans_right] ) / 2;
+                int tempCenterY = (faceDetectionLastOutput[j].rect[trans_top] +
+                                  faceDetectionLastOutput[j].rect[trans_bot] ) / 2;
+                int tempSizeX = (faceDetectionLastOutput[j].rect[trans_right] -
+                                faceDetectionLastOutput[j].rect[trans_left] ) ;
+                int tempSizeY = (faceDetectionLastOutput[j].rect[trans_bot] -
+                                faceDetectionLastOutput[j].rect[trans_top] ) ;
+
+                if ( (abs(tempCenterX - centerX) < HorizontalFilterThreshold) &&
+                     (abs(tempCenterY - centerY) < VerticalFilterThreshold) )
+                {
+                    // Found Face. It did not move too far.
+                    // Now check size of rectangle compare to last output
+                    if ( (abs (tempSizeX -sizeX) < HorizontalFaceSizeThreshold) &&
+                         (abs (tempSizeY -sizeY) < VerticalFaceSizeThreshold) )
+                    {
+                        // Rectangle is almost same as last time
+                        // Output exactly what was done for this face last time.
+                        faces[i] = faceDetectionLastOutput[j];
+                    }
+                    else
+                    {
+                        // TODO(XXX): Rectangle size changed but position is same.
+                        // Possibly we can apply just positional correctness.
+                    }
+                }
+            }
+        }
+
+        // Save this output for next iteration
+        for (int i = 0; i  < faceResult->number_of_faces; i++)
+        {
+            faceDetectionLastOutput[i] = faces[i];
+        }
+        faceDetectionNumFacesLastOutput = faceResult->number_of_faces;
     } else {
         faceResult->number_of_faces = 0;
         faceResult->faces = NULL;

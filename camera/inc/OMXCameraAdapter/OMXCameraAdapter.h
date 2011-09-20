@@ -69,6 +69,7 @@ namespace android {
 #define ZOOM_STAGES                 31
 
 #define FACE_DETECTION_BUFFER_SIZE  0x1000
+#define MAX_NUM_FACES_SUPPORTED     35
 
 #define EXIF_MODEL_SIZE             100
 #define EXIF_MAKE_SIZE              100
@@ -755,6 +756,9 @@ private:
     //Face detection status
     bool mFaceDetectionRunning;
     bool mFaceDetectionPaused;
+
+    camera_face_t  faceDetectionLastOutput [MAX_NUM_FACES_SUPPORTED];
+    int faceDetectionNumFacesLastOutput;
 
     //Geo-tagging
     EXIFData mEXIFData;
