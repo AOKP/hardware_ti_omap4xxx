@@ -487,7 +487,9 @@ int CameraHal::setParameters(const CameraParameters& params)
           {
               if ( framerate != atoi(mCameraProperties->get(CameraProperties::PREVIEW_FRAME_RATE)) )
               {
+
                 selectFPSRange(framerate, &minFPS, &maxFPS);
+                CAMHAL_LOGDB("Select FPS Range %d %d", minFPS, maxFPS);
               }
               else
                 {
@@ -3314,8 +3316,8 @@ void CameraHal::selectFPSRange(int framerate, int *min_fps, int *max_fps)
           if (framerate == fpsrangeArray[i])
             {
               CAMHAL_LOGDB("SETTING FPS RANGE min = %d max = %d \n", fpsrangeArray[0], fpsrangeArray[1]);
-              *min_fps = fpsrangeArray[0];
-              *max_fps = fpsrangeArray[1];
+              *min_fps = fpsrangeArray[0]*CameraHal::VFR_SCALE;
+              *max_fps = fpsrangeArray[1]*CameraHal::VFR_SCALE;
               break;
             }
         }
