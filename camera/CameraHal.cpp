@@ -1843,6 +1843,11 @@ bool CameraHal::resetVideoModeParameters()
 
     LOG_FUNCTION_NAME;
 
+    // ignore this if we are already recording
+    if (mRecordingEnabled) {
+        return false;
+    }
+
     // Set CAPTURE_MODE to VIDEO_MODE, if not set already and Restart Preview
     valstr = mParameters.get(TICameraParameters::KEY_CAP_MODE);
     if ( (valstr != NULL) && (strcmp(valstr, (const char *) TICameraParameters::VIDEO_MODE) == 0) )
