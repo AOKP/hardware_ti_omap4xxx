@@ -97,12 +97,24 @@ status_t OMXCameraAdapter::doAutoFocus()
     OMX_INIT_STRUCT_PTR (&focusControl, OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE);
     focusControl.eFocusControl = ( OMX_IMAGE_FOCUSCONTROLTYPE ) mParameters3A.Focus;
 
-    //In case we have CAF running we should first check the AF status.
-    //If it has managed to lock, then do as usual and return status
-    //immediately. If lock is not available, then switch temporarily
-    //to 'autolock' and do normal AF.
-    if ( mParameters3A.Focus == OMX_IMAGE_FocusControlAuto ) {
+    if (mParameters3A.FocusLock) {
+        // this basically means user never called cancelAutoFocus after a scan...
+        // if this is the case we need to unlock AF to ensure we will do a scan
+        if (set3ALock(mUserSetExpLock, mUserSetWbLock, OMX_FALSE) != NO_ERROR) {
+            CAMHAL_LOGEA("Error Unlocking 3A locks");
+        } else {
+            CAMHAL_LOGDA("AE/AWB unlocked successfully");
+        }
 
+        // if we are in CAF...then force normal AF
+        if (mParameters3A.Focus == OMX_IMAGE_FocusControlAuto) {
+            focusControl.eFocusControl = OMX_IMAGE_FocusControlAutoLock;
+        }
+    } else if ( mParameters3A.Focus == OMX_IMAGE_FocusControlAuto ) {
+        // In case we have CAF running we should first check the AF status.
+        // If it has managed to lock, then do as usual and return status
+        // immediately. If lock is not available, then switch temporarily
+        // to 'autolock' and do normal AF.
         ret = checkFocus(&focusStatus);
         if ( NO_ERROR != ret ) {
             CAMHAL_LOGEB("Focus status check failed 0x%x!", ret);
@@ -130,33 +142,25 @@ status_t OMXCameraAdapter::doAutoFocus()
             ret = setFocusCallback(true);
         }
 
-    }
+        eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
+                                OMX_IndexConfigFocusControl,
+                                &focusControl);
 
-    eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
-                            OMX_IndexConfigFocusControl,
-                            &focusControl);
+        if ( OMX_ErrorNone != eError ) {
+            CAMHAL_LOGEB("Error while starting focus 0x%x", eError);
+            return INVALID_OPERATION;
+        } else {
+            CAMHAL_LOGDA("Autofocus started successfully");
+        }
 
-    if ( OMX_ErrorNone != eError ) {
-        CAMHAL_LOGEB("Error while starting focus 0x%x", eError);
-        return INVALID_OPERATION;
-    } else {
-        CAMHAL_LOGDA("Autofocus started successfully");
-    }
+       if(mDoAFSem.WaitTimeout(AF_CALLBACK_TIMEOUT) != NO_ERROR) {
+            //If somethiing bad happened while we wait
+            if (mComponentState == OMX_StateInvalid) {
+                CAMHAL_LOGEA("Invalid State after Auto Focus Exitting!!!");
+                return EINVAL;
+            }
 
-    if ( ( focusControl.eFocusControl != OMX_IMAGE_FocusControlAuto ) &&
-         ( focusControl.eFocusControl != ( OMX_IMAGE_FOCUSCONTROLTYPE )
-                 OMX_IMAGE_FocusControlAutoInfinity ) ) {
-
-      if(mDoAFSem.WaitTimeout(AF_CALLBACK_TIMEOUT) != NO_ERROR) {
-
-        //If somethiing bad happened while we wait
-        if (mComponentState == OMX_StateInvalid)
-          {
-            CAMHAL_LOGEA("Invalid State after Auto Focus Exitting!!!");
-            return EINVAL;
-          }
-
-           //Disable auto focus callback from Ducati
+            //Disable auto focus callback from Ducati
             setFocusCallback(false);
             CAMHAL_LOGEA("Autofocus callback timeout expired");
             RemoveEvent(mCameraAdapterParameters.mHandleComp,
@@ -171,8 +175,7 @@ status_t OMXCameraAdapter::doAutoFocus()
             setFocusCallback(false);
             ret = returnFocusStatus(false);
         }
-
-    } else {
+    } else { // Focus mode in continuous
         if ( NO_ERROR == ret ) {
             ret = returnFocusStatus(false);
         }
@@ -415,15 +418,12 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
                         break;
                         }
                 }
-            //Lock the AE and AWB here
-            // Apply 3A locks after AF
-            if( set3ALock(OMX_TRUE, OMX_TRUE, OMX_TRUE) != NO_ERROR) {
+            // Lock CAF after AF call
+            if( set3ALock(mUserSetExpLock, mUserSetWbLock, OMX_TRUE) != NO_ERROR) {
                 CAMHAL_LOGEA("Error Applying 3A locks");
-            }
-            else
-                {
+            } else {
                 CAMHAL_LOGDA("Focus locked. Applied focus locks successfully");
-                }
+            }
 
             stopAutoFocus();
             }

@@ -877,8 +877,8 @@ status_t OMXCameraAdapter::stopImageCapture()
         mStartCaptureSem.Create(0);
     }
 
-    //release any 3A locks if locked
-    ret = set3ALock(OMX_FALSE, OMX_FALSE, OMX_FALSE);
+    // Release AF Lock if still held
+    ret = set3ALock(mUserSetExpLock, mUserSetWbLock, OMX_FALSE);
     if(ret!=NO_ERROR)
       {
         CAMHAL_LOGEB("Error Releaseing 3A locks%d", ret);
