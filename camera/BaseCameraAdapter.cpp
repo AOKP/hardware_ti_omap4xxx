@@ -1881,6 +1881,12 @@ status_t BaseCameraAdapter::setState(CameraCommands operation)
             switch ( operation )
                 {
 
+                case CAMERA_CANCEL_AUTOFOCUS:
+                    CAMHAL_LOGDB("Adapter state switch AF_STATE->PREVIEW_STATE event = 0x%x",
+                                 operation);
+                    mNextState = ZOOM_STATE;
+                    break;
+
                 case CAMERA_STOP_SMOOTH_ZOOM:
                     CAMHAL_LOGDB("Adapter state switch ZOOM_STATE->PREVIEW_STATE event = 0x%x",
                                  operation);
