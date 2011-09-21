@@ -269,28 +269,27 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
       }
 
     str = params.get(CameraParameters::KEY_METERING_AREAS);
-    if ( (str != NULL) )
-        {
+    if ( (str != NULL) ) {
         size_t MAX_METERING_AREAS;
         MAX_METERING_AREAS = atoi(params.get(CameraParameters::KEY_MAX_NUM_METERING_AREAS));
 
         mMeteringAreas.clear();
 
-        CameraArea::parseFocusArea(str, strlen(str), mMeteringAreas);
+        ret = CameraArea::parseAreas(str, ( strlen(str) + 1 ), mMeteringAreas);
 
-        if ( MAX_METERING_AREAS > mMeteringAreas.size() )
-            {
-            CAMHAL_LOGDB("Setting Metering Areas %s",
-                    params.get(CameraParameters::KEY_METERING_AREAS));
+        if ( NO_ERROR == ret ) {
+            if ( MAX_METERING_AREAS >= mMeteringAreas.size() ) {
+                CAMHAL_LOGDB("Setting Metering Areas %s",
+                        params.get(CameraParameters::KEY_METERING_AREAS));
 
-            mPending3Asettings |= SetMeteringAreas;
-            }
-        else
-            {
-            CAMHAL_LOGEB("Metering areas supported %d, metering areas set %d",
-                         MAX_METERING_AREAS, mMeteringAreas.size());
+                mPending3Asettings |= SetMeteringAreas;
+            } else {
+                CAMHAL_LOGEB("Metering areas supported %d, metering areas set %d",
+                             MAX_METERING_AREAS, mMeteringAreas.size());
+                ret = -EINVAL;
             }
         }
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 

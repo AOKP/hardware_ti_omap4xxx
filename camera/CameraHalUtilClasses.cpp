@@ -197,9 +197,9 @@ status_t CameraArea::checkArea(ssize_t top,
     return NO_ERROR;
 }
 
-status_t CameraArea::parseFocusArea(const char *area,
-                               size_t areaLength,
-                               Vector< sp<CameraArea> > &areas)
+status_t CameraArea::parseAreas(const char *area,
+                                size_t areaLength,
+                                Vector< sp<CameraArea> > &areas)
 {
     status_t ret = NO_ERROR;
     char *ctx;

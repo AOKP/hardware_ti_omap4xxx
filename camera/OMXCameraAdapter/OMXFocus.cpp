@@ -52,7 +52,7 @@ status_t OMXCameraAdapter::setParametersFocus(const CameraParameters &params,
 
     mFocusAreas.clear();
     if ( NULL != str ) {
-        ret = CameraArea::parseFocusArea(str, ( strlen(str) + 1 ), mFocusAreas);
+        ret = CameraArea::parseAreas(str, ( strlen(str) + 1 ), mFocusAreas);
     }
 
     if ( NO_ERROR == ret ) {

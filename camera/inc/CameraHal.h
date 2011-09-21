@@ -158,9 +158,9 @@ public:
         return mWeight;
         }
 
-    static status_t parseFocusArea(const char *area,
-                                   size_t areaLength,
-                                   Vector< sp<CameraArea> > &areas);
+    static status_t parseAreas(const char *area,
+                               size_t areaLength,
+                               Vector< sp<CameraArea> > &areas);
 
     static status_t checkArea(ssize_t top,
                               ssize_t left,
