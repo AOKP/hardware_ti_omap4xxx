@@ -3149,16 +3149,17 @@ status_t OMXCameraAdapter::initCameraFrame( CameraFrame &frame,
     frame.mWidth = port->mWidth;
     frame.mHeight = port->mHeight;
 
-    // Calculating the time source delta of Ducati & system time only once at the start of camera.
-    // It's seen that there is a one-time constant diff between the ducati source clock &
-    // System monotonic timer, although both derived from the same 32KHz clock.
-    // This delta is offsetted to/from ducati timestamp to match with system time so that
-    // video timestamps are aligned with Audio with a periodic timestamp intervals.
-    // Do timeset offset calculation only when recording is in progress, when nTimestamp
-    // will be populated by Camera
+    // Timestamp in pBuffHeader->nTimeStamp is derived on DUCATI side, which is
+    // is not  same time value as derived using systemTime. It would be ideal to use
+    // exactly same time source across Android and Ducati, which is limited by
+    // system now. So, workaround for now is to find the time offset between the two
+    // time sources and compensate the difference, along with the latency involved
+    // in camera buffer reaching CameraHal. Also, Do timeset offset calculation only
+    // when recording is in progress, when nTimestamp will be populated by Camera
     if ( onlyOnce && mRecording )
         {
         mTimeSourceDelta = (pBuffHeader->nTimeStamp * 1000) - systemTime(SYSTEM_TIME_MONOTONIC);
+        mTimeSourceDelta += kCameraBufferLatencyNs;
         onlyOnce = false;
         }
 

@@ -137,6 +137,8 @@ namespace android {
     }                                                                           \
 }
 
+const int64_t kCameraBufferLatencyNs = 250000000LL; // 250 ms
+
 ///OMX Specific Functions
 static OMX_ERRORTYPE OMXCameraAdapterEventHandler(OMX_IN OMX_HANDLETYPE hComponent,
                                         OMX_IN OMX_PTR pAppData,
