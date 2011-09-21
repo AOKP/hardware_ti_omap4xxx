@@ -1509,6 +1509,7 @@ status_t CameraHal::startPreview()
 
     mPreviewEnabled = true;
     mPreviewStartInProgress = false;
+    mDynamicPreviewSwitch = false;
     return ret;
 
     error:
