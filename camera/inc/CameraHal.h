@@ -72,6 +72,8 @@
 //Enables Absolute PPM measurements in logcat
 #define PPM_INSTRUMENTATION_ABS 1
 
+#define LOCK_BUFFER_TRIES 5
+
 //Uncomment to enable more verbose/debug logs
 //#define DEBUG_LOG
 
@@ -255,7 +257,11 @@ class CameraFrame
     mFd(0),
     mLength(0),
     mFrameMask(0),
-    mQuirks(0) {}
+    mQuirks(0) {
+
+      mYuv[0] = NULL;
+      mYuv[1] = NULL;
+    }
 
     //copy constructor
     CameraFrame(const CameraFrame &frame) :
@@ -271,7 +277,11 @@ class CameraFrame
     mFd(frame.mFd),
     mLength(frame.mLength),
     mFrameMask(frame.mFrameMask),
-    mQuirks(frame.mQuirks) {}
+    mQuirks(frame.mQuirks) {
+
+      mYuv[0] = frame.mYuv[0];
+      mYuv[1] = frame.mYuv[1];
+    }
 
     void *mCookie;
     void *mCookie2;
@@ -285,6 +295,7 @@ class CameraFrame
     size_t mLength;
     unsigned mFrameMask;
     unsigned int mQuirks;
+    unsigned int mYuv[2];
     ///@todo add other member vars like  stride etc
 };
 
@@ -415,6 +426,8 @@ class FrameNotifier : public MessageNotifier
 {
 public:
     virtual void returnFrame(void* frameBuf, CameraFrame::FrameType frameType) = 0;
+    virtual void addFramePointers(void *frameBuf, void *buf) = 0;
+    virtual void removeFramePointers() = 0;
 
     virtual ~FrameNotifier() {};
 };
@@ -434,6 +447,8 @@ public:
     int enableFrameNotification(int32_t frameTypes);
     int disableFrameNotification(int32_t frameTypes);
     int returnFrame(void *frameBuf, CameraFrame::FrameType frameType);
+    void addFramePointers(void *frameBuf, void *buf);
+    void removeFramePointers();
 };
 
 /** Wrapper class around MessageNotifier, which is used by display and notification classes for interacting with
@@ -767,6 +782,8 @@ public:
                                void *cookie = NULL) = 0;
     virtual void disableMsgType(int32_t msgs, void* cookie) = 0;
     virtual void returnFrame(void* frameBuf, CameraFrame::FrameType frameType) = 0;
+    virtual void addFramePointers(void *frameBuf, void *buf) = 0;
+    virtual void removeFramePointers() = 0;
 
     //APIs to configure Camera adapter and get the current parameter set
     virtual int setParameters(const CameraParameters& params) = 0;
