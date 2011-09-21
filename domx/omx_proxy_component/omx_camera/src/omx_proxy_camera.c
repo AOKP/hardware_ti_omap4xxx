@@ -93,7 +93,7 @@
 
 #define DEFAULT_DCC 1
 #ifdef _Android
-#define DCC_PATH  "/system/etc/omapcam/"
+#define DCC_PATH  "/data/misc/camera/"
 #else
 #define DCC_PATH  "/usr/share/omapcam/"
 #endif
