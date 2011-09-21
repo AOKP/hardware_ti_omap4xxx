@@ -530,6 +530,7 @@ int CameraHal::setParameters(const CameraParameters& params)
           }
         CAMHAL_LOGDB("SET FRAMERATE %d", framerate);
         mParameters.setPreviewFrameRate(framerate);
+        mParameters.set(CameraParameters::KEY_PREVIEW_FPS_RANGE, params.get(CameraParameters::KEY_PREVIEW_FPS_RANGE));
 
         CAMHAL_LOGDB("FPS Range [%d, %d]", minFPS, maxFPS);
         mParameters.set(TICameraParameters::KEY_MINFRAMERATE, minFPS);
