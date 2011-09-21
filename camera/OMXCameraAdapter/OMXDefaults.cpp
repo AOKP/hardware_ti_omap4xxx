@@ -29,6 +29,8 @@ namespace android {
 #undef LOG_TAG
 #define LOG_TAG "CameraHAL"
 
+#define __STRINGIFY(s) __STRING(s)
+
 // OMX Camera defaults
 const char OMXCameraAdapter::DEFAULT_ANTIBANDING[] = "auto";
 const char OMXCameraAdapter::DEFAULT_BRIGHTNESS[] = "50";
@@ -62,7 +64,7 @@ const char OMXCameraAdapter::DEFAULT_SHARPNESS[] = "100";
 const char OMXCameraAdapter::DEFAULT_VSTAB[] = "0";
 const char OMXCameraAdapter::DEFAULT_WB[] = "auto";
 const char OMXCameraAdapter::DEFAULT_ZOOM[] = "0";
-const char OMXCameraAdapter::DEFAULT_MAX_FD_HW_FACES[] = "35";
+const char OMXCameraAdapter::DEFAULT_MAX_FD_HW_FACES[] = __STRINGIFY(MAX_NUM_FACES_SUPPORTED);
 const char OMXCameraAdapter::DEFAULT_MAX_FD_SW_FACES[] = "0";
 const char OMXCameraAdapter::DEFAULT_FOCAL_LENGTH[] = "4.6";
 const char OMXCameraAdapter::DEFAULT_HOR_ANGLE[] = "54.8";
