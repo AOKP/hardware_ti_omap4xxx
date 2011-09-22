@@ -582,7 +582,10 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	PROXY_require(eError == OMX_ErrorNone, OMX_ErrorBadParameter, "Error is Get Parameter for port def");
 	nFilledLen = pBufferHdr->nFilledLen;
 	nAllocLen = pBufferHdr->nAllocLen;
-	pBufferHdr->nFilledLen = tParamStruct.nBufferSize;
+        if(nFilledLen != 0)
+        {
+	        pBufferHdr->nFilledLen = tParamStruct.nBufferSize;
+        }
 	pBufferHdr->nAllocLen =  tParamStruct.nBufferSize;
 
 	DOMX_DEBUG
@@ -590,7 +593,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	    __FUNCTION__,hComponent, pCompPrv, pBufferHdr->nFilledLen,
 	    pBufferHdr->nOffset, pBufferHdr->nFlags);
 
-	if( pCompPrv->proxyPortBuffers[OMX_H264E_INPUT_PORT].proxyBufferType == EncoderMetadataPointers)
+	if( pCompPrv->proxyPortBuffers[OMX_H264E_INPUT_PORT].proxyBufferType == EncoderMetadataPointers && nFilledLen != 0 )
 	{
 		OMX_U32 *pTempBuffer;
 		OMX_U32 nMetadataBufferType;
