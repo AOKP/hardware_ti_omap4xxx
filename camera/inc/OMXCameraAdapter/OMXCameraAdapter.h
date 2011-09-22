@@ -743,6 +743,7 @@ private:
 
     // Current Metering areas
     Vector< sp<CameraArea> > mMeteringAreas;
+    mutable Mutex mMeteringAreasLock;
 
     CaptureMode mCapMode;
     size_t mBurstFrames;

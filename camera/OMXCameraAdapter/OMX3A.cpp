@@ -273,6 +273,8 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
         size_t MAX_METERING_AREAS;
         MAX_METERING_AREAS = atoi(params.get(CameraParameters::KEY_MAX_NUM_METERING_AREAS));
 
+        Mutex::Autolock lock(mMeteringAreasLock);
+
         mMeteringAreas.clear();
 
         ret = CameraArea::parseAreas(str, ( strlen(str) + 1 ), mMeteringAreas);
@@ -1193,6 +1195,8 @@ status_t OMXCameraAdapter::setMeteringAreas(Gen3A_settings& Gen3A)
   int areasSize = 0;
 
   LOG_FUNCTION_NAME
+
+  Mutex::Autolock lock(mMeteringAreasLock);
 
   if ( OMX_StateInvalid == mComponentState )
     {
