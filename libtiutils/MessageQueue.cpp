@@ -74,12 +74,12 @@ MessageQueue::~MessageQueue()
 {
     LOG_FUNCTION_NAME;
 
-    if(this->fd_read)
+    if(this->fd_read < 0)
         {
         close(this->fd_read);
         }
 
-    if(this->fd_write)
+    if(this->fd_write < 0)
         {
         close(this->fd_write);
         }
