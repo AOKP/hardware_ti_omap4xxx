@@ -536,6 +536,8 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
 	OMX_PTR pBufferOrig = NULL;
 	OMX_U32 nStride = 0, nNumLines = 0;
+	OMX_PARAM_PORTDEFINITIONTYPE tParamStruct;
+	OMX_U32 nFilledLen, nAllocLen;
 #ifdef ANDROID_CUSTOM_OPAQUECOLORFORMAT
 	OMX_PROXY_MPEG4E_PRIVATE *pProxy = NULL;
 	TIMM_OSAL_ERRORTYPE eOSALStatus = TIMM_OSAL_ERR_NONE;
@@ -552,12 +554,30 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	pProxy = (OMX_PROXY_MPEG4E_PRIVATE *) pCompPrv->pCompProxyPrv;
 #endif
 
+	tParamStruct.nSize = sizeof(OMX_PARAM_PORTDEFINITIONTYPE);
+	tParamStruct.nVersion.s.nVersionMajor = OMX_VER_MAJOR;
+	tParamStruct.nVersion.s.nVersionMinor = OMX_VER_MINOR;
+	tParamStruct.nVersion.s.nRevision = 0x0;
+	tParamStruct.nVersion.s.nStep = 0x0;
+	tParamStruct.nPortIndex = OMX_MPEG4E_INPUT_PORT;
+
+	eError = PROXY_GetParameter(hComponent, OMX_IndexParamPortDefinition, &tParamStruct);
+	PROXY_require(eError == OMX_ErrorNone, OMX_ErrorBadParameter, "Error is Get Parameter for port def");
+	nFilledLen = pBufferHdr->nFilledLen;
+	nAllocLen = pBufferHdr->nAllocLen;
+        if(nFilledLen != 0)
+        {
+        	pBufferHdr->nFilledLen = tParamStruct.nBufferSize;
+        }
+	pBufferHdr->nAllocLen =  tParamStruct.nBufferSize;
+
 	DOMX_DEBUG
 	    ("%s hComponent=%p, pCompPrv=%p, nFilledLen=%d, nOffset=%d, nFlags=%08x",
 	    __FUNCTION__,hComponent, pCompPrv, pBufferHdr->nFilledLen,
 	    pBufferHdr->nOffset, pBufferHdr->nFlags);
 
-	if( pCompPrv->proxyPortBuffers[OMX_MPEG4E_INPUT_PORT].proxyBufferType == EncoderMetadataPointers)
+	if( pCompPrv->proxyPortBuffers[OMX_MPEG4E_INPUT_PORT].proxyBufferType == EncoderMetadataPointers
+                && nFilledLen != 0)
 	{
 		OMX_U32 *pTempBuffer;
 		OMX_U32 nMetadataBufferType;
