@@ -773,6 +773,17 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_ComponentDeInit(OMX_HANDLETYPE hComponent)
 	pCompPrv = (PROXY_COMPONENT_PRIVATE *) hComp->pComponentPrivate;
 	pProxy = (OMX_PROXY_MPEG4E_PRIVATE *) pCompPrv->pCompProxyPrv;
 
+	if(pProxy->hBufPipe != NULL)
+	{
+		eOSALStatus = TIMM_OSAL_DeletePipe(pProxy->hBufPipe);
+		pProxy->hBufPipe = NULL;
+
+		if(eOSALStatus != TIMM_OSAL_ERR_NONE)
+		{
+			DOMX_ERROR("Pipe deletion failed");
+		}
+	}
+
 	if(pProxy->bAndroidOpaqueFormat == OMX_TRUE)
 	{
 		/* Cleanup internal buffers in pipe if not freed on FreeBuffer */
@@ -782,17 +793,6 @@ OMX_ERRORTYPE LOCAL_PROXY_MPEG4E_ComponentDeInit(OMX_HANDLETYPE hComponent)
 			{
 				pProxy->mAllocDev->free(pProxy->mAllocDev, pProxy->gralloc_handle[i]);
 				pProxy->gralloc_handle[i] = NULL;
-			}
-		}
-
-		if(pProxy->hBufPipe != NULL)
-		{
-			eOSALStatus = TIMM_OSAL_DeletePipe(pProxy->hBufPipe);
-			pProxy->hBufPipe = NULL;
-
-			if(eOSALStatus != TIMM_OSAL_ERR_NONE)
-			{
-				DOMX_ERROR("Pipe deletion failed");
 			}
 		}
 
