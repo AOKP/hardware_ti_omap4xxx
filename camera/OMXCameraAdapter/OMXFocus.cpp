@@ -366,16 +366,18 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
     status_t ret = NO_ERROR;
     OMX_PARAM_FOCUSSTATUSTYPE eFocusStatus;
     bool focusStatus = false;
-    BaseCameraAdapter::AdapterState state;
+    BaseCameraAdapter::AdapterState state, nextState;
     BaseCameraAdapter::getState(state);
+    BaseCameraAdapter::getNextState(nextState);
 
     LOG_FUNCTION_NAME;
 
     OMX_INIT_STRUCT(eFocusStatus, OMX_PARAM_FOCUSSTATUSTYPE);
 
-    if( ( AF_ACTIVE & state ) != AF_ACTIVE )
+    if( ((AF_ACTIVE & state ) != AF_ACTIVE) && ((AF_ACTIVE & nextState ) != AF_ACTIVE) )
        {
         /// We don't send focus callback if focus was not started
+       CAMHAL_LOGDA("Not sending focus callback because focus was not started");
        return NO_ERROR;
        }
 
