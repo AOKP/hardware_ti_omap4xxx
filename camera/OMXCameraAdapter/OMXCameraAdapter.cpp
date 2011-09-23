@@ -1914,13 +1914,6 @@ status_t OMXCameraAdapter::stopPreview()
         // Error, but we probably still want to continue to stop preview
     }
 
-    // Release AF Lock if still held
-    ret = set3ALock(mUserSetExpLock, mUserSetWbLock, OMX_FALSE);
-    if(ret!=NO_ERROR)
-      {
-        CAMHAL_LOGEB("Error Releaseing 3A locks%d", ret);
-      }
-
     if ( 0 != mStopPreviewSem.Count() )
         {
         CAMHAL_LOGEB("Error mStopPreviewSem semaphore count %d", mStopPreviewSem.Count());
