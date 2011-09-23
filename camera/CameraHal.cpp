@@ -1649,17 +1649,6 @@ void CameraHal::stopPreview()
         // an image capture, we do not de-initialize the camera adapter and
         // restart over again.
 
-        // Since we are not calling CameraAdapter->stopPreview, we need to
-        // explicitly release the 3A locks in this first level stopPreview call
-        // before returning
-        if ( NULL != mCameraAdapter ) {
-            CameraParameters adapterParams = mParameters;
-
-            adapterParams.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, CameraParameters::FALSE);
-            adapterParams.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, CameraParameters::FALSE);
-            mCameraAdapter->setParameters(adapterParams);
-        }
-
         return;
         }
 
