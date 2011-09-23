@@ -243,6 +243,7 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
         mPictureQuality = 100;
         mCurrentZoomIdx = 0;
         mTargetZoomIdx = 0;
+        mPreviousZoomIndx = 0;
         mReturnZoomStatus = false;
         mZoomInc = 1;
         mZoomParameterIdx = 0;

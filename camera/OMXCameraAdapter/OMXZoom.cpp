@@ -83,7 +83,6 @@ status_t OMXCameraAdapter::doZoom(int index)
     status_t ret = NO_ERROR;
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_CONFIG_SCALEFACTORTYPE zoomControl;
-    static int prevIndex = 0;
 
     LOG_FUNCTION_NAME;
 
@@ -99,7 +98,7 @@ status_t OMXCameraAdapter::doZoom(int index)
         ret = -EINVAL;
         }
 
-    if ( prevIndex == index )
+    if (mPreviousZoomIndx == index )
         {
         return NO_ERROR;
         }
@@ -122,7 +121,7 @@ status_t OMXCameraAdapter::doZoom(int index)
         else
             {
             CAMHAL_LOGDA("Digital zoom applied successfully");
-            prevIndex = index;
+            mPreviousZoomIndx = index;
             }
         }
 

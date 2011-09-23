@@ -792,7 +792,7 @@ private:
 
     //current zoom
     Mutex mZoomLock;
-    unsigned int mCurrentZoomIdx, mTargetZoomIdx;
+    unsigned int mCurrentZoomIdx, mTargetZoomIdx, mPreviousZoomIndx;
     int mZoomInc;
     bool mReturnZoomStatus;
     static const int32_t ZOOM_STEPS [];
