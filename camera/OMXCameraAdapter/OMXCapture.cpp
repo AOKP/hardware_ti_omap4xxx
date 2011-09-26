@@ -27,6 +27,8 @@
 
 #include "CameraHal.h"
 #include "OMXCameraAdapter.h"
+#include "ErrorUtils.h"
+
 
 namespace android {
 
@@ -723,7 +725,10 @@ status_t OMXCameraAdapter::startImageCapture()
         mBracketingEnabled = false;
         mCapturedFrames = mBracketingRange;
         ret = sendBracketFrames();
-        goto EXIT;
+        if(ret != NO_ERROR)
+            goto EXIT;
+        else
+            return ret;
         }
     }
 
@@ -823,25 +828,21 @@ status_t OMXCameraAdapter::startImageCapture()
 
         }
 
-    EXIT:
+    return (ret | ErrorUtils::omxToAndroidError(eError));
 
-    if ( eError != OMX_ErrorNone )
-        {
-
-        mWaitingForSnapshot = false;
-        mCaptureSignalled = false;
-
-        }
-
+EXIT:
+    CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
+    mWaitingForSnapshot = false;
+    mCaptureSignalled = false;
+    performCleanupAfterError();
     LOG_FUNCTION_NAME_EXIT;
-
-    return ret;
+    return (ret | ErrorUtils::omxToAndroidError(eError));
 }
 
 status_t OMXCameraAdapter::stopImageCapture()
 {
     status_t ret = NO_ERROR;
-    OMX_ERRORTYPE eError;
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_CONFIG_BOOLEANTYPE bOMX;
     OMXCameraPortParameters *imgCaptureData = NULL;
 
@@ -897,7 +898,8 @@ status_t OMXCameraAdapter::stopImageCapture()
                            OMX_ALL,
                            OMX_TI_IndexConfigShutterCallback,
                            NULL);
-        CAMHAL_LOGEA("Timeout expired on shutter callback");
+        CAMHAL_LOGEA("Timeout expired on capture sem");
+        goto EXIT;
     }
 
     //Disable image capture
@@ -910,6 +912,7 @@ status_t OMXCameraAdapter::stopImageCapture()
     if ( OMX_ErrorNone != eError ) {
         CAMHAL_LOGDB("Error during SetConfig- 0x%x", eError);
         ret = -1;
+        goto EXIT;
     }
 
     CAMHAL_LOGDB("Capture set - 0x%x", eError);
@@ -966,24 +969,26 @@ status_t OMXCameraAdapter::stopImageCapture()
         goto EXIT;
     }
 
-    EXIT:
+    return (ret | ErrorUtils::omxToAndroidError(eError));
 
+EXIT:
+    CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
     //Release image buffers
     if ( NULL != mReleaseImageBuffersCallback ) {
         mReleaseImageBuffersCallback(mReleaseData);
     }
-
+    performCleanupAfterError();
     LOG_FUNCTION_NAME_EXIT;
-
-    return ret;
+    return (ret | ErrorUtils::omxToAndroidError(eError));
 }
+
 
 status_t OMXCameraAdapter::UseBuffersCapture(void* bufArr, int num)
 {
     LOG_FUNCTION_NAME;
 
     status_t ret = NO_ERROR;
-    OMX_ERRORTYPE eError;
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMXCameraPortParameters * imgCaptureData = NULL;
     uint32_t *buffers = (uint32_t*)bufArr;
     OMXCameraPortParameters cap;
@@ -993,7 +998,7 @@ status_t OMXCameraAdapter::UseBuffersCapture(void* bufArr, int num)
     if ( 0 != mUseCaptureSem.Count() )
         {
         CAMHAL_LOGEB("Error mUseCaptureSem semaphore count %d", mUseCaptureSem.Count());
-        goto EXIT;
+        return BAD_VALUE;
         }
 
     imgCaptureData->mNumBufs = num;
@@ -1023,14 +1028,14 @@ status_t OMXCameraAdapter::UseBuffersCapture(void* bufArr, int num)
     if ( ret != NO_ERROR )
         {
         CAMHAL_LOGEB("setExposureBracketing() failed %d", ret);
-        return ret;
+        goto EXIT;
         }
 
     ret = setImageQuality(mPictureQuality);
     if ( NO_ERROR != ret)
         {
         CAMHAL_LOGEB("Error configuring image quality %x", ret);
-        return ret;
+        goto EXIT;
         }
 
     ///Register for Image port ENABLE event
@@ -1045,6 +1050,9 @@ status_t OMXCameraAdapter::UseBuffersCapture(void* bufArr, int num)
                              OMX_CommandPortEnable,
                              mCameraAdapterParameters.mImagePortIndex,
                              NULL);
+
+    CAMHAL_LOGDB("OMX_UseBuffer = 0x%x", eError);
+    GOTO_EXIT_IF(( eError != OMX_ErrorNone ), eError);
 
     for ( int index = 0 ; index < imgCaptureData->mNumBufs ; index++ )
     {
@@ -1061,7 +1069,6 @@ status_t OMXCameraAdapter::UseBuffersCapture(void* bufArr, int num)
                                (OMX_U8*)buffers[index]);
 
         CAMHAL_LOGDB("OMX_UseBuffer = 0x%x", eError);
-
         GOTO_EXIT_IF(( eError != OMX_ErrorNone ), eError);
 
         pBufferHdr->pAppPrivate = (OMX_PTR) index;
@@ -1111,11 +1118,18 @@ status_t OMXCameraAdapter::UseBuffersCapture(void* bufArr, int num)
     mCapturedFrames = mBurstFrames;
     mCaptureConfigured = true;
 
-    EXIT:
+    return (ret | ErrorUtils::omxToAndroidError(eError));
 
+EXIT:
+    CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
+    //Release image buffers
+    if ( NULL != mReleaseImageBuffersCallback ) {
+        mReleaseImageBuffersCallback(mReleaseData);
+    }
+    performCleanupAfterError();
     LOG_FUNCTION_NAME_EXIT;
+    return (ret | ErrorUtils::omxToAndroidError(eError));
 
-    return ret;
 }
 
 };

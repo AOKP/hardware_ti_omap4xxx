@@ -465,35 +465,17 @@ int ANativeWindowDisplayAdapter::disableDisplay(bool cancel_buffer)
 
        if(cancel_buffer)
         {
-        if (mANativeWindow)
-            for(unsigned int i = 0; i < mFramesWithCameraAdapterMap.size(); i++) {
-                int value = mFramesWithCameraAdapterMap.valueAt(i);
-
-                // unlock buffer before giving it up
-                mapper.unlock((buffer_handle_t) mGrallocHandleMap[value]);
-
-                ret = mANativeWindow->cancel_buffer(mANativeWindow, mBufferHandleMap[value]);
-                if ( ENODEV == ret ) {
-                    CAMHAL_LOGEA("Preview surface abandoned!");
-                    mANativeWindow = NULL;
-                    return -ret;
-                } else if ( NO_ERROR != ret ) {
-                    CAMHAL_LOGEB("cancel_buffer() failed: %s (%d)",
-                                 strerror(-ret),
-                                 -ret);
-                   return -ret;
-                }
-            }
-        else
-            LOGE("mANativeWindow is NULL");
+        // Return the buffers to ANativeWindow here, the mFramesWithCameraAdapterMap is also cleared inside
+        returnBuffersToWindow();
         }
        else
         {
         mANativeWindow = NULL;
+        // Clear the frames with camera adapter map
+        mFramesWithCameraAdapterMap.clear();
         }
 
-        ///Clear the frames with camera adapter map
-        mFramesWithCameraAdapterMap.clear();
+
     }
     LOG_FUNCTION_NAME_EXIT;
 
@@ -565,23 +547,21 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
     }
 
     CAMHAL_LOGDB("Number of buffers set to ANativeWindow %d", numBufs);
-    //if(mBufferCount != numBufs)
-    //    {
-        ///Set the number of buffers needed for camera preview
-        err = mANativeWindow->set_buffer_count(mANativeWindow, numBufs);
-        if (err != 0) {
-            LOGE("native_window_set_buffer_count failed: %s (%d)", strerror(-err), -err);
+    ///Set the number of buffers needed for camera preview
+    err = mANativeWindow->set_buffer_count(mANativeWindow, numBufs);
+    if (err != 0) {
+        LOGE("native_window_set_buffer_count failed: %s (%d)", strerror(-err), -err);
 
-            if ( ENODEV == err ) {
-                CAMHAL_LOGEA("Preview surface abandoned!");
-                mANativeWindow = NULL;
-            }
-
-            return NULL;
+        if ( ENODEV == err ) {
+            CAMHAL_LOGEA("Preview surface abandoned!");
+            mANativeWindow = NULL;
         }
-        CAMHAL_LOGDB("Configuring %d buffers for ANativeWindow", numBufs);
-        mBufferCount = numBufs;
-    //}
+
+        return NULL;
+    }
+    CAMHAL_LOGDB("Configuring %d buffers for ANativeWindow", numBufs);
+    mBufferCount = numBufs;
+
 
     // Set window geometry
     err = mANativeWindow->set_buffers_geometry(
@@ -817,11 +797,50 @@ int ANativeWindowDisplayAdapter::getFd()
 
 }
 
+status_t ANativeWindowDisplayAdapter::returnBuffersToWindow()
+{
+    status_t ret = NO_ERROR;
+
+     GraphicBufferMapper &mapper = GraphicBufferMapper::get();
+    //Give the buffers back to display here -  sort of free it
+     if (mANativeWindow)
+         for(unsigned int i = 0; i < mFramesWithCameraAdapterMap.size(); i++) {
+             int value = mFramesWithCameraAdapterMap.valueAt(i);
+
+             // unlock buffer before giving it up
+             mapper.unlock((buffer_handle_t) mGrallocHandleMap[value]);
+
+             ret = mANativeWindow->cancel_buffer(mANativeWindow, mBufferHandleMap[value]);
+             if ( ENODEV == ret ) {
+                 CAMHAL_LOGEA("Preview surface abandoned!");
+                 mANativeWindow = NULL;
+                 return -ret;
+             } else if ( NO_ERROR != ret ) {
+                 CAMHAL_LOGEB("cancel_buffer() failed: %s (%d)",
+                              strerror(-ret),
+                              -ret);
+                return -ret;
+             }
+         }
+     else
+         LOGE("mANativeWindow is NULL");
+
+     ///Clear the frames with camera adapter map
+     mFramesWithCameraAdapterMap.clear();
+
+     return ret;
+
+}
+
 int ANativeWindowDisplayAdapter::freeBuffer(void* buf)
 {
     LOG_FUNCTION_NAME;
 
     int *buffers = (int *) buf;
+    status_t ret = NO_ERROR;
+
+    Mutex::Autolock lock(mLock);
+
     if((int *)mGrallocHandleMap != buffers)
     {
         CAMHAL_LOGEA("CameraHal passed wrong set of buffers to free!!!");
@@ -829,6 +848,9 @@ int ANativeWindowDisplayAdapter::freeBuffer(void* buf)
             delete []mGrallocHandleMap;
         mGrallocHandleMap = NULL;
     }
+
+
+    returnBuffersToWindow();
 
     if ( NULL != buf )
     {

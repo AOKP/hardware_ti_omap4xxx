@@ -99,6 +99,7 @@ public:
     bool processHalMsg();
     status_t PostFrame(ANativeWindowDisplayAdapter::DisplayFrame &dispFrame);
     bool handleFrameReturn();
+    status_t returnBuffersToWindow();
 
 public:
 

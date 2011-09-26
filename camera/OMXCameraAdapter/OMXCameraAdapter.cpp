@@ -94,29 +94,8 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
 
         if(!mCameraAdapterParameters.mHandleComp)
             {
-            ///Initialize the OMX Core
-            eError = OMX_Init();
-
-            if(eError!=OMX_ErrorNone)
-                {
-                CAMHAL_LOGEB("OMX_Init -0x%x", eError);
-                }
-            GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
-
-            ///Setup key parameters to send to Ducati during init
-            OMX_CALLBACKTYPE oCallbacks;
-
-            /* Initialize the callback handles */
-            oCallbacks.EventHandler    = android::OMXCameraAdapterEventHandler;
-            oCallbacks.EmptyBufferDone = android::OMXCameraAdapterEmptyBufferDone;
-            oCallbacks.FillBufferDone  = android::OMXCameraAdapterFillBufferDone;
-
             ///Get the handle to the OMX Component
-            mCameraAdapterParameters.mHandleComp = NULL;
-            eError = OMX_GetHandle(&(mCameraAdapterParameters.mHandleComp), //     previously used: OMX_GetHandle
-                                        (OMX_STRING)"OMX.TI.DUCATI1.VIDEO.CAMERA" ///@todo Use constant instead of hardcoded name
-                                        , this
-                                        , &oCallbacks);
+            eError = OMXCameraAdapter::OMXCameraGetHandle(&mCameraAdapterParameters.mHandleComp, (OMX_PTR)this);
 
             if(eError!=OMX_ErrorNone)
                 {
@@ -354,19 +333,23 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
     EXIT:
 
     CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
+    performCleanupAfterError();
+    LOG_FUNCTION_NAME_EXIT;
+    return ErrorUtils::omxToAndroidError(eError);
+}
 
+void OMXCameraAdapter::performCleanupAfterError()
+{
     if(mCameraAdapterParameters.mHandleComp)
         {
         ///Free the OMX component handle in case of error
         OMX_FreeHandle(mCameraAdapterParameters.mHandleComp);
+        mCameraAdapterParameters.mHandleComp = NULL;
         }
 
     ///De-init the OMX
     OMX_Deinit();
-
-    LOG_FUNCTION_NAME_EXIT;
-
-    return ErrorUtils::omxToAndroidError(eError);
+    mComponentState = OMX_StateInvalid;
 }
 
 OMXCameraAdapter::OMXCameraPortParameters *OMXCameraAdapter::getPortParams(CameraFrame::FrameType frameType)
@@ -443,8 +426,8 @@ status_t OMXCameraAdapter::fillThisBuffer(void* frameBuf, CameraFrame::FrameType
                 eError = OMX_FillThisBuffer(mCameraAdapterParameters.mHandleComp, port->mBufferHeader[i]);
                 if ( eError != OMX_ErrorNone )
                     {
-                    CAMHAL_LOGDB("OMX_FillThisBuffer 0x%x", eError);
-                    ret = ErrorUtils::omxToAndroidError(eError);
+                    CAMHAL_LOGEB("OMX_FillThisBuffer 0x%x", eError);
+                    goto EXIT;
                     }
                 mFramesWithDucati++;
                 break;
@@ -453,7 +436,16 @@ status_t OMXCameraAdapter::fillThisBuffer(void* frameBuf, CameraFrame::FrameType
 
         }
 
+    LOG_FUNCTION_NAME_EXIT;
     return ret;
+
+EXIT:
+    CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
+    performCleanupAfterError();
+    //Since fillthisbuffer is called asynchronously, make sure to signal error to the app
+    mErrorNotifier->errorNotify(CAMERA_ERROR_HARD);
+    LOG_FUNCTION_NAME_EXIT;
+    return (ret | ErrorUtils::omxToAndroidError(eError));
 }
 
 status_t OMXCameraAdapter::setParameters(const CameraParameters &params)
@@ -1113,8 +1105,8 @@ status_t OMXCameraAdapter::flushBuffers()
 
     EXIT:
     CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
+    performCleanupAfterError();
     LOG_FUNCTION_NAME_EXIT;
-
     return (ret | ErrorUtils::omxToAndroidError(eError));
 }
 
@@ -1172,13 +1164,13 @@ status_t OMXCameraAdapter::UseBuffersPreviewData(void* bufArr, int num)
     if ( mComponentState != OMX_StateLoaded )
         {
         CAMHAL_LOGEA("Calling UseBuffersPreviewData() when not in LOADED state");
-        ret = BAD_VALUE;
+        return BAD_VALUE;
         }
 
     if ( NULL == bufArr )
         {
         CAMHAL_LOGEA("NULL pointer passed for buffArr");
-        ret = BAD_VALUE;
+        return BAD_VALUE;
         }
 
     if ( 0 != mUsePreviewDataSem.Count() )
@@ -1211,7 +1203,7 @@ status_t OMXCameraAdapter::UseBuffersPreviewData(void* bufArr, int num)
         else
             {
             CAMHAL_LOGEB("Error in registering for event %d", ret);
-            ret = BAD_VALUE;
+            goto EXIT;
             }
         }
 
@@ -1230,7 +1222,7 @@ status_t OMXCameraAdapter::UseBuffersPreviewData(void* bufArr, int num)
             else
                 {
                 CAMHAL_LOGEB("OMX_SendCommand(OMX_CommandPortEnable) -0x%x", eError);
-                ret = BAD_VALUE;
+                goto EXIT;
                 }
         }
 
@@ -1242,7 +1234,7 @@ status_t OMXCameraAdapter::UseBuffersPreviewData(void* bufArr, int num)
         if (mComponentState == OMX_StateInvalid)
           {
             CAMHAL_LOGEA("Invalid State after measurement port enable Exitting!!!");
-            return EINVAL;
+            goto EXIT;
           }
 
         if ( NO_ERROR == ret )
@@ -1257,6 +1249,7 @@ status_t OMXCameraAdapter::UseBuffersPreviewData(void* bufArr, int num)
                                mCameraAdapterParameters.mMeasurementPortIndex,
                                NULL);
             CAMHAL_LOGEA("Timeout expoired during port enable on measurement port");
+            goto EXIT;
             }
 
         CAMHAL_LOGDA("Port enable event arrived on measurement port");
@@ -1265,6 +1258,11 @@ status_t OMXCameraAdapter::UseBuffersPreviewData(void* bufArr, int num)
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
+EXIT:
+    CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
+    performCleanupAfterError();
+    LOG_FUNCTION_NAME_EXIT;
+    return (ret | ErrorUtils::omxToAndroidError(eError));
 }
 
 status_t OMXCameraAdapter::switchToLoaded()
@@ -1277,7 +1275,7 @@ status_t OMXCameraAdapter::switchToLoaded()
     if ( mComponentState == OMX_StateLoaded  || mComponentState == OMX_StateInvalid)
         {
         CAMHAL_LOGDA("Already in OMX_Loaded state or OMX_StateInvalid state");
-        goto EXIT;
+        return NO_ERROR;
         }
 
     if ( 0 != mSwitchToLoadedSem.Count() )
@@ -1439,14 +1437,17 @@ status_t OMXCameraAdapter::switchToLoaded()
                            mCameraAdapterParameters.mPrevPortIndex,
                            NULL);
         CAMHAL_LOGEA("Preview enable timedout");
+
         goto EXIT;
         }
 
-    EXIT:
+    return (ret | ErrorUtils::omxToAndroidError(eError));
 
+EXIT:
+    CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
+    performCleanupAfterError();
     LOG_FUNCTION_NAME_EXIT;
-
-    return ret;
+    return (ret | ErrorUtils::omxToAndroidError(eError));
 }
 
 status_t OMXCameraAdapter::UseBuffersPreview(void* bufArr, int num)
@@ -1738,8 +1739,9 @@ status_t OMXCameraAdapter::UseBuffersPreview(void* bufArr, int num)
 
     ///If there is any failure, we reach here.
     ///Here, we do any resource freeing and convert from OMX error code to Camera Hal error code
-    EXIT:
-
+EXIT:
+    CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
+    performCleanupAfterError();
     CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
 
     LOG_FUNCTION_NAME_EXIT;
@@ -1874,12 +1876,12 @@ status_t OMXCameraAdapter::startPreview()
 
     LOG_FUNCTION_NAME_EXIT;
 
-    return ret;
+    return (ret | ErrorUtils::omxToAndroidError(eError));
 
     EXIT:
 
     CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
-
+    performCleanupAfterError();
     LOG_FUNCTION_NAME_EXIT;
 
     return (ret | ErrorUtils::omxToAndroidError(eError));
@@ -2023,18 +2025,15 @@ status_t OMXCameraAdapter::stopPreview()
 
     return (ret | ErrorUtils::omxToAndroidError(eError));
 
-    EXIT:
-
+EXIT:
+    CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
     {
     Mutex::Autolock lock(mPreviewBufferLock);
     ///Clear all the available preview buffers
     mPreviewBuffersAvailable.clear();
     }
-
-    switchToLoaded();
-
+    performCleanupAfterError();
     LOG_FUNCTION_NAME_EXIT;
-
     return (ret | ErrorUtils::omxToAndroidError(eError));
 
 }
@@ -3296,10 +3295,12 @@ OMXCameraAdapter::~OMXCameraAdapter()
         if(mCameraAdapterParameters.mHandleComp)
             {
             OMX_FreeHandle(mCameraAdapterParameters.mHandleComp);
+             mCameraAdapterParameters.mHandleComp = NULL;
             }
 
         OMX_Deinit();
         }
+
 
     //Remove any unhandled events
     if ( !mEventSignalQ.isEmpty() )
@@ -3366,6 +3367,44 @@ extern "C" CameraAdapter* CameraAdapter_Factory()
     return gCameraAdapter;
 }
 
+OMX_ERRORTYPE OMXCameraAdapter::OMXCameraGetHandle(OMX_HANDLETYPE *handle, OMX_PTR pAppData )
+{
+    OMX_ERRORTYPE eError = OMX_ErrorUndefined;
+
+    int retries = 5;
+    while(eError!=OMX_ErrorNone && --retries>=0) {
+        // OMX_Init
+        eError = OMX_Init();
+        if (eError != OMX_ErrorNone) {
+            CAMHAL_LOGEB("OMX_Init -0x%x", eError);
+        } else {
+            // Setup key parameters to send to Ducati during init
+            OMX_CALLBACKTYPE oCallbacks;
+
+            // Initialize the callback handles
+            oCallbacks.EventHandler    = android::OMXCameraAdapterEventHandler;
+            oCallbacks.EmptyBufferDone = android::OMXCameraAdapterEmptyBufferDone;
+            oCallbacks.FillBufferDone  = android::OMXCameraAdapterFillBufferDone;
+
+            // Get Handle
+            eError = OMX_GetHandle(handle, (OMX_STRING)"OMX.TI.DUCATI1.VIDEO.CAMERA", pAppData, &oCallbacks);
+            if (eError != OMX_ErrorNone) {
+                CAMHAL_LOGEB("OMX_GetHandle -0x%x", eError);
+                //Deinit here as we will init again above
+                //Note that we need to deinit because an erro recovery
+                //might have rendered the currently open rpmsg-omx device
+                //useless. so we might need to re-open it again
+                OMX_Deinit();
+            }
+        }
+        //Sleep for 100 mS
+        usleep(100000);
+    }
+
+    return eError;
+
+}
+
 extern "C" int CameraAdapter_Capabilities(CameraProperties::Properties* properties_array,
                                           const unsigned int starting_camera,
                                           const unsigned int max_camera) {
@@ -3383,23 +3422,7 @@ extern "C" int CameraAdapter_Capabilities(CameraProperties::Properties* properti
         return -EINVAL;
     }
 
-    // OMX_Init
-    eError = OMX_Init();
-    if (eError != OMX_ErrorNone) {
-        CAMHAL_LOGEB("OMX_Init -0x%x", eError);
-        return 0;  // no cameras supported
-    }
-
-    // Setup key parameters to send to Ducati during init
-    OMX_CALLBACKTYPE oCallbacks;
-
-    // Initialize the callback handles
-    oCallbacks.EventHandler    = android::OMXCameraAdapterEventHandler;
-    oCallbacks.EmptyBufferDone = android::OMXCameraAdapterEmptyBufferDone;
-    oCallbacks.FillBufferDone  = android::OMXCameraAdapterFillBufferDone;
-
-    // Get Handle
-    eError = OMX_GetHandle(&handle, (OMX_STRING)"OMX.TI.DUCATI1.VIDEO.CAMERA", NULL, &oCallbacks);
+    eError = OMXCameraAdapter::OMXCameraGetHandle(&handle);
     if (eError != OMX_ErrorNone) {
         CAMHAL_LOGEB("OMX_GetHandle -0x%x", eError);
         goto EXIT;
@@ -3438,6 +3461,7 @@ extern "C" int CameraAdapter_Capabilities(CameraProperties::Properties* properti
     // clean up
     if(handle) {
         OMX_FreeHandle(handle);
+        handle=NULL;
     }
     OMX_Deinit();
 

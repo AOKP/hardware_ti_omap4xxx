@@ -46,6 +46,7 @@ extern "C"
 #include "timm_osal_semaphores.h"
 }
 
+
 namespace android {
 
 #define Q16_OFFSET                  16
@@ -372,6 +373,9 @@ public:
 
  OMX_ERRORTYPE OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLETYPE hComponent,
                                     OMX_IN OMX_BUFFERHEADERTYPE* pBuffHeader);
+
+ static OMX_ERRORTYPE OMXCameraGetHandle(OMX_HANDLETYPE *handle, OMX_PTR pAppData=NULL);
+
 protected:
 
     //Parent class method implementation
@@ -397,6 +401,8 @@ protected:
     virtual void onOrientationEvent(uint32_t orientation, uint32_t tilt);
 
 private:
+
+    void performCleanupAfterError();
 
     status_t switchToLoaded();
 
