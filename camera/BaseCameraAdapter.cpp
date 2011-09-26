@@ -1211,7 +1211,9 @@ status_t BaseCameraAdapter::__sendFrameToSubscribers(CameraFrame* frame,
 
     frame->mFrameType = frameType;
 
-    if ( (frameType == CameraFrame::PREVIEW_FRAME_SYNC) || (frameType == CameraFrame::VIDEO_FRAME_SYNC)){
+    if ( (frameType == CameraFrame::PREVIEW_FRAME_SYNC) ||
+         (frameType == CameraFrame::VIDEO_FRAME_SYNC) ||
+         (frameType == CameraFrame::SNAPSHOT_FRAME) ){
         if (mFrameQueue.size() > 0){
           CameraFrame *lframe = (CameraFrame *)mFrameQueue.valueFor(frame->mBuffer);
           frame->mYuv[0] = lframe->mYuv[0];
