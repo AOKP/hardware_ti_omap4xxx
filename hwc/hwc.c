@@ -743,6 +743,7 @@ static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts 
             num->possible_overlay_layers <= num->max_hw_overlays &&
             num->possible_overlay_layers == num->composited_layers &&
             num->scaled_layers <= num->max_scaling_overlays &&
+            num->NV12 <= num->max_scaling_overlays &&
             /* fits into TILER slot */
             num->mem <= MAX_TILER_SLOT &&
             /* we cannot clone non-NV12 transformed layers */
@@ -921,7 +922,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 
     /* if scaling GFX (e.g. only 1 scaled surface) use a VID pipe */
     if (scaled_gfx)
-        dsscomp->ovls[0].cfg.ix = 1;
+        dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls;
 
     /* assign a z-layer for fb */
     if (hwc_dev->use_sgx && fb_z < 0) {
