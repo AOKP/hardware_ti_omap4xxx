@@ -500,12 +500,10 @@ static struct dsscomp_dispc_limitations {
 };
 
 static int omap4_hwc_can_scale(int src_w, int src_h, int dst_w, int dst_h, int is_nv12,
-                               struct dsscomp_display_info *dis, struct dsscomp_dispc_limitations *limits)
+                               struct dsscomp_display_info *dis, struct dsscomp_dispc_limitations *limits,
+                               __u32 pclk)
 {
     __u32 fclk = limits->fclk / 1000;
-    __u32 pclk = dis->timings.pixel_clock;
-    if (!pclk)
-        return 0;
 
     /* ERRATAs */
     /* cannot render 1-width layers on DSI video mode panels - we just disallow all 1-width LCD layers */
@@ -517,6 +515,10 @@ static int omap4_hwc_can_scale(int src_w, int src_h, int dst_w, int dst_h, int i
     /* max downscale */
     if (dst_h < src_h / limits->max_downscale / (is_nv12 ? limits->max_ydecim_2d : limits->max_ydecim_1d))
         return 0;
+
+    /* for manual panels pclk is 0, and there are no pclk based scaling limits */
+    if (!pclk)
+        return (dst_w < src_w / limits->max_downscale / (is_nv12 ? limits->max_xdecim_2d : limits->max_xdecim_1d));
 
     /* :HACK: limit horizontal downscale well below theoretical limit as we saw display artifacts */
     if (dst_w < src_w / 4)
@@ -548,7 +550,10 @@ static int omap4_hwc_can_scale_layer(omap4_hwc_device_t *hwc_dev, hwc_layer_t *l
         src_h = tmp;
     }
 
-    return omap4_hwc_can_scale(src_w, src_h, dst_w, dst_h, is_NV12(handle->iFormat), &hwc_dev->fb_dis, &limits);
+    /* NOTE: layers should be able to be scaled externally since
+       framebuffer is able to be scaled on selected external resolution */
+    return omap4_hwc_can_scale(src_w, src_h, dst_w, dst_h, is_NV12(handle->iFormat), &hwc_dev->fb_dis, &limits,
+                               hwc_dev->fb_dis.timings.pixel_clock);
 }
 
 static int omap4_hwc_is_valid_layer(omap4_hwc_device_t *hwc_dev,
@@ -617,8 +622,10 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         get_max_dimensions(xres, yres, xratio, yratio, d.modedb[i].xres, d.modedb[i].yres,
                            ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
 
-        if (!omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
-                                 hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits))
+        if (!d.modedb[i].pixclock ||
+            !omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
+                                 hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits,
+                                 1000000000 / d.modedb[i].pixclock))
             continue;
 
         /* prefer CEA modes */
@@ -665,8 +672,10 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
 
         get_max_dimensions(xres, yres, xratio, yratio, d.dis.timings.x_res, d.dis.timings.y_res,
                            ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
-        if (!omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
-                                 hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits)) {
+        if (!d.dis.timings.pixel_clock ||
+            !omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
+                                 hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits,
+                                 d.dis.timings.pixel_clock)) {
             LOGE("DSS scaler cannot support HDMI cloning");
             return -1;
         }
