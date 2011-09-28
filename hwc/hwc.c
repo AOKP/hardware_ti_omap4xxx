@@ -623,6 +623,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
                            ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
 
         if (!d.modedb[i].pixclock ||
+            d.modedb[i].vmode ||
             !omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
                                  hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits,
                                  1000000000 / d.modedb[i].pixclock))
@@ -673,6 +674,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         get_max_dimensions(xres, yres, xratio, yratio, d.dis.timings.x_res, d.dis.timings.y_res,
                            ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
         if (!d.dis.timings.pixel_clock ||
+            d.dis.mgr.interlaced ||
             !omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
                                  hwc_dev->ext & EXT_TRANSFORM, &d.dis, &limits,
                                  d.dis.timings.pixel_clock)) {
