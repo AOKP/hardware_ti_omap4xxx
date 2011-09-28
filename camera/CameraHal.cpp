@@ -129,6 +129,12 @@ void CameraHal::enableMsgType(int32_t msgType)
         msgType &= ~CAMERA_MSG_SHUTTER;
         }
 
+    // ignoring enable focus message from camera service
+    // we will enable internally in autoFocus call
+    if (msgType & CAMERA_MSG_FOCUS) {
+        msgType &= ~CAMERA_MSG_FOCUS;
+    }
+
     {
     Mutex::Autolock lock(mLock);
     mMsgEnabled |= msgType;
@@ -2144,6 +2150,12 @@ status_t CameraHal::autoFocus()
 
     LOG_FUNCTION_NAME;
 
+    {
+    Mutex::Autolock lock(mLock);
+    mMsgEnabled |= CAMERA_MSG_FOCUS;
+    }
+
+
     if ( NULL != mCameraAdapter )
         {
 
@@ -2185,6 +2197,12 @@ status_t CameraHal::autoFocus()
 status_t CameraHal::cancelAutoFocus()
 {
     LOG_FUNCTION_NAME;
+
+    {
+    Mutex::Autolock lock(mLock);
+    mMsgEnabled &= ~CAMERA_MSG_FOCUS;
+    }
+
     if( NULL != mCameraAdapter )
     {
         mCameraAdapter->sendCommand(CameraAdapter::CAMERA_CANCEL_AUTOFOCUS);
@@ -3373,8 +3391,7 @@ void CameraHal::forceStopPreview()
            // and application needs to call startFaceDection again
            // to restart FD
            mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_FD);
-
-           cancelAutoFocus();
+           mCameraAdapter->sendCommand(CameraAdapter::CAMERA_CANCEL_AUTOFOCUS);
         }
 
         // only need to send these control commands to state machine if we are
