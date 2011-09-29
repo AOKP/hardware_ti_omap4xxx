@@ -41,6 +41,9 @@
 #define max(a, b) ( { typeof(a) __a = (a), __b = (b); __a > __b ? __a : __b; } )
 #define swap(a, b) do { typeof(a) __a = (a); (a) = (b); (b) = __a; } while (0)
 
+#define WIDTH(rect) ((rect).right - (rect).left)
+#define HEIGHT(rect) ((rect).bottom - (rect).top)
+
 #include <video/dsscomp.h>
 
 #include "hal_public.h"
@@ -185,14 +188,13 @@ static int omap4_hwc_is_valid_format(int format)
 
 static int scaled(hwc_layer_t *layer)
 {
-    int w = layer->sourceCrop.right - layer->sourceCrop.left;
-    int h = layer->sourceCrop.bottom - layer->sourceCrop.top;
+    int w = WIDTH(layer->sourceCrop);
+    int h = HEIGHT(layer->sourceCrop);
 
     if (layer->transform & HWC_TRANSFORM_ROT_90)
         swap(w, h);
 
-    return (layer->displayFrame.right - layer->displayFrame.left != w ||
-            layer->displayFrame.bottom - layer->displayFrame.top != h);
+    return WIDTH(layer->displayFrame) != w || HEIGHT(layer->displayFrame) != h;
 }
 
 static int sync_id = 0;
@@ -322,14 +324,14 @@ omap4_hwc_setup_layer(omap4_hwc_device_t *hwc_dev, struct dss2_ovl_info *ovl,
     /* display position */
     oc->win.x = layer->displayFrame.left;
     oc->win.y = layer->displayFrame.top;
-    oc->win.w = layer->displayFrame.right - layer->displayFrame.left;
-    oc->win.h = layer->displayFrame.bottom - layer->displayFrame.top;
+    oc->win.w = WIDTH(layer->displayFrame);
+    oc->win.h = HEIGHT(layer->displayFrame);
 
     /* crop */
     oc->crop.x = layer->sourceCrop.left;
     oc->crop.y = layer->sourceCrop.top;
-    oc->crop.w = layer->sourceCrop.right - layer->sourceCrop.left;
-    oc->crop.h = layer->sourceCrop.bottom - layer->sourceCrop.top;
+    oc->crop.w = WIDTH(layer->sourceCrop);
+    oc->crop.h = HEIGHT(layer->sourceCrop);
 }
 
 const float m_unit[2][3] = { { 1., 0., 0. }, { 0., 1., 0. } };
@@ -534,10 +536,10 @@ static int omap4_hwc_can_scale(int src_w, int src_h, int dst_w, int dst_h, int i
 
 static int omap4_hwc_can_scale_layer(omap4_hwc_device_t *hwc_dev, hwc_layer_t *layer, IMG_native_handle_t *handle)
 {
-    int src_w = layer->sourceCrop.right - layer->sourceCrop.left;
-    int src_h = layer->sourceCrop.bottom - layer->sourceCrop.top;
-    int dst_w = layer->displayFrame.right - layer->displayFrame.left;
-    int dst_h = layer->displayFrame.bottom - layer->displayFrame.top;
+    int src_w = WIDTH(layer->sourceCrop);
+    int src_h = HEIGHT(layer->sourceCrop);
+    int dst_w = WIDTH(layer->displayFrame);
+    int dst_h = HEIGHT(layer->displayFrame);
 
     /* account for 90-degree rotation */
     if (layer->transform & HWC_TRANSFORM_ROT_90)
