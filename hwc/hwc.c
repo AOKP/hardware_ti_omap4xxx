@@ -100,6 +100,7 @@ struct omap4_hwc_device {
     int last_ext_ovls;
     int last_int_ovls;
     int ext_ovls;
+    int ext_ovls_wanted;
 
     int flags_rgb_order;
     int flags_nv12_only;
@@ -741,6 +742,7 @@ static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts 
      * here to figure out if mirroring is supported, but may not do mirroring for the first
      * frame while the overlays required for it are cleared.
      */
+    hwc_dev->ext_ovls_wanted = hwc_dev->ext_ovls;
     hwc_dev->ext_ovls = min(MAX_HW_OVERLAYS - hwc_dev->last_int_ovls, hwc_dev->ext_ovls);
 
     /* if not docking, we may be limited by last used external overlays */
@@ -1070,10 +1072,13 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
     struct dsscomp_setup_dispc_data *dsscomp = &hwc_dev->dsscomp_data;
     int err = 0;
     unsigned int i;
+    int invalidate;
 
     pthread_mutex_lock(&hwc_dev->lock);
 
     omap4_hwc_reset_screen(hwc_dev);
+
+    invalidate = hwc_dev->ext_ovls_wanted && !hwc_dev->ext_ovls;
 
     char big_log[1024];
     int e = sizeof(big_log);
@@ -1170,6 +1175,10 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
 
 err_out:
     pthread_mutex_unlock(&hwc_dev->lock);
+
+    if (invalidate && hwc_dev->procs && hwc_dev->procs->invalidate)
+        hwc_dev->procs->invalidate(hwc_dev->procs);
+
     return err;
 }
 
@@ -1287,16 +1296,13 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
          !!hwc_dev->ext, !!(hwc_dev->ext & EXT_DOCK),
          !!(hwc_dev->ext & EXT_TV), hwc_dev->ext & EXT_ROTATION,
          (hwc_dev->ext & EXT_HFLIP) ? "+hflip" : "");
-    pthread_mutex_unlock(&hwc_dev->lock);
 
     hwc_dev->ext_requested = hwc_dev->ext;
     hwc_dev->ext_last = hwc_dev->ext;
+    pthread_mutex_unlock(&hwc_dev->lock);
 
-    if (hwc_dev->procs && hwc_dev->procs->invalidate) {
+    if (hwc_dev->procs && hwc_dev->procs->invalidate)
             hwc_dev->procs->invalidate(hwc_dev->procs);
-            usleep(30000);
-            hwc_dev->procs->invalidate(hwc_dev->procs);
-    }
 }
 
 static void handle_uevents(omap4_hwc_device_t *hwc_dev, const char *s)
