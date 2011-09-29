@@ -39,6 +39,7 @@
 
 #define min(a, b) ( { typeof(a) __a = (a), __b = (b); __a < __b ? __a : __b; } )
 #define max(a, b) ( { typeof(a) __a = (a), __b = (b); __a > __b ? __a : __b; } )
+#define swap(a, b) do { typeof(a) __a = (a); (a) = (b); (b) = __a; } while (0)
 
 #include <video/dsscomp.h>
 
@@ -187,11 +188,8 @@ static int scaled(hwc_layer_t *layer)
     int w = layer->sourceCrop.right - layer->sourceCrop.left;
     int h = layer->sourceCrop.bottom - layer->sourceCrop.top;
 
-    if (layer->transform & HWC_TRANSFORM_ROT_90) {
-        int t = w;
-        w = h;
-        h = t;
-    }
+    if (layer->transform & HWC_TRANSFORM_ROT_90)
+        swap(w, h);
 
     return (layer->displayFrame.right - layer->displayFrame.left != w ||
             layer->displayFrame.bottom - layer->displayFrame.top != h);
@@ -425,12 +423,8 @@ static void set_ext_matrix(omap4_hwc_device_t *hwc_dev, int orig_w, int orig_h)
         m_scale(hwc_dev->m, 1, -1, 1, 1);
 
     if (hwc_dev->ext & EXT_ROTATION & 1) {
-        int q = orig_w;
-        orig_w = orig_h;
-        orig_h = q;
-        q = source_x;
-        source_x = source_y;
-        source_y = q;
+        swap(orig_w, orig_h);
+        swap(source_x, source_y);
     }
 
     /* get target size */
@@ -546,11 +540,8 @@ static int omap4_hwc_can_scale_layer(omap4_hwc_device_t *hwc_dev, hwc_layer_t *l
     int dst_h = layer->displayFrame.bottom - layer->displayFrame.top;
 
     /* account for 90-degree rotation */
-    if (layer->transform & HWC_TRANSFORM_ROT_90) {
-        int tmp = src_w;
-        src_w = src_h;
-        src_h = tmp;
-    }
+    if (layer->transform & HWC_TRANSFORM_ROT_90)
+        swap(src_w, src_h);
 
     /* NOTE: layers should be able to be scaled externally since
        framebuffer is able to be scaled on selected external resolution */
@@ -990,11 +981,8 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                 /* full screen video */
                 o->cfg.win.x = 0;
                 o->cfg.win.y = 0;
-                if (o->cfg.rotation & 1) {
-                    __u16 t = o->cfg.win.w;
-                    o->cfg.win.w = o->cfg.win.h;
-                    o->cfg.win.h = t;
-                }
+                if (o->cfg.rotation & 1)
+                    swap(o->cfg.win.w, o->cfg.win.h);
                 o->cfg.rotation = 0;
                 o->cfg.mirror = 0;
 
