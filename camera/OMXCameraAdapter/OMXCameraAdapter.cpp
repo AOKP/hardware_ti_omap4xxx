@@ -1217,6 +1217,123 @@ EXIT:
     return (ret | ErrorUtils::omxToAndroidError(eError));
 }
 
+status_t OMXCameraAdapter::switchToExecuting()
+{
+  status_t ret = NO_ERROR;
+  TIUTILS::Message msg;
+
+  LOG_FUNCTION_NAME;
+
+  mSwitchToExecLock.lock();
+  msg.command = CommandHandler::CAMERA_SWITCH_TO_EXECUTING;
+  msg.arg1 = mErrorNotifier;
+  ret = mCommandHandler->put(&msg);
+
+  LOG_FUNCTION_NAME;
+
+  return ret;
+}
+
+status_t OMXCameraAdapter::doSwitchToExecuting()
+{
+  status_t ret = NO_ERROR;
+  OMX_ERRORTYPE eError = OMX_ErrorNone;
+  LOG_FUNCTION_NAME;
+
+  if ( (mComponentState == OMX_StateExecuting) || (mComponentState == OMX_StateInvalid) ){
+    CAMHAL_LOGDA("Already in OMX_Executing state or OMX_StateInvalid state");
+    mSwitchToExecLock.unlock();
+    return NO_ERROR;
+  }
+
+  if ( 0 != mSwitchToExecSem.Count() ){
+    CAMHAL_LOGEB("Error mSwitchToExecSem semaphore count %d", mSwitchToExecSem.Count());
+    goto EXIT;
+  }
+
+  ///Register for Preview port DISABLE  event
+  ret = RegisterForEvent(mCameraAdapterParameters.mHandleComp,
+                         OMX_EventCmdComplete,
+                         OMX_CommandPortDisable,
+                         mCameraAdapterParameters.mPrevPortIndex,
+                         mSwitchToExecSem);
+  if ( NO_ERROR != ret ){
+    CAMHAL_LOGEB("Error in registering Port Disable for event %d", ret);
+    goto EXIT;
+  }
+  ///Disable Preview Port
+  eError = OMX_SendCommand(mCameraAdapterParameters.mHandleComp,
+                           OMX_CommandPortDisable,
+                           mCameraAdapterParameters.mPrevPortIndex,
+                           NULL);
+  ret = mSwitchToExecSem.WaitTimeout(OMX_CMD_TIMEOUT);
+  if (ret != NO_ERROR){
+    CAMHAL_LOGEB("Timeout PREVIEW PORT DISABLE %d", ret);
+  }
+
+  CAMHAL_LOGVB("PREV PORT DISABLED %d", ret);
+
+  ///Register for IDLE state switch event
+  ret = RegisterForEvent(mCameraAdapterParameters.mHandleComp,
+                         OMX_EventCmdComplete,
+                         OMX_CommandStateSet,
+                         OMX_StateIdle,
+                         mSwitchToExecSem);
+  if(ret!=NO_ERROR)
+    {
+      CAMHAL_LOGEB("Error in IDLE STATE SWITCH %d", ret);
+      goto EXIT;
+    }
+  eError = OMX_SendCommand (mCameraAdapterParameters.mHandleComp ,
+                            OMX_CommandStateSet,
+                            OMX_StateIdle,
+                            NULL);
+  GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
+  ret = mSwitchToExecSem.WaitTimeout(OMX_CMD_TIMEOUT);
+  if (ret != NO_ERROR){
+    CAMHAL_LOGEB("Timeout IDLE STATE SWITCH %d", ret);
+    goto EXIT;
+  }
+  mComponentState = OMX_StateIdle;
+  CAMHAL_LOGVB("OMX_SendCommand(OMX_StateIdle) 0x%x", eError);
+
+  ///Register for EXECUTING state switch event
+  ret = RegisterForEvent(mCameraAdapterParameters.mHandleComp,
+                         OMX_EventCmdComplete,
+                         OMX_CommandStateSet,
+                         OMX_StateExecuting,
+                         mSwitchToExecSem);
+  if(ret!=NO_ERROR)
+    {
+      CAMHAL_LOGEB("Error in EXECUTING STATE SWITCH %d", ret);
+      goto EXIT;
+    }
+  eError = OMX_SendCommand (mCameraAdapterParameters.mHandleComp ,
+                            OMX_CommandStateSet,
+                            OMX_StateExecuting,
+                            NULL);
+  GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
+  ret = mSwitchToExecSem.WaitTimeout(OMX_CMD_TIMEOUT);
+  if (ret != NO_ERROR){
+    CAMHAL_LOGEB("Timeout EXEC STATE SWITCH %d", ret);
+    goto EXIT;
+  }
+  mComponentState = OMX_StateExecuting;
+  CAMHAL_LOGVB("OMX_SendCommand(OMX_StateExecuting) 0x%x", eError);
+
+  mSwitchToExecLock.unlock();
+
+  LOG_FUNCTION_NAME_EXIT;
+  return ret;
+
+ EXIT:
+  CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
+  performCleanupAfterError();
+  mSwitchToExecLock.unlock();
+  LOG_FUNCTION_NAME_EXIT;
+  return (ret | ErrorUtils::omxToAndroidError(eError));
+}
+
 status_t OMXCameraAdapter::switchToLoaded()
 {
     status_t ret = NO_ERROR;
@@ -1362,8 +1479,8 @@ status_t OMXCameraAdapter::switchToLoaded()
                              mCameraAdapterParameters.mPrevPortIndex,
                              NULL);
 
-    CAMHAL_LOGDB("OMX_SendCommand(OMX_CommandStateSet) 0x%x", eError);
 
+    CAMHAL_LOGDB("OMX_SendCommand(OMX_CommandStateSet) 0x%x", eError);
     GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
 
     CAMHAL_LOGDA("Enabling Preview port");
@@ -1444,6 +1561,8 @@ status_t OMXCameraAdapter::UseBuffersPreview(void* bufArr, int num)
         LOG_FUNCTION_NAME_EXIT;
         return BAD_VALUE;
         }
+
+    mSwitchToExecLock.lock();
 
     if ( mComponentState == OMX_StateLoaded )
         {
@@ -1777,6 +1896,8 @@ status_t OMXCameraAdapter::startPreview()
 
         }
 
+    mSwitchToExecLock.unlock();
+
     //Queue all the buffers on preview port
     for(int index=0;index< mPreviewData->mMaxQueueable;index++)
         {
@@ -1834,6 +1955,7 @@ status_t OMXCameraAdapter::startPreview()
 
     CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
     performCleanupAfterError();
+    mSwitchToExecLock.unlock();
     LOG_FUNCTION_NAME_EXIT;
 
     return (ret | ErrorUtils::omxToAndroidError(eError));
@@ -2184,7 +2306,6 @@ status_t OMXCameraAdapter::getFrameSize(size_t &width, size_t &height)
 
     if ( mOMXStateSwitch )
         {
-
         ret = switchToLoaded();
         if ( NO_ERROR != ret )
             {
@@ -2291,7 +2412,6 @@ status_t OMXCameraAdapter::getFrameSize(size_t &width, size_t &height)
 exit:
 
     CAMHAL_LOGDB("Required frame size %dx%d", width, height);
-
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
@@ -3149,6 +3269,11 @@ bool OMXCameraAdapter::CommandHandler::Handler()
                 forever = 0;
                 break;
             }
+            case CommandHandler::CAMERA_SWITCH_TO_EXECUTING:
+            {
+              stat = mCameraAdapter->doSwitchToExecuting();
+              break;
+            }
         }
 
         if ( NO_ERROR != stat )
@@ -3219,6 +3344,8 @@ OMXCameraAdapter::OMXCameraAdapter(size_t sensor_index): mComponentState (OMX_St
     mStopCaptureSem.Create(0);
     mSwitchToLoadedSem.Create(0);
     mCaptureSem.Create(0);
+
+    mSwitchToExecSem.Create(0);
 
     mCameraAdapterParameters.mHandleComp = 0;
 

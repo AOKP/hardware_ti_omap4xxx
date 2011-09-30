@@ -398,9 +398,12 @@ protected:
     virtual status_t getFrameDataSize(size_t &dataFrameSize, size_t bufferCount);
     virtual status_t startFaceDetection();
     virtual status_t stopFaceDetection();
+    virtual status_t switchToExecuting();
     virtual void onOrientationEvent(uint32_t orientation, uint32_t tilt);
 
 private:
+
+    status_t doSwitchToExecuting();
 
     void performCleanupAfterError();
 
@@ -630,7 +633,8 @@ private:
             enum {
                 COMMAND_EXIT = -1,
                 CAMERA_START_IMAGE_CAPTURE = 0,
-                CAMERA_PERFORM_AUTOFOCUS
+                CAMERA_PERFORM_AUTOFOCUS = 1,
+                CAMERA_SWITCH_TO_EXECUTING
             };
 
         private:
@@ -846,6 +850,9 @@ private:
     Semaphore mStartCaptureSem;
     Semaphore mStopCaptureSem;
     Semaphore mSwitchToLoadedSem;
+    Semaphore mSwitchToExecSem;
+
+    mutable Mutex mSwitchToExecLock;
 
     Vector<struct TIUTILS::Message *> mEventSignalQ;
     Mutex mEventLock;

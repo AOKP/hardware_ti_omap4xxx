@@ -135,6 +135,8 @@ protected:
     // ( if supported )
     virtual status_t stopFaceDetection();
 
+    virtual status_t switchToExecuting();
+
     // Receive orientation events from CameraHal
     virtual void onOrientationEvent(uint32_t orientation, uint32_t tilt);
 

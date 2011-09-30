@@ -755,6 +755,7 @@ public:
         CAMERA_TIMEOUT_EXPIRED                      = 21,
         CAMERA_START_FD                             = 22,
         CAMERA_STOP_FD                              = 23,
+        CAMERA_SWITCH_TO_EXECUTING                  = 24,
         };
 
     enum CameraMode

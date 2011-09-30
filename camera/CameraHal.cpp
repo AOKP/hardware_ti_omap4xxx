@@ -1378,33 +1378,47 @@ status_t CameraHal::startPreview()
     unsigned int max_queueble_buffers;
 
 #if PPM_INSTRUMENTATION || PPM_INSTRUMENTATION_ABS
-
         gettimeofday(&mStartPreview, NULL);
-
 #endif
 
     LOG_FUNCTION_NAME;
 
-    if ( mPreviewEnabled )
-    {
-    CAMHAL_LOGDA("Preview already running");
-
-    LOG_FUNCTION_NAME_EXIT;
-
-    return ALREADY_EXISTS;
+    if ( mPreviewEnabled ){
+      CAMHAL_LOGDA("Preview already running");
+      LOG_FUNCTION_NAME_EXIT;
+      return ALREADY_EXISTS;
     }
 
     if ( NULL != mCameraAdapter ) {
+      ret = mCameraAdapter->setParameters(mParameters);
+    }
 
-        ret = mCameraAdapter->setParameters(mParameters);
+    if ((mPreviewStartInProgress == false) && (mDisplayPaused == false)){
+      ret = mCameraAdapter->sendCommand(CameraAdapter::CAMERA_QUERY_RESOLUTION_PREVIEW,( int ) &frame);
+      if ( NO_ERROR != ret ){
+        CAMHAL_LOGEB("Error: CAMERA_QUERY_RESOLUTION_PREVIEW %d", ret);
+        return ret;
+      }
+
+      ///Update the current preview width and height
+      mPreviewWidth = frame.mWidth;
+      mPreviewHeight = frame.mHeight;
+      //Update the padded width and height - required for VNF and VSTAB
+      mParameters.set(TICameraParameters::KEY_PADDED_WIDTH, mPreviewWidth);
+      mParameters.set(TICameraParameters::KEY_PADDED_HEIGHT, mPreviewHeight);
+
     }
 
     ///If we don't have the preview callback enabled and display adapter,
-    if(!mSetPreviewWindowCalled || (mDisplayAdapter.get() == NULL))
-    {
-        CAMHAL_LOGEA("Preview not started. Preview in progress flag set");
-        mPreviewStartInProgress = true;
-        return NO_ERROR;
+    if(!mSetPreviewWindowCalled || (mDisplayAdapter.get() == NULL)){
+      CAMHAL_LOGEA("Preview not started. Preview in progress flag set");
+      mPreviewStartInProgress = true;
+      ret = mCameraAdapter->sendCommand(CameraAdapter::CAMERA_SWITCH_TO_EXECUTING);
+      if ( NO_ERROR != ret ){
+        CAMHAL_LOGEB("Error: CAMERA_SWITCH_TO_EXECUTING %d", ret);
+        return ret;
+      }
+      return NO_ERROR;
     }
 
     if( (mDisplayAdapter.get() != NULL) && ( !mPreviewEnabled ) && ( mDisplayPaused ) )
@@ -1438,27 +1452,11 @@ status_t CameraHal::startPreview()
             }
         }
 
-    /// Ensure that buffers for preview are allocated before we start the camera
-    ///Get the updated size from Camera Adapter, to account for padding etc
-    ret = mCameraAdapter->sendCommand(CameraAdapter::CAMERA_QUERY_RESOLUTION_PREVIEW,
-                                      ( int ) &frame);
-    if ( NO_ERROR != ret )
-        {
-        return ret;
-        }
-
-    ///Update the current preview width and height
-    mPreviewWidth = frame.mWidth;
-    mPreviewHeight = frame.mHeight;
-
-    //Update the padded width and height - required for VNF and VSTAB
-    mParameters.set(TICameraParameters::KEY_PADDED_WIDTH, mPreviewWidth);
-    mParameters.set(TICameraParameters::KEY_PADDED_HEIGHT, mPreviewHeight);
 
     required_buffer_count = atoi(mCameraProperties->get(CameraProperties::REQUIRED_PREVIEW_BUFS));
 
     ///Allocate the preview buffers
-    ret = allocPreviewBufs(frame.mWidth, frame.mHeight, mParameters.getPreviewFormat(), required_buffer_count, max_queueble_buffers);
+    ret = allocPreviewBufs(mPreviewWidth, mPreviewHeight, mParameters.getPreviewFormat(), required_buffer_count, max_queueble_buffers);
 
     if ( NO_ERROR != ret )
         {
