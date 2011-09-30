@@ -411,13 +411,13 @@ status_t BaseCameraAdapter::sendCommand(CameraCommands operation, int value1, in
                         mPreviewDataBuffersAvailable.clear();
                         for ( uint32_t i = 0 ; i < desc->mMaxQueueable ; i++ )
                             {
-                            mPreviewDataBuffersAvailable.add(mPreviewDataBuffers[i], true);
+                            mPreviewDataBuffersAvailable.add(mPreviewDataBuffers[i], 0);
                             }
                         // initial ref count for undeqeueued buffers is 1 since buffer provider
                         // is still holding on to it
                         for ( uint32_t i = desc->mMaxQueueable ; i < desc->mCount ; i++ )
                             {
-                            mPreviewDataBuffersAvailable.add(mPreviewBuffers[i], 1);
+                            mPreviewDataBuffersAvailable.add(mPreviewDataBuffers[i], 1);
                             }
                         }
 
@@ -464,13 +464,13 @@ status_t BaseCameraAdapter::sendCommand(CameraCommands operation, int value1, in
                     mCaptureBuffersAvailable.clear();
                     for ( uint32_t i = 0 ; i < desc->mMaxQueueable ; i++ )
                         {
-                        mCaptureBuffersAvailable.add(mCaptureBuffers[i], true);
+                        mCaptureBuffersAvailable.add(mCaptureBuffers[i], 0);
                         }
                     // initial ref count for undeqeueued buffers is 1 since buffer provider
                     // is still holding on to it
                     for ( uint32_t i = desc->mMaxQueueable ; i < desc->mCount ; i++ )
                         {
-                        mCaptureBuffersAvailable.add(mPreviewBuffers[i], 1);
+                        mCaptureBuffersAvailable.add(mCaptureBuffers[i], 1);
                         }
                     }
 
@@ -1821,6 +1821,7 @@ status_t BaseCameraAdapter::setState(CameraCommands operation)
             switch ( operation )
                 {
                 case CAMERA_STOP_IMAGE_CAPTURE:
+                case CAMERA_STOP_BRACKET_CAPTURE:
                     CAMHAL_LOGDB("Adapter state switch CAPTURE_STATE->PREVIEW_STATE event = 0x%x",
                                  operation);
                     mNextState = PREVIEW_STATE;
@@ -1841,6 +1842,7 @@ status_t BaseCameraAdapter::setState(CameraCommands operation)
             switch ( operation )
                 {
 
+                case CAMERA_STOP_IMAGE_CAPTURE:
                 case CAMERA_STOP_BRACKET_CAPTURE:
                     CAMHAL_LOGDB("Adapter state switch BRACKETING_STATE->PREVIEW_STATE event = 0x%x",
                                  operation);

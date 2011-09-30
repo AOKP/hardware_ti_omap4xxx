@@ -583,11 +583,10 @@ status_t OMXCameraAdapter::sendBracketFrames()
             if (!mBracketingBuffersQueued[currentBufferIdx] )
                 {
                 CameraFrame cameraFrame;
-                initCameraFrame(cameraFrame,
-                                imgCaptureData->mBufferHeader[currentBufferIdx],
-                                imgCaptureData->mImageType,
-                                imgCaptureData);
-                sendFrame(cameraFrame);
+                sendCallBacks(cameraFrame,
+                              imgCaptureData->mBufferHeader[currentBufferIdx],
+                              imgCaptureData->mImageType,
+                              imgCaptureData);
                 }
             } while ( currentBufferIdx != mLastBracetingBufferIdx );
 
@@ -687,22 +686,17 @@ status_t OMXCameraAdapter::stopBracketing()
 
     Mutex::Autolock lock(mBracketingLock);
 
-    if ( mBracketingEnabled )
-        {
+    if ( NULL != mBracketingBuffersQueued )
+    {
+        delete [] mBracketingBuffersQueued;
+    }
 
-        if ( NULL != mBracketingBuffersQueued )
-        {
-            delete [] mBracketingBuffersQueued;
-        }
+    ret = stopImageCapture();
 
-        ret = stopImageCapture();
-
-        mBracketingBuffersQueued = NULL;
-        mBracketingEnabled = false;
-        mBracketingBuffersQueuedCount = 0;
-        mLastBracetingBufferIdx = 0;
-
-        }
+    mBracketingBuffersQueued = NULL;
+    mBracketingEnabled = false;
+    mBracketingBuffersQueuedCount = 0;
+    mLastBracetingBufferIdx = 0;
 
     LOG_FUNCTION_NAME_EXIT;
 

@@ -678,6 +678,9 @@ void* ANativeWindowDisplayAdapter::allocateBuffer(int width, int height, const c
         }
         mFramesWithCameraAdapterMap.removeItem((int) mGrallocHandleMap[start]);
     }
+
+    freeBuffer(mGrallocHandleMap);
+
     CAMHAL_LOGEA("Error occurred, performing cleanup");
 
     if ( NULL != mErrorNotifier.get() )

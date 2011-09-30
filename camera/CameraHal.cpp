@@ -1301,7 +1301,11 @@ status_t CameraHal::signalEndImageCapture()
 
     LOG_FUNCTION_NAME;
 
-    mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_IMAGE_CAPTURE);
+    if ( mBracketingRunning ) {
+        stopImageBracketing();
+    } else {
+        mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_IMAGE_CAPTURE);
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 
@@ -2378,25 +2382,14 @@ status_t CameraHal::stopImageBracketing()
 
         LOG_FUNCTION_NAME;
 
-        if ( !mBracketingRunning )
-            {
-            return ret;
-            }
-
-        if ( NO_ERROR == ret )
-            {
-            mBracketingRunning = false;
-            }
-
-        if(!previewEnabled() && !mDisplayPaused)
+        if( !previewEnabled() )
             {
             return NO_INIT;
             }
 
-        if ( NO_ERROR == ret )
-            {
-            ret = mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_BRACKET_CAPTURE);
-            }
+        mBracketingRunning = false;
+
+        ret = mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_BRACKET_CAPTURE);
 
         LOG_FUNCTION_NAME_EXIT;
 
@@ -2549,10 +2542,6 @@ status_t CameraHal::takePicture( )
             ret = mCameraAdapter->sendCommand(CameraAdapter::CAMERA_USE_BUFFERS_IMAGE_CAPTURE,
                                               ( int ) &desc);
             }
-        }
-    else
-        {
-        mBracketingRunning = false;
         }
 
     if ( ( NO_ERROR == ret ) && ( NULL != mCameraAdapter ) )
