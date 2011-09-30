@@ -41,7 +41,7 @@ status_t OMXCameraAdapter::setParametersAlgo(const CameraParameters &params,
     LOG_FUNCTION_NAME;
 
     CaptureMode capMode;
-    CAMHAL_LOGEB("Capture mode %s",  params.get(TICameraParameters::KEY_CAP_MODE));
+    CAMHAL_LOGDB("Capture mode %s",  params.get(TICameraParameters::KEY_CAP_MODE));
     if ( (valstr = params.get(TICameraParameters::KEY_CAP_MODE)) != NULL )
         {
         if (strcmp(valstr, (const char *) TICameraParameters::HIGH_PERFORMANCE_MODE) == 0)
@@ -1124,17 +1124,23 @@ status_t OMXCameraAdapter::setVFramerate(OMX_U32 minFrameRate, OMX_U32 maxFrameR
     status_t ret = NO_ERROR;
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_TI_CONFIG_VARFRMRANGETYPE vfr;
+    OMXCameraPortParameters * mPreviewData =
+        &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex];
 
     LOG_FUNCTION_NAME;
 
-    if ( OMX_StateInvalid == mComponentState )
-        {
+    if ( OMX_StateInvalid == mComponentState ) {
         CAMHAL_LOGEA("OMX component is in invalid state");
         ret = -EINVAL;
-        }
+    }
 
-    if ( NO_ERROR == ret )
-        {
+    // The port framerate should never be smaller
+    // than max framerate.
+    if (  mPreviewData->mFrameRate < maxFrameRate ) {
+        return NO_INIT;
+    }
+
+    if ( NO_ERROR == ret ) {
         OMX_INIT_STRUCT_PTR (&vfr, OMX_TI_CONFIG_VARFRMRANGETYPE);
 
         vfr.xMin = minFrameRate<<16;
@@ -1143,21 +1149,18 @@ status_t OMXCameraAdapter::setVFramerate(OMX_U32 minFrameRate, OMX_U32 maxFrameR
         eError = OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
                                (OMX_INDEXTYPE)OMX_TI_IndexConfigVarFrmRange,
                                &vfr);
-        if(OMX_ErrorNone != eError)
-            {
+        if(OMX_ErrorNone != eError) {
             CAMHAL_LOGEB("Error while setting VFR min = %d, max = %d, error = 0x%x",
                          ( unsigned int ) minFrameRate,
                          ( unsigned int ) maxFrameRate,
                          eError);
             ret = -1;
-            }
-        else
-            {
+        } else {
             CAMHAL_LOGDB("VFR Configured Successfully [%d:%d]",
                         ( unsigned int ) minFrameRate,
                         ( unsigned int ) maxFrameRate);
-            }
         }
+    }
 
     return ret;
  }
