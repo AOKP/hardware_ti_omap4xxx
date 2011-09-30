@@ -501,7 +501,7 @@ static struct dsscomp_dispc_limitations {
     .integer_scale_ratio_limit = 2048,
 };
 
-static int omap4_hwc_can_scale(int src_w, int src_h, int dst_w, int dst_h, int is_nv12,
+static int omap4_hwc_can_scale(int src_w, int src_h, int dst_w, int dst_h, int is_2d,
                                struct dsscomp_display_info *dis, struct dsscomp_dispc_limitations *limits,
                                __u32 pclk)
 {
@@ -515,12 +515,12 @@ static int omap4_hwc_can_scale(int src_w, int src_h, int dst_w, int dst_h, int i
     /* NOTE: no support for checking YUV422 layers that are tricky to scale */
 
     /* max downscale */
-    if (dst_h < src_h / limits->max_downscale / (is_nv12 ? limits->max_ydecim_2d : limits->max_ydecim_1d))
+    if (dst_h < src_h / limits->max_downscale / (is_2d ? limits->max_ydecim_2d : limits->max_ydecim_1d))
         return 0;
 
     /* for manual panels pclk is 0, and there are no pclk based scaling limits */
     if (!pclk)
-        return (dst_w < src_w / limits->max_downscale / (is_nv12 ? limits->max_xdecim_2d : limits->max_xdecim_1d));
+        return (dst_w < src_w / limits->max_downscale / (is_2d ? limits->max_xdecim_2d : limits->max_xdecim_1d));
 
     /* :HACK: limit horizontal downscale well below theoretical limit as we saw display artifacts */
     if (dst_w < src_w / 4)
@@ -532,7 +532,7 @@ static int omap4_hwc_can_scale(int src_w, int src_h, int dst_w, int dst_h, int i
     /* for small parts, we need to use integer fclk/pixclk */
     if (src_w < limits->integer_scale_ratio_limit)
         fclk = fclk / pclk * pclk;
-    if (dst_w < src_w * pclk / fclk / (is_nv12 ? limits->max_xdecim_2d : limits->max_xdecim_1d))
+    if (dst_w < src_w * pclk / fclk / (is_2d ? limits->max_xdecim_2d : limits->max_xdecim_1d))
         return 0;
 
     return 1;
@@ -624,6 +624,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         get_max_dimensions(xres, yres, xratio, yratio, d.modedb[i].xres, d.modedb[i].yres,
                            ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
 
+        /* we need to ensure that even TILER2D buffers can be scaled */
         if (!d.modedb[i].pixclock ||
             d.modedb[i].vmode ||
             !omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
