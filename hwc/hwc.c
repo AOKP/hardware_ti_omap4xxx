@@ -860,11 +860,11 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             /* render via DSS overlay */
             mem_used += mem1d(handle);
             layer->compositionType = HWC_OVERLAY;
-            hwc_dev->buffers[dsscomp->num_ovls] = layer->handle;
+            hwc_dev->buffers[dsscomp->num_ovls] = handle;
 
             omap4_hwc_setup_layer(hwc_dev,
                                   &dsscomp->ovls[dsscomp->num_ovls],
-                                  &list->hwLayers[i],
+                                  layer,
                                   z,
                                   handle->iFormat,
                                   handle->iWidth,
@@ -1161,8 +1161,8 @@ static void omap4_hwc_dump(struct hwc_composer_device *dev, char *buff, int buff
         len = dump_printf(buff, buff_len, len, "  layer %d:\n", i);
         len = dump_printf(buff, buff_len, len, "     enabled: %s\n",
                           cfg->enabled ? "true" : "false");
-        len = dump_printf(buff, buff_len, len, "     buff: %dx%d stride: %d:\n",
-                          cfg->width, cfg->height, cfg->stride);
+        len = dump_printf(buff, buff_len, len, "     buff: %p %dx%d stride: %d\n",
+                          hwc_dev->buffers[i], cfg->width, cfg->height, cfg->stride);
         len = dump_printf(buff, buff_len, len, "     src: (%d,%d) %dx%d\n",
                           cfg->crop.x, cfg->crop.y, cfg->crop.w, cfg->crop.h);
         len = dump_printf(buff, buff_len, len, "     dst: (%d,%d) %dx%d\n",
