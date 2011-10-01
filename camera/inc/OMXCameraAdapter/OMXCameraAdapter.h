@@ -260,6 +260,16 @@ public:
         BRIGHTNESS_AUTO,
         };
 
+    enum CaptureSettingsFlags {
+        SetFormat               = 1 << 0,
+        SetThumb                = 1 << 1,
+        SetExpBracket           = 1 << 2,
+        SetQuality              = 1 << 3,
+        SetRotation             = 1 << 3,
+        E3aSettingMax,
+        E3AsettingsAll = ( ((E3aSettingMax -1 ) << 1) -1 ) /// all possible flags raised
+    };
+
     class GPSData
     {
         public:
@@ -825,6 +835,7 @@ private:
     bool mWaitingForSnapshot;
     int mSnapshotCount;
     bool mCaptureConfigured;
+    unsigned int mPendingCaptureSettings;
 
     //Temporal bracketing management data
     mutable Mutex mBracketingLock;

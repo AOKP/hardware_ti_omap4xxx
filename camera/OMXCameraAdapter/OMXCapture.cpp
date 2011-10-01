@@ -40,7 +40,6 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
     int w, h;
     OMX_COLOR_FORMATTYPE pixFormat;
     const char *valstr = NULL;
-    bool updateImagePortParams = false;
 
     LOG_FUNCTION_NAME;
 
@@ -52,7 +51,7 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
     if ( ( w != ( int ) cap->mWidth ) ||
           ( h != ( int ) cap->mHeight ) )
         {
-        updateImagePortParams = true;
+        mPendingCaptureSettings |= SetFormat;
         }
 
     cap->mWidth = w;
@@ -139,31 +138,29 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
 
     if ( pixFormat != cap->mColorFormat )
         {
-        updateImagePortParams = true;
+        mPendingCaptureSettings |= SetFormat;
         cap->mColorFormat = pixFormat;
-        }
-
-    if ( updateImagePortParams )
-        {
-        if ( ( CAPTURE_ACTIVE & state ) != CAPTURE_ACTIVE )
-            {
-            setFormat(OMX_CAMERA_PORT_IMAGE_OUT_IMAGE, *cap);
-            }
         }
 
     str = params.get(TICameraParameters::KEY_EXP_BRACKETING_RANGE);
     if ( NULL != str ) {
         parseExpRange(str, mExposureBracketingValues, EXP_BRACKET_RANGE, mExposureBracketingValidEntries);
     } else {
+        // if bracketing was previously set...we set again before capturing to clear
+        if (mExposureBracketingValidEntries) mPendingCaptureSettings |= SetExpBracket;
         mExposureBracketingValidEntries = 0;
     }
 
     if ( params.getInt(CameraParameters::KEY_ROTATION) != -1 )
         {
+        if (params.getInt(CameraParameters::KEY_ROTATION) != mPictureRotation) {
+            mPendingCaptureSettings |= SetRotation;
+        }
         mPictureRotation = params.getInt(CameraParameters::KEY_ROTATION);
         }
     else
         {
+        if (mPictureRotation) mPendingCaptureSettings |= SetRotation;
         mPictureRotation = 0;
         }
 
@@ -190,10 +187,14 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
 
     if ( params.getInt(TICameraParameters::KEY_BURST)  >= 1 )
         {
+        if (params.getInt(TICameraParameters::KEY_BURST) != mBurstFrames) {
+            mPendingCaptureSettings |= SetExpBracket;
+        }
         mBurstFrames = params.getInt(TICameraParameters::KEY_BURST);
         }
     else
         {
+        if (mBurstFrames != 1) mPendingCaptureSettings |= SetExpBracket;
         mBurstFrames = 1;
         }
 
@@ -202,10 +203,14 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
     if ( ( params.getInt(CameraParameters::KEY_JPEG_QUALITY)  >= MIN_JPEG_QUALITY ) &&
          ( params.getInt(CameraParameters::KEY_JPEG_QUALITY)  <= MAX_JPEG_QUALITY ) )
         {
+        if (params.getInt(CameraParameters::KEY_JPEG_QUALITY) != mPictureQuality) {
+            mPendingCaptureSettings |= SetQuality;
+        }
         mPictureQuality = params.getInt(CameraParameters::KEY_JPEG_QUALITY);
         }
     else
         {
+        if (mPictureQuality != MAX_JPEG_QUALITY) mPendingCaptureSettings |= SetQuality;
         mPictureQuality = MAX_JPEG_QUALITY;
         }
 
@@ -213,10 +218,14 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
 
     if ( params.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_WIDTH)  >= 0 )
         {
+        if (params.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_WIDTH) != mThumbWidth) {
+            mPendingCaptureSettings |= SetThumb;
+        }
         mThumbWidth = params.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_WIDTH);
         }
     else
         {
+        if (mThumbWidth != DEFAULT_THUMB_WIDTH) mPendingCaptureSettings |= SetThumb;
         mThumbWidth = DEFAULT_THUMB_WIDTH;
         }
 
@@ -225,10 +234,14 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
 
     if ( params.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_HEIGHT)  >= 0 )
         {
+        if (params.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_HEIGHT) != mThumbHeight) {
+            mPendingCaptureSettings |= SetThumb;
+        }
         mThumbHeight = params.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_HEIGHT);
         }
     else
         {
+        if (mThumbHeight != DEFAULT_THUMB_HEIGHT) mPendingCaptureSettings |= SetThumb;
         mThumbHeight = DEFAULT_THUMB_HEIGHT;
         }
 
@@ -238,10 +251,14 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
     if ( ( params.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_QUALITY)  >= MIN_JPEG_QUALITY ) &&
          ( params.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_QUALITY)  <= MAX_JPEG_QUALITY ) )
         {
+        if (params.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_QUALITY) != mThumbQuality) {
+            mPendingCaptureSettings |= SetThumb;
+        }
         mThumbQuality = params.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_QUALITY);
         }
     else
         {
+        if (mThumbQuality != MAX_JPEG_QUALITY) mPendingCaptureSettings |= SetThumb;
         mThumbQuality = MAX_JPEG_QUALITY;
         }
 
@@ -732,14 +749,15 @@ status_t OMXCameraAdapter::startImageCapture()
         }
     }
 
-    if ( NO_ERROR == ret )
-        {
-        ret = setPictureRotation(mPictureRotation);
-        if ( NO_ERROR != ret )
-            {
-            CAMHAL_LOGEB("Error configuring image rotation %x", ret);
+    if ( NO_ERROR == ret ) {
+        if (mPendingCaptureSettings & SetRotation) {
+            mPendingCaptureSettings &= ~SetRotation;
+            ret = setPictureRotation(mPictureRotation);
+            if ( NO_ERROR != ret ) {
+                CAMHAL_LOGEB("Error configuring image rotation %x", ret);
             }
         }
+    }
 
     //OMX shutter callback events are only available in hq mode
     if ( (HIGH_QUALITY == mCapMode) || (HIGH_QUALITY_ZSL== mCapMode))
@@ -1008,35 +1026,43 @@ status_t OMXCameraAdapter::UseBuffersCapture(void* bufArr, int num)
     CAMHAL_LOGDB("Params Width = %d", (int)imgCaptureData->mWidth);
     CAMHAL_LOGDB("Params Height = %d", (int)imgCaptureData->mWidth);
 
-    ret = setFormat(OMX_CAMERA_PORT_IMAGE_OUT_IMAGE, *imgCaptureData);
-    if ( ret != NO_ERROR )
-        {
-        CAMHAL_LOGEB("setFormat() failed %d", ret);
-        LOG_FUNCTION_NAME_EXIT;
-        return ret;
+    if (mPendingCaptureSettings & SetFormat) {
+        mPendingCaptureSettings &= ~SetFormat;
+        ret = setFormat(OMX_CAMERA_PORT_IMAGE_OUT_IMAGE, *imgCaptureData);
+        if ( ret != NO_ERROR ) {
+            CAMHAL_LOGEB("setFormat() failed %d", ret);
+            LOG_FUNCTION_NAME_EXIT;
+            return ret;
         }
+    }
 
-    ret = setThumbnailParams(mThumbWidth, mThumbHeight, mThumbQuality);
-    if ( NO_ERROR != ret)
-        {
-        CAMHAL_LOGEB("Error configuring thumbnail size %x", ret);
-        return ret;
+    if (mPendingCaptureSettings & SetThumb) {
+        mPendingCaptureSettings &= ~SetThumb;
+        ret = setThumbnailParams(mThumbWidth, mThumbHeight, mThumbQuality);
+        if ( NO_ERROR != ret) {
+            CAMHAL_LOGEB("Error configuring thumbnail size %x", ret);
+            return ret;
         }
+    }
 
-    ret = setExposureBracketing( mExposureBracketingValues,
-                                 mExposureBracketingValidEntries, mBurstFrames);
-    if ( ret != NO_ERROR )
-        {
-        CAMHAL_LOGEB("setExposureBracketing() failed %d", ret);
-        goto EXIT;
+    if (mPendingCaptureSettings & SetExpBracket) {
+        mPendingCaptureSettings &= ~SetExpBracket;
+        ret = setExposureBracketing( mExposureBracketingValues,
+                                     mExposureBracketingValidEntries, mBurstFrames);
+        if ( ret != NO_ERROR ) {
+            CAMHAL_LOGEB("setExposureBracketing() failed %d", ret);
+            goto EXIT;
         }
+    }
 
-    ret = setImageQuality(mPictureQuality);
-    if ( NO_ERROR != ret)
-        {
-        CAMHAL_LOGEB("Error configuring image quality %x", ret);
-        goto EXIT;
+    if (mPendingCaptureSettings & SetQuality) {
+        mPendingCaptureSettings &= ~SetQuality;
+        ret = setImageQuality(mPictureQuality);
+        if ( NO_ERROR != ret) {
+            CAMHAL_LOGEB("Error configuring image quality %x", ret);
+            goto EXIT;
         }
+    }
 
     ///Register for Image port ENABLE event
     ret = RegisterForEvent(mCameraAdapterParameters.mHandleComp,

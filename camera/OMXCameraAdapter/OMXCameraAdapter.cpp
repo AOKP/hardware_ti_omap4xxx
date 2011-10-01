@@ -69,6 +69,7 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
     mLocalVersionParam.s.nStep =  0x0;
 
     mPending3Asettings = 0;//E3AsettingsAll;
+    mPendingCaptureSettings = 0;
 
     if ( 0 != mInitSem.Count() )
         {
@@ -2091,6 +2092,7 @@ status_t OMXCameraAdapter::stopPreview()
 
 
     mFirstTimeInit = true;
+    mPendingCaptureSettings = 0;
     mFramesWithDucati = 0;
     mFramesWithDisplay = 0;
     mFramesWithEncoder = 0;
