@@ -199,6 +199,15 @@ status_t OMXCameraAdapter::setFaceDetection(bool enable, OMX_U32 orientation)
         mFaceDetectionPaused = !enable;
         }
 
+    if ( enable )
+        {
+        //Disable region priority first
+        setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, false);
+
+        //Enable face algorithm priority for focus
+        setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO , true);
+        }
+
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
