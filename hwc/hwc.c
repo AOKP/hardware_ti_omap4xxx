@@ -1024,6 +1024,34 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     return 0;
 }
 
+static void omap4_hwc_reset_screen(omap4_hwc_device_t *hwc_dev)
+{
+    static int first_set = 1;
+    int ret;
+
+    if (first_set) {
+        first_set = 0;
+        struct dsscomp_setup_dispc_data d = {
+                .num_mgrs = 1,
+        };
+        /* remove bootloader image from the screen as blank/unblank does not change the composition */
+        ret = ioctl(hwc_dev->dsscomp_fd, DSSCOMP_SETUP_DISPC, &d);
+        if (ret)
+            LOGW("failed to remove bootloader image");
+
+        /* blank and unblank fd to make sure display is properly programmed on boot.
+         * This is needed because the bootloader can not be trusted.
+         */
+        ret = ioctl(hwc_dev->fb_fd, FBIOBLANK, FB_BLANK_POWERDOWN);
+        if (ret)
+            LOGW("failed to blank display");
+
+        ret = ioctl(hwc_dev->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
+        if (ret)
+            LOGW("failed to blank display");
+    }
+}
+
 static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
                hwc_surface_t sur, hwc_layer_list_t* list)
 {
@@ -1033,6 +1061,9 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
     unsigned int i;
 
     pthread_mutex_lock(&hwc_dev->lock);
+
+    omap4_hwc_reset_screen(hwc_dev);
+
     char big_log[1024];
     int e = sizeof(big_log);
     char *end = big_log + e;
@@ -1384,17 +1415,6 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
             err = -errno;
             goto done;
     }
-
-    /* blank and unblnk fd to make sure display is proppery programmed on boot
-     * this is needed because the bootloader can not be trusted
-     */
-    ret = ioctl(hwc_dev->fb_fd, FBIOBLANK, FB_BLANK_POWERDOWN);
-    if (ret)
-        LOGW("failed to blank disolay");
-
-    ret = ioctl(hwc_dev->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
-    if (ret)
-        LOGW("failed to blank disolay");
 
     /* get debug properties */
 
