@@ -27,6 +27,8 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
+#include "cutils/properties.h"
 
 namespace android {
 
@@ -143,9 +145,13 @@ public:
             Properties()
             {
                 mProperties = new DefaultKeyedVector<String8, String8>(String8(DEFAULT_VALUE));
-                // set properties that are same for all cameras
-                set(EXIF_MAKE, EXIF_MAKE_DEFAULT);
-                set(EXIF_MODEL, EXIF_MODEL_DEFAULT);
+                char property[PROPERTY_VALUE_MAX];
+                property_get("ro.product.manufacturer", property, EXIF_MAKE_DEFAULT);
+                property[0] = toupper(property[0]);
+                set(EXIF_MAKE, property);
+                property_get("ro.product.model", property, EXIF_MODEL_DEFAULT);
+                property[0] = toupper(property[0]);
+                set(EXIF_MODEL, property);
             }
             ~Properties()
             {
