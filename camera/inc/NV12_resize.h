@@ -103,6 +103,7 @@ typedef struct
 {
   mmInt32                       uWidth;
   mmInt32                       uHeight;
+  mmInt32                       uStride;
   enumImageFormat               eFormat;
   mmByte                        *imgPtr;
   mmByte                        *clrPtr;

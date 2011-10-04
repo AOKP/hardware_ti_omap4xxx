@@ -27,6 +27,7 @@
 
 #include "CameraHal.h"
 #include "Encoder_libjpeg.h"
+#include "NV12_resize.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -92,9 +93,28 @@ libjpeg_destination_mgr::libjpeg_destination_mgr(uint8_t* input, int size) {
 
     this->buf = input;
     this->bufsize = size;
+
+    jpegsize = 0;
 }
 
 /* private static functions */
+static void nv21_to_yuv(uint8_t* dst, uint8_t* y, uint8_t* uv, int width) {
+    if (!dst || !y || !uv) {
+        return;
+    }
+
+    while ((width--) >= 0) {
+        uint8_t y0 = y[0];
+        uint8_t v0 = uv[0];
+        uint8_t u0 = *(uv+1);
+        dst[0] = y0;
+        dst[1] = u0;
+        dst[2] = v0;
+        dst += 3;
+        y++;
+        if(!(width % 2)) uv+=2;
+    }
+}
 
 static void uyvy_to_yuv(uint8_t* dst, uint32_t* src, int width) {
     if (!dst || !src) {
@@ -151,6 +171,32 @@ static void uyvy_to_yuv(uint8_t* dst, uint32_t* src, int width) {
     }
 }
 
+static void resize_nv12(Encoder_libjpeg::params* params, uint8_t* dst_buffer) {
+    structConvImage o_img_ptr, i_img_ptr;
+
+    if (!params || !dst_buffer) {
+        return;
+    }
+
+    //input
+    i_img_ptr.uWidth =  params->in_width;
+    i_img_ptr.uStride =  i_img_ptr.uWidth;
+    i_img_ptr.uHeight =  params->in_height;
+    i_img_ptr.eFormat = IC_FORMAT_YCbCr420_lp;
+    i_img_ptr.imgPtr = (uint8_t*) params->src;
+    i_img_ptr.clrPtr = i_img_ptr.imgPtr + (i_img_ptr.uWidth * i_img_ptr.uHeight);
+
+    //ouput
+    o_img_ptr.uWidth = params->out_width;
+    o_img_ptr.uStride = o_img_ptr.uWidth;
+    o_img_ptr.uHeight = params->out_height;
+    o_img_ptr.eFormat = IC_FORMAT_YCbCr420_lp;
+    o_img_ptr.imgPtr = dst_buffer;
+    o_img_ptr.clrPtr = o_img_ptr.imgPtr + (o_img_ptr.uWidth * o_img_ptr.uHeight);
+
+    VT_resizeFrame_Video_opt2_lp(&i_img_ptr, &o_img_ptr, NULL, 0);
+}
+
 /* public static functions */
 const char* ExifElementsTable::degreesToExifOrientation(const char* degrees) {
     for (unsigned int i = 0; i < ARRAY_SIZE(degress_to_exif_lut); i++) {
@@ -169,6 +215,17 @@ void ExifElementsTable::insertExifToJpeg(unsigned char* jpeg, size_t jpeg_size) 
         jpeg_opened = true;
         create_EXIF(table, exif_tag_count, gps_tag_count);
     }
+}
+
+status_t ExifElementsTable::insertExifThumbnailImage(const char* thumb, int len) {
+    status_t ret = NO_ERROR;
+
+    if ((len > 0) && jpeg_opened) {
+        ret = ReplaceThumbnailFromBuffer(thumb, len);
+        CAMHAL_LOGDB("insertExifThumbnailImage. ReplaceThumbnail(). ret=%d", ret);
+    }
+
+    return ret;
 }
 
 void ExifElementsTable::saveJpeg(unsigned char* jpeg, size_t jpeg_size) {
@@ -223,7 +280,7 @@ status_t ExifElementsTable::insertElement(const char* tag, const char* value) {
     table[position].Value = (char*) malloc(sizeof(char) * (value_length + 1));
 
     if (table[position].Value) {
-        strncpy(table[position].Value, value, value_length);
+        strcpy(table[position].Value, value);
         table[position].DataLength = value_length + 1;
     }
 
@@ -232,19 +289,57 @@ status_t ExifElementsTable::insertElement(const char* tag, const char* value) {
 }
 
 /* private member functions */
-size_t Encoder_libjpeg::encode() {
+size_t Encoder_libjpeg::encode(params* input) {
     jpeg_compress_struct    cinfo;
     jpeg_error_mgr jerr;
     jpeg_destination_mgr jdest;
+    uint8_t* src = NULL, *resize_src = NULL;
     uint8_t* row_tmp = NULL;
     uint8_t* row_src = NULL;
-    int bpp = 2; // TODO(XXX): hardcoded for uyvy
+    uint8_t* row_uv = NULL; // used only for NV12
+    int out_width = 0, in_width = 0;
+    int out_height = 0, in_height = 0;
+    int bpp = 2; // for uyvy
+
+    if (!input) {
+        return 0;
+    }
+
+    out_width = input->out_width;
+    in_width = input->in_width;
+    out_height = input->out_height;
+    in_height = input->in_height;
+    src = input->src;
+    input->jpeg_size = 0;
+
+    libjpeg_destination_mgr dest_mgr(input->dst, input->dst_size);
+
+    // param check...
+    if ((in_width < 2) || (out_width < 2) || (in_height < 2) || (out_height < 2) ||
+         (src == NULL) || (input->dst == NULL) || (input->quality < 1) || (input->src_size < 1) ||
+         (input->dst_size < 1) || (input->format == NULL)) {
+        goto exit;
+    }
+
+    if (strcmp(input->format, CameraParameters::PIXEL_FORMAT_YUV420SP) == 0) {
+        bpp = 1;
+        if ((in_width != out_width) || (in_height != out_height)) {
+            resize_src = (uint8_t*) malloc(input->dst_size);
+            resize_nv12(input, resize_src);
+            if (resize_src) src = resize_src;
+        }
+    } else if ((in_width != out_width) || (in_height != out_height)) {
+        CAMHAL_LOGEB("Encoder: resizing is not supported for this format: %s", input->format);
+        goto exit;
+    } else if (strcmp(input->format, CameraParameters::PIXEL_FORMAT_YUV422I)) {
+        // we currently only support yuv422i and yuv420sp
+        CAMHAL_LOGEB("Encoder: format not supported: %s", input->format);
+        goto exit;
+    }
 
     cinfo.err = jpeg_std_error(&jerr);
 
     jpeg_create_compress(&cinfo);
-
-    libjpeg_destination_mgr dest_mgr(mDest, mDestSize);
 
     CAMHAL_LOGDB("encoding...  \n\t"
                  "width: %d    \n\t"
@@ -252,36 +347,54 @@ size_t Encoder_libjpeg::encode() {
                  "dest %p      \n\t"
                  "dest size:%d \n\t"
                  "mSrc %p",
-                 mWidth, mHeight, mDest, mDestSize, mSrc);
+                 out_width, out_height, input->dst,
+                 input->dst_size, src);
 
     cinfo.dest = &dest_mgr;
-    cinfo.image_width = mWidth;
-    cinfo.image_height = mHeight;
+    cinfo.image_width = out_width;
+    cinfo.image_height = out_height;
     cinfo.input_components = 3;
     cinfo.in_color_space = JCS_YCbCr;
     cinfo.input_gamma = 1;
 
     jpeg_set_defaults(&cinfo);
-    jpeg_set_quality(&cinfo, mQuality, TRUE);
+    jpeg_set_quality(&cinfo, input->quality, TRUE);
     cinfo.dct_method = JDCT_IFAST;
 
     jpeg_start_compress(&cinfo, TRUE);
 
-    row_tmp = (uint8_t*)malloc(mWidth * 3);
-    row_src = mSrc;
+    row_tmp = (uint8_t*)malloc(out_width * 3);
+    row_src = src;
+    row_uv = src + out_width * out_height * bpp;
 
     while (cinfo.next_scanline < cinfo.image_height) {
         JSAMPROW row[1];    /* pointer to JSAMPLE row[s] */
 
-        uyvy_to_yuv(row_tmp, (uint32_t*)row_src, mWidth);
+        // convert input yuv format to yuv444
+        if (strcmp(input->format, CameraParameters::PIXEL_FORMAT_YUV420SP) == 0) {
+            nv21_to_yuv(row_tmp, row_src, row_uv, out_width);
+        } else {
+            uyvy_to_yuv(row_tmp, (uint32_t*)row_src, out_width);
+        }
+
         row[0] = row_tmp;
         jpeg_write_scanlines(&cinfo, row, 1);
-        row_src = row_src + mWidth*bpp;
+        row_src = row_src + out_width*bpp;
+
+        // move uv row if input format needs it
+        if (strcmp(input->format, CameraParameters::PIXEL_FORMAT_YUV420SP) == 0) {
+            if (!(cinfo.next_scanline % 2))
+                row_uv = row_uv +  out_width * bpp;
+        }
     }
 
     jpeg_finish_compress(&cinfo);
     jpeg_destroy_compress(&cinfo);
 
+    if (resize_src) free(resize_src);
+
+ exit:
+    input->jpeg_size = dest_mgr.jpegsize;
     return dest_mgr.jpegsize;
 }
 

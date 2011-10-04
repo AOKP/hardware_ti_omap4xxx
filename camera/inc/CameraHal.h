@@ -574,7 +574,7 @@ public:
 
 	status_t useMetaDataBufferMode(bool enable);
 
-    void EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFrame::FrameType type, void* cookie1, void* cookie2);
+    void EncoderDoneCb(void*, void*, CameraFrame::FrameType type, void* cookie1, void* cookie2);
 
     void useVideoBuffers(bool useVideoBuffers);
 

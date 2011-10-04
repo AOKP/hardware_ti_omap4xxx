@@ -982,6 +982,10 @@ int CameraHal::setParameters(const CameraParameters& params)
         mParameters.unflatten(oldParams.flatten());
     }
 
+    if ( NULL != mAppCallbackNotifier.get() ) {
+        mAppCallbackNotifier->setParameters(mParameters);
+    }
+
     // Restart Preview if needed by KEY_RECODING_HINT only if preview is already running.
     // If preview is not started yet, Video Mode parameters will take effect on next startPreview()
     if(restartPreviewRequired && previewEnabled())
@@ -2477,6 +2481,15 @@ status_t CameraHal::takePicture( )
 #if PPM_INSTRUMENTATION || PPM_INSTRUMENTATION_ABS
             mDisplayAdapter->setSnapshotTimeRef(&mStartCapture);
 #endif
+        }
+
+        // if we taking video snapshot...
+        if ((NO_ERROR == ret) && (mCameraAdapter->getState() == CameraAdapter::VIDEO_STATE)) {
+            // enable post view frames if not already enabled so we can internally
+            // save snapshot frames for generating thumbnail
+            if((mMsgEnabled & CAMERA_MSG_POSTVIEW_FRAME) == 0) {
+                mAppCallbackNotifier->enableMsgType(CAMERA_MSG_POSTVIEW_FRAME);
+            }
         }
 
         if ( (NO_ERROR == ret) && (NULL != mCameraAdapter) )

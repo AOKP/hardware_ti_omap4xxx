@@ -37,9 +37,8 @@ namespace android {
  */
 
 #define MAX_EXIF_TAGS_SUPPORTED 30
-
-typedef void (*encoder_libjpeg_callback_t) (size_t jpeg_size,
-                                            uint8_t* src,
+typedef void (*encoder_libjpeg_callback_t) (void* main_jpeg,
+                                            void* thumb_jpeg,
                                             CameraFrame::FrameType type,
                                             void* cookie1,
                                             void* cookie2,
@@ -73,6 +72,7 @@ class ExifElementsTable {
 
         status_t insertElement(const char* tag, const char* value);
         void insertExifToJpeg(unsigned char* jpeg, size_t jpeg_size);
+        status_t insertExifThumbnailImage(const char*, int);
         void saveJpeg(unsigned char* picture, size_t jpeg_size);
         static const char* degreesToExifOrientation(const char*);
     private:
@@ -84,22 +84,32 @@ class ExifElementsTable {
 };
 
 class Encoder_libjpeg : public Thread {
+    /* public member types and variables */
     public:
-        Encoder_libjpeg(uint8_t* src,
-                               int src_size,
-                               uint8_t* dst,
-                               int dst_size,
-                               int quality,
-                               int width,
-                               int height,
-                               encoder_libjpeg_callback_t cb,
-                               CameraFrame::FrameType type,
-                               void* cookie1,
-                               void* cookie2,
-                               void* cookie3)
-            : Thread(false), mSrc(src), mDest(dst), mSrcSize(src_size), mDestSize(dst_size),
-              mQuality(quality), mWidth(width), mHeight(height), mCb(cb), mCookie1(cookie1),
-              mCookie2(cookie2), mCookie3(cookie3), mType(type) {
+        struct params {
+            uint8_t* src;
+            int src_size;
+            uint8_t* dst;
+            int dst_size;
+            int quality;
+            int in_width;
+            int in_height;
+            int out_width;
+            int out_height;
+            const char* format;
+            size_t jpeg_size;
+         };
+    /* public member functions */
+    public:
+        Encoder_libjpeg(params* main_jpeg,
+                        params* tn_jpeg,
+                        encoder_libjpeg_callback_t cb,
+                        CameraFrame::FrameType type,
+                        void* cookie1,
+                        void* cookie2,
+                        void* cookie3)
+            : Thread(false), mMainInput(main_jpeg), mThumbnailInput(tn_jpeg), mCb(cb),
+              mCookie1(cookie1), mCookie2(cookie2), mCookie3(cookie3), mType(type) {
             this->incStrong(this);
         }
 
@@ -107,25 +117,41 @@ class Encoder_libjpeg : public Thread {
         }
 
         virtual bool threadLoop() {
-            size_t size = encode();
-            mCb(size, mSrc, mType, mCookie1, mCookie2, mCookie3);
+            size_t size = 0;
+            sp<Encoder_libjpeg> tn = NULL;
+            if (mThumbnailInput) {
+                // start thread to encode thumbnail
+                tn = new Encoder_libjpeg(mThumbnailInput, NULL, NULL, mType, NULL, NULL, NULL);
+                tn->run();
+            }
+
+            // encode our main image
+            size = encode(mMainInput);
+
+            // check if it is main jpeg thread
+            if(tn.get()) {
+                // wait until tn jpeg thread exits.
+                tn->join();
+                tn.clear();
+                if(mCb) {
+                    mCb(mMainInput, mThumbnailInput, mType, mCookie1, mCookie2, mCookie3);
+                }
+            }
             // encoder thread runs, self-destructs, and then exits
             this->decStrong(this);
             return false;
         }
 
     private:
-        uint8_t* mSrc;
-        uint8_t* mDest;
-        int mSrcSize, mDestSize;
-        int mQuality, mWidth, mHeight;
+        params* mMainInput;
+        params* mThumbnailInput;
         encoder_libjpeg_callback_t mCb;
         void* mCookie1;
         void* mCookie2;
         void* mCookie3;
         CameraFrame::FrameType mType;
 
-        size_t encode();
+        size_t encode(params*);
 };
 
 }

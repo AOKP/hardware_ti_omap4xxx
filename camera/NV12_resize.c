@@ -93,9 +93,9 @@ VT_resizeFrame_Video_opt2_lp
   idy = i_img_ptr->uHeight;
 
   /* make sure valid input size */
-  if (idx < 1 || idy < 1)
+  if (idx < 1 || idy < 1 || i_img_ptr->uStride < 1)
 	{
-	LOGE("idx or idy less then 1");
+	LOGE("idx or idy less then 1 idx = %d idy = %d stride = %d", idx, idy, i_img_ptr->uStride);
 	LOGV("VT_resizeFrame_Video_opt2_lp-");
 	return FALSE;
 	}
@@ -116,8 +116,8 @@ VT_resizeFrame_Video_opt2_lp
         mmUchar *pu8Yrow2 = NULL;
         y  = (mmUint16) ((mmUint32) (row*resizeFactorY) >> 9);
         yf = (mmUchar)  ((mmUint32)((row*resizeFactorY) >> 6) & 0x7);
-        pu8Yrow1 = inImgPtrY + (y)*STRIDE;
-        pu8Yrow2 = pu8Yrow1 + STRIDE;
+        pu8Yrow1 = inImgPtrY + (y) * i_img_ptr->uStride;
+        pu8Yrow2 = pu8Yrow1 + i_img_ptr->uStride;
 
         for (col=0; col < codx; col++)
         {
@@ -178,7 +178,7 @@ VT_resizeFrame_Video_opt2_lp
 
             ptr8++;
         }
-        ptr8 = ptr8 + (STRIDE-codx);
+        ptr8 = ptr8 + (o_img_ptr->uStride - codx);
     }
     ////////////////////////////for Y//////////////////////////
 
@@ -199,10 +199,10 @@ VT_resizeFrame_Video_opt2_lp
         y  = (mmUint16) ((mmUint32) (row*resizeFactorY) >> 9);
         yf = (mmUchar)  ((mmUint32)((row*resizeFactorY) >> 6) & 0x7);
 
-        pu8Cbr1 = inImgPtrU + (y)*STRIDE;
-        pu8Cbr2 = pu8Cbr1 + STRIDE;
-        pu8Crr1 = inImgPtrV + (y)*STRIDE;
-        pu8Crr2 = pu8Crr1 + STRIDE;
+        pu8Cbr1 = inImgPtrU + (y) * i_img_ptr->uStride;
+        pu8Cbr2 = pu8Cbr1 + i_img_ptr->uStride;
+        pu8Crr1 = inImgPtrV + (y) * i_img_ptr->uStride;
+        pu8Crr2 = pu8Crr1 + i_img_ptr->uStride;
 
         for (col=0; col < (((codx)>>1)); col++)
         {
@@ -290,8 +290,8 @@ VT_resizeFrame_Video_opt2_lp
             ptr8Cb++;
             ptr8Cr++;
         }
-        ptr8Cb = ptr8Cb + (STRIDE-codx);
-        ptr8Cr = ptr8Cr + (STRIDE-codx);
+        ptr8Cb = ptr8Cb + (o_img_ptr->uStride-codx);
+        ptr8Cr = ptr8Cr + (o_img_ptr->uStride-codx);
     }
     ///////////////////For Cb- Cr////////////////////////////////////////
   }

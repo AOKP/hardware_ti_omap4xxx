@@ -26,15 +26,14 @@
 #include <MetadataBufferType.h>
 #include <ui/GraphicBuffer.h>
 #include <ui/GraphicBufferMapper.h>
-
 #include "NV12_resize.h"
 
 namespace android {
 
 const int AppCallbackNotifier::NOTIFIER_TIMEOUT = -1;
 
-void AppCallbackNotifierEncoderCallback(size_t jpeg_size,
-                                        uint8_t* src,
+void AppCallbackNotifierEncoderCallback(void* main_jpeg,
+                                        void* thumb_jpeg,
                                         CameraFrame::FrameType type,
                                         void* cookie1,
                                         void* cookie2,
@@ -42,15 +41,18 @@ void AppCallbackNotifierEncoderCallback(size_t jpeg_size,
 {
     if (cookie1) {
         AppCallbackNotifier* cb = (AppCallbackNotifier*) cookie1;
-        cb->EncoderDoneCb(jpeg_size, src, type, cookie2, cookie3);
+        cb->EncoderDoneCb(main_jpeg, thumb_jpeg, type, cookie2, cookie3);
     }
 }
 
 /*--------------------NotificationHandler Class STARTS here-----------------------------*/
 
-void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFrame::FrameType type, void* cookie1, void* cookie2)
+void AppCallbackNotifier::EncoderDoneCb(void* main_jpeg, void* thumb_jpeg, CameraFrame::FrameType type, void* cookie1, void* cookie2)
 {
     camera_memory_t* encoded_mem = NULL;
+    Encoder_libjpeg::params *main_param = NULL, *thumb_param = NULL;
+    size_t jpeg_size;
+    uint8_t* src = NULL;
 
     LOG_FUNCTION_NAME;
 
@@ -59,18 +61,28 @@ void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFr
     {
     Mutex::Autolock lock(mLock);
 
+    if (!main_jpeg) {
+        goto exit;
+    }
+
     encoded_mem = (camera_memory_t*) cookie1;
+    main_param = (Encoder_libjpeg::params *) main_jpeg;
+    jpeg_size = main_param->jpeg_size;
+    src = main_param->src;
 
-    // TODO(XXX): Need to temporarily allocate another chunk of memory and then memcpy
-    //            encoded buffer since MemoryHeapBase and MemoryBase are passed as
-    //            one camera_memory_t structure. How fix this?
-
-    if(encoded_mem && encoded_mem->data) {
+    if(encoded_mem && encoded_mem->data && (jpeg_size > 0)) {
         if (cookie2) {
             ExifElementsTable* exif = (ExifElementsTable*) cookie2;
             Section_t* exif_section = NULL;
 
             exif->insertExifToJpeg((unsigned char*) encoded_mem->data, jpeg_size);
+
+            if(thumb_jpeg) {
+                thumb_param = (Encoder_libjpeg::params *) thumb_jpeg;
+                exif->insertExifThumbnailImage((const char*)thumb_param->dst,
+                                               (int)thumb_param->jpeg_size);
+            }
+
             exif_section = FindSection(M_EXIF);
 
             if (exif_section) {
@@ -88,11 +100,11 @@ void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFr
             }
         }
     }
-    }
+    } // scope for mutex lock
 
     // Send the callback to the application only if the notifier is started and the message is enabled
-    if((mNotifierState==AppCallbackNotifier::NOTIFIER_STARTED)
-                && (mCameraHal->msgTypeEnabled(CAMERA_MSG_COMPRESSED_IMAGE)))
+    if(picture && (mNotifierState==AppCallbackNotifier::NOTIFIER_STARTED) &&
+                  (mCameraHal->msgTypeEnabled(CAMERA_MSG_COMPRESSED_IMAGE)))
     {
         Mutex::Autolock lock(mBurstLock);
 #if 0 //TODO: enable burst mode later
@@ -105,6 +117,19 @@ void AppCallbackNotifier::EncoderDoneCb(size_t jpeg_size, uint8_t* src, CameraFr
         {
             mDataCb(CAMERA_MSG_COMPRESSED_IMAGE, picture, 0, NULL, mCallbackCookie);
         }
+    }
+
+ exit:
+
+    if (main_jpeg) {
+        free(main_jpeg);
+    }
+
+    if (thumb_jpeg) {
+       if (((Encoder_libjpeg::params *) thumb_jpeg)->dst) {
+           free(((Encoder_libjpeg::params *) thumb_jpeg)->dst);
+       }
+       free(thumb_jpeg);
     }
 
     if (encoded_mem) {
@@ -767,8 +792,10 @@ void AppCallbackNotifier::notifyFrame()
                           (CameraFrame::ENCODE_RAW_YUV422I_TO_JPEG & frame->mQuirks) )
                     {
 
-                    int encode_quality = 100;
-                    const char* valstr = NULL;
+                    int encode_quality = 100, tn_quality = 100;
+                    int tn_width, tn_height;
+                    unsigned int current_snapshot = 0;
+                    Encoder_libjpeg::params *main_jpeg = NULL, *tn_jpeg = NULL;
                     void* exif_data = NULL;
                     camera_memory_t* raw_picture = mRequestMemory(-1, frame->mLength, 1, NULL);
 
@@ -776,47 +803,72 @@ void AppCallbackNotifier::notifyFrame()
                         buf = raw_picture->data;
                     }
 
-                    valstr = mParameters.get(CameraParameters::KEY_JPEG_QUALITY);
-                    if (valstr) {
-                        encode_quality = atoi(valstr);
-                        if (encode_quality < 0 || encode_quality > 100) {
-                            encode_quality = 100;
-                        }
+                    encode_quality = mParameters.getInt(CameraParameters::KEY_JPEG_QUALITY);
+                    if (encode_quality < 0 || encode_quality > 100) {
+                        encode_quality = 100;
+                    }
+
+                    tn_quality = mParameters.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_QUALITY);
+                    if (tn_quality < 0 || tn_quality > 100) {
+                        tn_quality = 100;
                     }
 
                     if (CameraFrame::HAS_EXIF_DATA & frame->mQuirks) {
                         exif_data = frame->mCookie2;
                     }
 
-                    CAMHAL_LOGVB("encoder(%p, %d, %p, %d, %d, %d, %d,%p,%d,%p,%p,%p)",
-                                 (uint8_t*)frame->mBuffer,
-                                 frame->mLength,
-                                 (uint8_t*)buf,
-                                 frame->mLength,
-                                 encode_quality,
-                                 frame->mWidth,
-                                 frame->mHeight,
-                                 AppCallbackNotifierEncoderCallback,
-                                 frame->mFrameType,
-                                 this,
-                                 raw_picture,
-                                 exif_data);
+                    main_jpeg = (Encoder_libjpeg::params*)
+                                    malloc(sizeof(Encoder_libjpeg::params));
+                    if (main_jpeg) {
+                        main_jpeg->src = (uint8_t*) frame->mBuffer;
+                        main_jpeg->src_size = frame->mLength;
+                        main_jpeg->dst = (uint8_t*) buf;
+                        main_jpeg->dst_size = frame->mLength;
+                        main_jpeg->quality = encode_quality;
+                        main_jpeg->in_width = frame->mWidth;
+                        main_jpeg->in_height = frame->mHeight;
+                        main_jpeg->out_width = frame->mWidth;
+                        main_jpeg->out_height = frame->mHeight;
+                        main_jpeg->format = CameraParameters::PIXEL_FORMAT_YUV422I;
+                    }
 
-                    sp<Encoder_libjpeg> encoder = new Encoder_libjpeg((uint8_t*)frame->mBuffer,
-                                                                      frame->mLength,
-                                                                      (uint8_t*)buf,
-                                                                      frame->mLength,
-                                                                      encode_quality,
-                                                                      frame->mWidth,
-                                                                      frame->mHeight,
-                                                                      AppCallbackNotifierEncoderCallback,
-                                                                      (CameraFrame::FrameType)frame->mFrameType,
-                                                                      this,
-                                                                      raw_picture,
-                                                                      exif_data);
+                    tn_width = mParameters.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_WIDTH);
+                    tn_height = mParameters.getInt(CameraParameters::KEY_JPEG_THUMBNAIL_HEIGHT);
+
+                    if ((tn_width > 0) && (tn_height > 0)) {
+                        tn_jpeg = (Encoder_libjpeg::params*)
+                                      malloc(sizeof(Encoder_libjpeg::params));
+                        // if malloc fails just keep going and encode main jpeg
+                        if (!tn_jpeg) {
+                            tn_jpeg = NULL;
+                        }
+                    }
+
+                    if (tn_jpeg) {
+                        int width, height;
+                        mParameters.getPreviewSize(&width,&height);
+                        current_snapshot = (mPreviewBufCount + MAX_BUFFERS - 1) % MAX_BUFFERS;
+                        tn_jpeg->src = (uint8_t*) mPreviewBufs[current_snapshot];
+                        tn_jpeg->src_size = mPreviewMemory->size / MAX_BUFFERS;
+                        tn_jpeg->dst = (uint8_t*) malloc(tn_jpeg->src_size);
+                        tn_jpeg->dst_size = tn_jpeg->src_size;
+                        tn_jpeg->quality = tn_quality;
+                        tn_jpeg->in_width = width;
+                        tn_jpeg->in_height = height;
+                        tn_jpeg->out_width = tn_width;
+                        tn_jpeg->out_height = tn_height;
+                        tn_jpeg->format = CameraParameters::PIXEL_FORMAT_YUV420SP;;
+                    }
+
+                    sp<Encoder_libjpeg> encoder = new Encoder_libjpeg(main_jpeg,
+                                                      tn_jpeg,
+                                                      AppCallbackNotifierEncoderCallback,
+                                                      (CameraFrame::FrameType)frame->mFrameType,
+                                                      this,
+                                                      raw_picture,
+                                                      exif_data);
                     encoder->run();
                     encoder.clear();
-
                     }
                 else if ( ( CameraFrame::IMAGE_FRAME == frame->mFrameType ) &&
                              ( NULL != mCameraHal ) &&
@@ -886,6 +938,7 @@ void AppCallbackNotifier::notifyFrame()
 
                                 structConvImage input =  {frame->mWidth,
                                                           frame->mHeight,
+                                                          4096,
                                                           IC_FORMAT_YCbCr420_lp,
                                                           (mmByte *)frame->mYuv[0],
                                                           (mmByte *)frame->mYuv[1],
@@ -893,6 +946,7 @@ void AppCallbackNotifier::notifyFrame()
 
                                 structConvImage output = {mVideoWidth,
                                                           mVideoHeight,
+                                                          4096,
                                                           IC_FORMAT_YCbCr420_lp,
                                                           (mmByte *)y_uv[0],
                                                           (mmByte *)y_uv[1],
@@ -1346,7 +1400,7 @@ int AppCallbackNotifier::setParameters(const CameraParameters& params)
 {
     LOG_FUNCTION_NAME;
 
-    mParameters = params
+    mParameters = params;
 
     LOG_FUNCTION_NAME_EXIT;
     return NO_ERROR;
