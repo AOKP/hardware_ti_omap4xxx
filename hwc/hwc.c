@@ -638,14 +638,14 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         if (ext_fb_xres >= xres * 99 / 100 && ext_fb_yres >= yres * 99 / 100)
             score |= (1 << 29);
 
-        /* pick smallest leftover area */
-        score |= (1 << 24) * ((16 * ext_fb_xres * ext_fb_yres + (mode_area >> 1)) / mode_area);
-
         /* pick closest screen size */
         if (ext_fb_xres * ext_fb_yres > area)
-            score |= (1 << 19) * (16 * area / ext_fb_xres / ext_fb_yres);
+            score |= (1 << 24) * (16 * area / ext_fb_xres / ext_fb_yres);
         else
-            score |= (1 << 19) * (16 * ext_fb_xres * ext_fb_yres / area);
+            score |= (1 << 24) * (16 * ext_fb_xres * ext_fb_yres / area);
+
+        /* pick smallest leftover area */
+        score |= (1 << 19) * ((16 * ext_fb_xres * ext_fb_yres + (mode_area >> 1)) / mode_area);
 
         /* pick highest frame rate */
         score |= (1 << 11) * d.modedb[i].refresh;
