@@ -106,10 +106,6 @@ status_t OMXCameraAdapter::doAutoFocus()
             CAMHAL_LOGDA("AE/AWB unlocked successfully");
         }
 
-        // if we are in CAF...then force normal AF
-        if (mParameters3A.Focus == OMX_IMAGE_FocusControlAuto) {
-            focusControl.eFocusControl = OMX_IMAGE_FocusControlAutoLock;
-        }
     } else if ( mParameters3A.Focus == OMX_IMAGE_FocusControlAuto ) {
         // In case we have CAF running we should first check the AF status.
         // If it has managed to lock, then do as usual and return status
@@ -121,10 +117,6 @@ status_t OMXCameraAdapter::doAutoFocus()
             return ret;
         } else {
             CAMHAL_LOGDB("Focus status check 0x%x!", focusStatus.eFocusStatus);
-        }
-
-        if ( OMX_FocusStatusReached != focusStatus.eFocusStatus ) {
-            focusControl.eFocusControl = OMX_IMAGE_FocusControlAutoLock;
         }
     }
 
@@ -178,13 +170,8 @@ status_t OMXCameraAdapter::doAutoFocus()
     } else { // Focus mode in continuous
         if ( NO_ERROR == ret ) {
             ret = returnFocusStatus(false);
+            mPending3Asettings |= SetFocus;
         }
-    }
-
-    //Restore CAF if needed
-    if ( ( mParameters3A.Focus == OMX_IMAGE_FocusControlAuto ) &&
-         ( focusControl.eFocusControl == OMX_IMAGE_FocusControlAutoLock ) ) {
-        mPending3Asettings |= SetFocus;
     }
 
     LOG_FUNCTION_NAME_EXIT;
