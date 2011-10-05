@@ -59,9 +59,10 @@ enum {
     EXT_ROTATION    = 3,        /* rotation while mirroring */
     EXT_HFLIP       = (1 << 2), /* flip l-r on output (after rotation) */
     EXT_TRANSFORM   = EXT_ROTATION | EXT_HFLIP,
-    EXT_ON          = (1 << 3), /* copy output to other display */
-    EXT_DOCK        = (1 << 4), /* docking only */
+    EXT_MIRROR      = (1 << 3), /* mirroring allowed */
+    EXT_DOCK        = (1 << 4), /* docking allowed */
     EXT_TV          = (1 << 5), /* using TV for mirroring */
+    EXT_DOCK_TRANSFORM_SHIFT = 6, /* transform for docking */
 };
 
 struct omap4_hwc_module {
@@ -453,7 +454,7 @@ omap4_hwc_create_ext_matrix(omap4_hwc_device_t *hwc_dev)
     }
 
     /* if docking, we cannot create the matrix ahead of time as it depends on input size */
-    if (hwc_dev->ext && !(hwc_dev->ext & EXT_DOCK))
+    if (hwc_dev->ext & EXT_MIRROR)
         set_ext_matrix(hwc_dev, hwc_dev->fb_dev->base.width, hwc_dev->fb_dev->base.height);
 }
 
@@ -715,15 +716,15 @@ static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts 
      * have to be disabled, and the disabling has to take effect on the current display.
      * We keep track of the available number of overlays here.
      */
-    if ((hwc_dev->ext & EXT_DOCK) || (hwc_dev->ext && num->dockable)) {
+    if ((hwc_dev->ext & EXT_DOCK) && !((hwc_dev->ext & EXT_MIRROR) && !num->dockable)) {
         /* some overlays may already be used by the external display, so we account for this */
 
         /* reserve just a video pipeline for HDMI if docking */
         hwc_dev->ext_ovls = num->dockable ? 1 : 0;
         num->max_hw_overlays -= max(hwc_dev->ext_ovls, hwc_dev->last_ext_ovls);
-        hwc_dev->ext &= ~EXT_TRANSFORM;
-        hwc_dev->ext |= EXT_DOCK;
-    } else if (hwc_dev->ext) {
+        hwc_dev->ext &= ~EXT_TRANSFORM & ~EXT_MIRROR;
+        hwc_dev->ext |= EXT_DOCK | ((hwc_dev->ext >> EXT_DOCK_TRANSFORM_SHIFT) & EXT_TRANSFORM);
+    } else if (hwc_dev->ext & EXT_MIRROR) {
         /*
          * otherwise, manage just from half the pipelines.  NOTE: there is
          * no danger of having used too many overlays for external display here.
@@ -731,9 +732,11 @@ static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts 
         num->max_hw_overlays >>= 1;
         nonscaling_ovls >>= 1;
         hwc_dev->ext_ovls = MAX_HW_OVERLAYS - num->max_hw_overlays;
+        hwc_dev->ext &= ~EXT_DOCK;
     } else {
         num->max_hw_overlays -= hwc_dev->last_ext_ovls;
         hwc_dev->ext_ovls = 0;
+        hwc_dev->ext = 0;
     }
     int tform = hwc_dev->ext & EXT_TRANSFORM;
 
@@ -746,7 +749,7 @@ static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts 
     hwc_dev->ext_ovls = min(MAX_HW_OVERLAYS - hwc_dev->last_int_ovls, hwc_dev->ext_ovls);
 
     /* if not docking, we may be limited by last used external overlays */
-    if (hwc_dev->ext_ovls && hwc_dev->ext && !(hwc_dev->ext & EXT_DOCK))
+    if (hwc_dev->ext_ovls && (hwc_dev->ext & EXT_MIRROR) && !(hwc_dev->ext & EXT_DOCK))
          num->max_hw_overlays = hwc_dev->ext_ovls;
 
     num->max_scaling_overlays = num->max_hw_overlays - nonscaling_ovls;
@@ -775,16 +778,14 @@ static inline int can_dss_render_layer(omap4_hwc_device_t *hwc_dev,
 
     return omap4_hwc_is_valid_layer(hwc_dev, layer, handle) &&
            /* cannot rotate non-NV12 layers on external display */
-           (!hwc_dev->ext || (hwc_dev->ext & EXT_DOCK) || !tform || is_NV12(handle->iFormat)) &&
+           (!tform || is_NV12(handle->iFormat)) &&
            /* skip non-NV12 layers if also using SGX (if nv12_only flag is set) */
            (!hwc_dev->flags_nv12_only || (!hwc_dev->use_sgx || is_NV12(handle->iFormat))) &&
            /* make sure RGB ordering is consistent (if rgb_order flag is set) */
            (!(hwc_dev->swap_rb ? is_RGB(handle->iFormat) : is_BGR(handle->iFormat)) ||
             !hwc_dev->flags_rgb_order) &&
            /* TV can only render RGB */
-           !(tv && is_BGR(handle->iFormat)) &&
-           /* we can only rotate TILER2D buffers for external displays */
-           !(tform && !is_NV12(handle->iFormat));
+           !(tv && is_BGR(handle->iFormat));
 }
 
 static inline int display_area(struct dss2_ovl_info *o)
@@ -1274,28 +1275,36 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
     pthread_mutex_lock(&hwc_dev->lock);
     hwc_dev->ext = 0;
     if (state) {
-        hwc_dev->ext = EXT_ON | 3;
+        /* check whether we can clone and/or dock */
+        char value[PROPERTY_VALUE_MAX];
+        property_get("hwc.hdmi.docking.enabled", value, "1");
+        hwc_dev->ext |= EXT_DOCK * (atoi(value) > 0);
+        property_get("hwc.hdmi.mirroring.enabled", value, "1");
+        hwc_dev->ext |= EXT_MIRROR * (atoi(value) > 0);
+
+        /* get cloning transformation */
+        property_get("hwc.hdmi.docking.transform", value, "0");
+        hwc_dev->ext |= (atoi(value) & EXT_TRANSFORM) << EXT_DOCK_TRANSFORM_SHIFT;
+        property_get("hwc.hdmi.mirroring.transform", value, hwc_dev->fb_dev->base.height > hwc_dev->fb_dev->base.width ? "3" : "0");
+        hwc_dev->ext |= atoi(value) & EXT_TRANSFORM;
+
         __u32 xres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
         __u32 yres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.width : hwc_dev->fb_dev->base.height;
         int res = omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1, 1);
-        if (!res) {
+        if (!res)
             ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
-
-            /* FIXME set up hwc_dev->ext based on mirroring needs */
-            char value[PROPERTY_VALUE_MAX];
-            property_get("debug.hwc.ext", value, "0");
-            hwc_dev->ext |= atoi(value) & EXT_DOCK;
-            if (hwc_dev->ext & EXT_DOCK)
-                hwc_dev->ext &= ~EXT_TRANSFORM;
-        } else {
+        else
             hwc_dev->ext = 0;
-        }
     }
     omap4_hwc_create_ext_matrix(hwc_dev);
-    LOGI("external display changed (state=%d, on=%d, dock=%d, tv=%d, trform=%ddeg%s)", state,
-         !!hwc_dev->ext, !!(hwc_dev->ext & EXT_DOCK),
-         !!(hwc_dev->ext & EXT_TV), hwc_dev->ext & EXT_ROTATION,
-         (hwc_dev->ext & EXT_HFLIP) ? "+hflip" : "");
+    LOGI("external display changed (state=%d, mirror={%s tform=%ddeg%s}, dock={%s tform=%ddeg%s}, tv=%d", state,
+         (hwc_dev->ext & EXT_MIRROR) ? "enabled" : "disabled",
+         (hwc_dev->ext & EXT_ROTATION) * 90,
+         (hwc_dev->ext & EXT_HFLIP) ? "+hflip" : "",
+         (hwc_dev->ext & EXT_DOCK) ? "enabled" : "disabled",
+         ((hwc_dev->ext >> EXT_DOCK_TRANSFORM_SHIFT) & EXT_ROTATION) * 90,
+         ((hwc_dev->ext >> EXT_DOCK_TRANSFORM_SHIFT) & EXT_HFLIP) ? "+hflip" : "",
+         !!(hwc_dev->ext & EXT_TV));
 
     hwc_dev->ext_requested = hwc_dev->ext;
     hwc_dev->ext_last = hwc_dev->ext;
