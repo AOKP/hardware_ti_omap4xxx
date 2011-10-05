@@ -141,6 +141,19 @@ struct omap4_hwc_device {
 };
 typedef struct omap4_hwc_device omap4_hwc_device_t;
 
+#define HAL_FMT(f) ((f) == HAL_PIXEL_FORMAT_TI_NV12 ? "NV12" : \
+                    (f) == HAL_PIXEL_FORMAT_YV12 ? "YV12" : \
+                    (f) == HAL_PIXEL_FORMAT_BGRX_8888 ? "xRGB32" : \
+                    (f) == HAL_PIXEL_FORMAT_RGBX_8888 ? "xBGR32" : \
+                    (f) == HAL_PIXEL_FORMAT_BGRA_8888 ? "ARGB32" : \
+                    (f) == HAL_PIXEL_FORMAT_RGBA_8888 ? "ABGR32" : \
+                    (f) == HAL_PIXEL_FORMAT_RGB_565 ? "RGB565" : "??")
+
+#define DSS_FMT(f) ((f) == OMAP_DSS_COLOR_NV12 ? "NV12" : \
+                    (f) == OMAP_DSS_COLOR_RGB24U ? "xRGB32" : \
+                    (f) == OMAP_DSS_COLOR_ARGB32 ? "ARGB32" : \
+                    (f) == OMAP_DSS_COLOR_RGB16 ? "RGB565" : "??")
+
 static int debug = 0;
 
 static void dump_layer(hwc_layer_t const* l)
@@ -180,11 +193,11 @@ static void dump_dsscomp(struct dsscomp_setup_dispc_data *d)
             struct dss2_ovl_info *oi = d->ovls + i;
             struct dss2_ovl_cfg *c = &oi->cfg;
             if (c->zonly)
-                    LOGE("ovl%d(%s z%d)\n",
+                    LOGD("ovl%d(%s z%d)\n",
                          c->ix, c->enabled ? "ON" : "off", c->zorder);
             else
-                    LOGE("ovl%d(%s z%d %x%s *%d%% %d*%d:%d,%d+%d,%d rot%d%s => %d,%d+%d,%d %p/%p|%d)\n",
-                         c->ix, c->enabled ? "ON" : "off", c->zorder, c->color_mode,
+                    LOGD("ovl%d(%s z%d %s%s *%d%% %d*%d:%d,%d+%d,%d rot%d%s => %d,%d+%d,%d %p/%p|%d)\n",
+                         c->ix, c->enabled ? "ON" : "off", c->zorder, DSS_FMT(c->color_mode),
                          c->pre_mult_alpha ? " premult" : "",
                          (c->global_alpha * 100 + 128) / 255,
                          c->width, c->height, c->crop.x, c->crop.y,
@@ -193,6 +206,73 @@ static void dump_dsscomp(struct dsscomp_setup_dispc_data *d)
                          c->win.x, c->win.y, c->win.w, c->win.h,
                          (void *) oi->ba, (void *) oi->uv, c->stride);
     }
+}
+
+struct dump_buf {
+    char *buf;
+    int buf_len;
+    int len;
+};
+
+static void dump_printf(struct dump_buf *buf, const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    buf->len += vsnprintf(buf->buf + buf->len, buf->buf_len - buf->len, fmt, ap);
+    va_end(ap);
+}
+
+static void dump_set_info(omap4_hwc_device_t *hwc_dev, hwc_layer_list_t* list)
+{
+    struct dsscomp_setup_dispc_data *dsscomp = &hwc_dev->dsscomp_data;
+    char logbuf[1024];
+    struct dump_buf log = {
+        .buf = logbuf,
+        .buf_len = sizeof(logbuf),
+    };
+    unsigned int i;
+
+    dump_printf(&log, "set H{");
+    for (i = 0; list && i < list->numHwLayers; i++) {
+        if (i)
+            dump_printf(&log, " ");
+        hwc_layer_t *layer = &list->hwLayers[i];
+        IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
+        dump_printf(&log, "%p:%s,", handle, layer->compositionType == HWC_OVERLAY ? "DSS" : "SGX");
+        if ((layer->flags & HWC_SKIP_LAYER) || !handle) {
+            dump_printf(&log, "SKIP");
+            continue;
+        }
+        if (layer->flags & HWC_HINT_CLEAR_FB)
+            dump_printf(&log, "CLR,");
+        dump_printf(&log, "%d*%d(%s)", handle->iWidth, handle->iHeight, HAL_FMT(handle->iFormat));
+        if (layer->transform)
+            dump_printf(&log, "~%d", layer->transform);
+    }
+    dump_printf(&log, "} D{");
+    for (i = 0; i < dsscomp->num_ovls; i++) {
+        if (i)
+            dump_printf(&log, " ");
+        dump_printf(&log, "%d=", dsscomp->ovls[i].cfg.ix);
+        if (dsscomp->ovls[i].cfg.enabled)
+            dump_printf(&log, "%08x:%d*%d,%s",
+                        dsscomp->ovls[i].ba,
+                        dsscomp->ovls[i].cfg.width,
+                        dsscomp->ovls[i].cfg.height,
+                        DSS_FMT(dsscomp->ovls[i].cfg.color_mode));
+        else
+            dump_printf(&log, "-");
+    }
+    dump_printf(&log, "} L{");
+    for (i = 0; i < hwc_dev->post2_layers; i++) {
+        if (i)
+            dump_printf(&log, " ");
+        dump_printf(&log, "%p", hwc_dev->buffers[i]);
+    }
+    dump_printf(&log, "}%s\n", hwc_dev->use_sgx ? " swap" : "");
+
+    LOGD("%s", log.buf);
 }
 
 static int omap4_hwc_is_valid_format(int format)
@@ -793,7 +873,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
             !omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
                                  1, &d.dis, &limits,
                                  d.dis.timings.pixel_clock)) {
-            LOGE("DSS scaler cannot support HDMI cloning");
+            LOGW("DSS scaler cannot support HDMI cloning");
             return -1;
         }
     }
@@ -1237,64 +1317,8 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
 
     invalidate = hwc_dev->ext_ovls_wanted && !hwc_dev->ext_ovls;
 
-    char big_log[1024];
-    int e = sizeof(big_log);
-    char *end = big_log + e;
-    e -= snprintf(end - e, e, "set H{");
-    for (i = 0; list && i < list->numHwLayers; i++) {
-        if (i)
-            e -= snprintf(end - e, e, " ");
-        hwc_layer_t *layer = &list->hwLayers[i];
-        IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
-        e -= snprintf(end - e, e, "%p:%s,", handle, layer->compositionType == HWC_OVERLAY ? "DSS" : "SGX");
-        if ((layer->flags & HWC_SKIP_LAYER) || !handle) {
-            e -= snprintf(end - e, e, "SKIP");
-            continue;
-        }
-        if (layer->flags & HWC_HINT_CLEAR_FB)
-            e -= snprintf(end - e, e, "CLR,");
-#define FMT(f) ((f) == HAL_PIXEL_FORMAT_TI_NV12 ? "NV12" : \
-                (f) == HAL_PIXEL_FORMAT_BGRX_8888 ? "xRGB32" : \
-                (f) == HAL_PIXEL_FORMAT_RGBX_8888 ? "xBGR32" : \
-                (f) == HAL_PIXEL_FORMAT_BGRA_8888 ? "ARGB32" : \
-                (f) == HAL_PIXEL_FORMAT_RGBA_8888 ? "ABGR32" : \
-                (f) == HAL_PIXEL_FORMAT_RGB_565 ? "RGB565" : "??")
-        e -= snprintf(end - e, e, "%d*%d(%s)", handle->iWidth, handle->iHeight, FMT(handle->iFormat));
-        if (layer->transform)
-            e -= snprintf(end - e, e, "~%d", layer->transform);
-#undef FMT
-    }
-    e -= snprintf(end - e, e, "} D{");
-    for (i = 0; i < dsscomp->num_ovls; i++) {
-        if (i)
-            e -= snprintf(end - e, e, " ");
-        e -= snprintf(end - e, e, "%d=", dsscomp->ovls[i].cfg.ix);
-#define FMT(f) ((f) == OMAP_DSS_COLOR_NV12 ? "NV12" : \
-                (f) == OMAP_DSS_COLOR_RGB24U ? "xRGB32" : \
-                (f) == OMAP_DSS_COLOR_ARGB32 ? "ARGB32" : \
-                (f) == OMAP_DSS_COLOR_RGB16 ? "RGB565" : "??")
-        if (dsscomp->ovls[i].cfg.enabled)
-            e -= snprintf(end - e, e, "%08x:%d*%d,%s",
-                          dsscomp->ovls[i].ba,
-                          dsscomp->ovls[i].cfg.width,
-                          dsscomp->ovls[i].cfg.height,
-                          FMT(dsscomp->ovls[i].cfg.color_mode));
-#undef FMT
-        else
-            e -= snprintf(end - e, e, "-");
-    }
-    e -= snprintf(end - e, e, "} L{");
-    for (i = 0; i < hwc_dev->post2_layers; i++) {
-        if (i)
-            e -= snprintf(end - e, e, " ");
-        e -= snprintf(end - e, e, "%p", hwc_dev->buffers[i]);
-    }
-    e -= snprintf(end - e, e, "}%s\n", hwc_dev->use_sgx ? " swap" : "");
-    if (debug) {
-        LOGD("%s", big_log);
-    }
-
-    // LOGD("set %d layers (sgx=%d)\n", dsscomp->num_ovls, hwc_dev->use_sgx);
+    if (debug)
+        dump_set_info(hwc_dev, list);
 
     if (dpy && sur) {
         // list can be NULL which means hwc is temporarily disabled.
@@ -1344,45 +1368,33 @@ err_out:
     return err;
 }
 
-static int dump_printf(char *buff, int buff_len, int len, const char *fmt, ...)
-{
-    va_list ap;
-
-    int print_len;
-
-    va_start(ap, fmt);
-
-    print_len = vsnprintf(buff + len, buff_len - len, fmt, ap);
-
-    va_end(ap);
-
-    return len + print_len;
-}
-
 static void omap4_hwc_dump(struct hwc_composer_device *dev, char *buff, int buff_len)
 {
     omap4_hwc_device_t *hwc_dev = (omap4_hwc_device_t *)dev;
     struct dsscomp_setup_dispc_data *dsscomp = &hwc_dev->dsscomp_data;
-    int len = 0;
+    struct dump_buf log = {
+        .buf = buff,
+        .buf_len = buff_len,
+    };
     int i;
 
-    len = dump_printf(buff, buff_len, len, "omap4_hwc %d:\n", dsscomp->num_ovls);
-    len = dump_printf(buff, buff_len, len, "  idle timeout: %dms\n", hwc_dev->idle);
+    dump_printf(&log, "omap4_hwc %d:\n", dsscomp->num_ovls);
+    dump_printf(&log, "  idle timeout: %dms\n", hwc_dev->idle);
 
     for (i = 0; i < dsscomp->num_ovls; i++) {
         struct dss2_ovl_cfg *cfg = &dsscomp->ovls[i].cfg;
 
-        len = dump_printf(buff, buff_len, len, "  layer %d:\n", i);
-        len = dump_printf(buff, buff_len, len, "     enabled: %s\n",
+        dump_printf(&log, "  layer %d:\n", i);
+        dump_printf(&log, "     enabled: %s\n",
                           cfg->enabled ? "true" : "false");
-        len = dump_printf(buff, buff_len, len, "     buff: %p %dx%d stride: %d\n",
+        dump_printf(&log, "     buff: %p %dx%d stride: %d\n",
                           hwc_dev->buffers[i], cfg->width, cfg->height, cfg->stride);
-        len = dump_printf(buff, buff_len, len, "     src: (%d,%d) %dx%d\n",
+        dump_printf(&log, "     src: (%d,%d) %dx%d\n",
                           cfg->crop.x, cfg->crop.y, cfg->crop.w, cfg->crop.h);
-        len = dump_printf(buff, buff_len, len, "     dst: (%d,%d) %dx%d\n",
+        dump_printf(&log, "     dst: (%d,%d) %dx%d\n",
                           cfg->win.x, cfg->win.y, cfg->win.w, cfg->win.h);
-        len = dump_printf(buff, buff_len, len, "     ix: %d\n", cfg->ix);
-        len = dump_printf(buff, buff_len, len, "     zorder: %d\n\n", cfg->zorder);
+        dump_printf(&log, "     ix: %d\n", cfg->ix);
+        dump_printf(&log, "     zorder: %d\n\n", cfg->zorder);
     }
 }
 
@@ -1713,7 +1725,7 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     }
     handle_hotplug(hwc_dev, hpd);
 
-    LOGE("omap4_hwc_device_open(rgb_order=%d nv12_only=%d)",
+    LOGI("omap4_hwc_device_open(rgb_order=%d nv12_only=%d)",
         hwc_dev->flags_rgb_order, hwc_dev->flags_nv12_only);
 
 done:
