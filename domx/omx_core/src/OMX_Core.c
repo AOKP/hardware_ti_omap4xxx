@@ -113,6 +113,8 @@ extern OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent);
     goto EXIT; }\
     } while(0)
 
+OMX_U32 DUCATI_IN_SECURE_MODE = 0;
+OMX_U32 SECURE_COMPONENTS_RUNNING = 0;
 
 /******************************Public*Routine******************************\
 * OMX_Init()
@@ -228,6 +230,16 @@ OMX_ERRORTYPE OMX_GetHandle(OMX_HANDLETYPE * pHandle,
 	strcpy(buf, prefix);	/* the lengths are defined herein or have been */
 	strcat(buf, cComponentName);	/* checked already, so strcpy and strcat are  */
 	strcat(buf, postfix);	/* are safe to use in this context. */
+
+	if(DUCATI_IN_SECURE_MODE == 1)
+	{
+		if(strstr(cComponentName,"secure") == NULL)
+		{
+			TIMM_OSAL_Error("non-secure component not supported in secure mode");
+			eError = OMX_ErrorComponentNotFound;
+			goto EXIT;
+		}
+	}
 //#if 0
 	pModules[i] = dlopen(buf, RTLD_LAZY | RTLD_GLOBAL);
 	if (pModules[i] == NULL)

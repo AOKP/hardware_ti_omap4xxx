@@ -108,7 +108,7 @@ RPC_OMX_ERRORTYPE RPC_InstanceInit(OMX_STRING cComponentName,
 	OMX_S32 status = 0;
 	struct omx_conn_req sReq = { .name = "OMX" };
 	TIMM_OSAL_ERRORTYPE eError = TIMM_OSAL_ERR_NONE;
-	OMX_U32 i = 0;
+	OMX_U32 i = 0, nAttempts = 0;
 
 	*(RPC_OMX_CONTEXT **) phRPCCtx = NULL;
 
@@ -126,9 +126,21 @@ RPC_OMX_ERRORTYPE RPC_InstanceInit(OMX_STRING cComponentName,
 
 	/*Assuming that open maintains an internal count for multi instance */
 	DOMX_DEBUG("Calling open on the device");
-	pRPCCtx->fd_omx = open("/dev/rpmsg-omx1", O_RDWR);
-	RPC_assert(pRPCCtx->fd_omx >= 0, RPC_OMX_ErrorInsufficientResources,
-	    "Can't open device");
+	while (1)
+	{
+		pRPCCtx->fd_omx = open("/dev/rpmsg-omx1", O_RDWR);
+		if(pRPCCtx->fd_omx >= 0 || errno != ENOENT || nAttempts == 15)
+			break;
+		DOMX_DEBUG("errno from open= %d, REATTEMPTING OPEN!!!!",errno);
+		nAttempts++;
+		usleep(1000000);
+	}
+	if(pRPCCtx->fd_omx < 0)
+	{
+		DOMX_ERROR("Can't open device, errorno from open = %d",errno);
+		eError = RPC_OMX_ErrorInsufficientResources;
+		goto EXIT;
+	}
 	DOMX_DEBUG("Open was successful, pRPCCtx->fd_omx = %d",
 	    pRPCCtx->fd_omx);
 //AD

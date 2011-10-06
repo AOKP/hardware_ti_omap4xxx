@@ -151,13 +151,6 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 	    OMX_ErrorInsufficientResources,
 	    " Error in Allocating space for proxy component table");
 
-	// Copying component Name - this will be picked up in the proxy common
-	PROXY_assert(strlen(COMPONENT_NAME) + 1 < MAX_COMPONENT_NAME_LENGTH,
-	    OMX_ErrorInvalidComponentName,
-	    "Length of component name is longer than the max allowed");
-	TIMM_OSAL_Memcpy(pComponentPrivate->cCompName, COMPONENT_NAME,
-	    strlen(COMPONENT_NAME) + 1);
-
 	eError = OMX_ProxyViddecInit(hComponent);
 
 	EXIT:
@@ -180,8 +173,15 @@ OMX_ERRORTYPE OMX_ProxyViddecInit(OMX_HANDLETYPE hComponent)
 
 	DOMX_DEBUG("Component name provided is %s", COMPONENT_NAME);
 
-	pComponentPrivate =
-	    (PROXY_COMPONENT_PRIVATE *) pHandle->pComponentPrivate;
+        pComponentPrivate =
+            (PROXY_COMPONENT_PRIVATE *) pHandle->pComponentPrivate;
+
+	// Copying component Name - this will be picked up in the proxy common
+	PROXY_assert(strlen(COMPONENT_NAME) + 1 < MAX_COMPONENT_NAME_LENGTH,
+	    OMX_ErrorInvalidComponentName,
+	    "Length of component name is longer than the max allowed");
+	TIMM_OSAL_Memcpy(pComponentPrivate->cCompName, COMPONENT_NAME,
+	    strlen(COMPONENT_NAME) + 1);
 
 	eError = OMX_ProxyCommonInit(hComponent);	// Calling Proxy Common Init()
 	PROXY_assert(eError == OMX_ErrorNone, eError, "Proxy common init returned error");
