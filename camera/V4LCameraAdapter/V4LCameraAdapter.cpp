@@ -55,14 +55,13 @@ namespace android {
 //frames skipped before recalculating the framerate
 #define FPS_PERIOD 30
 
-static V4LCameraAdapter *gCameraAdapter = NULL;
 Mutex gAdapterLock;
 const char *device = DEVICE;
 
 
 /*--------------------Camera Adapter Class STARTS here-----------------------------*/
 
-status_t V4LCameraAdapter::initialize(CameraProperties::Properties* caps, int sensor_index)
+status_t V4LCameraAdapter::initialize(CameraProperties::Properties* caps)
 {
     LOG_FUNCTION_NAME;
 
@@ -483,7 +482,7 @@ void V4LCameraAdapter::onOrientationEvent(uint32_t orientation, uint32_t tilt)
 }
 
 
-V4LCameraAdapter::V4LCameraAdapter()
+V4LCameraAdapter::V4LCameraAdapter(size_t sensor_index)
 {
     LOG_FUNCTION_NAME;
 
@@ -563,24 +562,21 @@ int V4LCameraAdapter::previewThread()
 
 extern "C" CameraAdapter* CameraAdapter_Factory()
 {
+    CameraAdapter *adapter = NULL;
     Mutex::Autolock lock(gAdapterLock);
 
     LOG_FUNCTION_NAME;
 
-    if ( NULL == gCameraAdapter )
-        {
-        CAMHAL_LOGDA("Creating new Camera adapter instance");
-        gCameraAdapter= new V4LCameraAdapter();
-        }
-    else
-        {
-        CAMHAL_LOGDA("Reusing existing Camera adapter instance");
-        }
-
+    adapter = new V4LCameraAdapter(sensor_index);
+    if ( adapter ) {
+        CAMHAL_LOGDB("New OMX Camera adapter instance created for sensor %d",sensor_index);
+    } else {
+        CAMHAL_LOGEA("Camera adapter create failed!");
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 
-    return gCameraAdapter;
+    return adapter;
 }
 
 extern "C" int CameraAdapter_Capabilities(CameraProperties::Properties* properties_array,

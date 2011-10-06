@@ -34,7 +34,7 @@
 
 namespace android {
 
-extern "C" CameraAdapter* CameraAdapter_Factory();
+extern "C" CameraAdapter* CameraAdapter_Factory(size_t);
 
 /*****************************************************************************/
 
@@ -2741,8 +2741,8 @@ status_t CameraHal::initialize(CameraProperties::Properties* properties)
 
     CAMHAL_LOGDB("Sensor index %d", sensor_index);
 
-    mCameraAdapter = CameraAdapter_Factory();
-    if ( ( NULL == mCameraAdapter ) || (mCameraAdapter->initialize(properties, sensor_index)!=NO_ERROR))
+    mCameraAdapter = CameraAdapter_Factory(sensor_index);
+    if ( ( NULL == mCameraAdapter ) || (mCameraAdapter->initialize(properties)!=NO_ERROR))
         {
         CAMHAL_LOGEA("Unable to create or initialize CameraAdapter");
         mCameraAdapter = NULL;

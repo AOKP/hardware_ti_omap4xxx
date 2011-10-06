@@ -23,6 +23,8 @@
 
 #define LOG_TAG "CameraHAL"
 
+#include <utils/threads.h>
+
 #include "CameraHal.h"
 #include "CameraProperties.h"
 #include "TICameraParameters.h"
@@ -30,6 +32,8 @@
 
 static android::CameraProperties gCameraProperties;
 static android::CameraHal* gCameraHals[MAX_CAMERAS_SUPPORTED];
+static unsigned int gCamerasOpen = 0;
+static android::Mutex gCameraHalDeviceLock;
 
 static int camera_device_open(const hw_module_t* module, const char* name,
                 hw_device_t** device);
@@ -438,6 +442,8 @@ int camera_device_close(hw_device_t* device)
 
     LOGV("%s", __FUNCTION__);
 
+    android::Mutex::Autolock lock(gCameraHalDeviceLock);
+
     if (!device) {
         ret = -EINVAL;
         goto done;
@@ -448,6 +454,7 @@ int camera_device_close(hw_device_t* device)
     if (gCameraHals[ti_dev->cameraid]) {
         delete gCameraHals[ti_dev->cameraid];
         gCameraHals[ti_dev->cameraid] = NULL;
+        gCamerasOpen--;
     }
 
     if (ti_dev->base.ops) {
@@ -483,6 +490,8 @@ int camera_device_open(const hw_module_t* module, const char* name,
     android::CameraHal* camera = NULL;
     android::CameraProperties::Properties* properties = NULL;
 
+    android::Mutex::Autolock lock(gCameraHalDeviceLock);
+
     LOGI("camera_device open");
 
     if (name != NULL) {
@@ -494,6 +503,14 @@ int camera_device_open(const hw_module_t* module, const char* name,
             LOGE("camera service provided cameraid out of bounds, "
                     "cameraid = %d, num supported = %d",
                     cameraid, num_cameras);
+            rv = -EINVAL;
+            goto fail;
+        }
+
+        if(gCamerasOpen >= MAX_SIMUL_CAMERAS_SUPPORTED)
+        {
+            LOGE("maximum number of cameras already open");
+            rv = -ENOMEM;
             goto fail;
         }
 
@@ -576,12 +593,12 @@ int camera_device_open(const hw_module_t* module, const char* name,
         }
 
         gCameraHals[cameraid] = camera;
+        gCamerasOpen++;
     }
 
     return rv;
 
 fail:
-
     if(camera_device)
         free(camera_device);
     if(camera_ops)

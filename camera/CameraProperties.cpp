@@ -22,6 +22,8 @@
 */
 
 //#include "CameraHal.h"
+#include <utils/threads.h>
+
 #include "DebugUtils.h"
 #include "CameraProperties.h"
 
@@ -68,6 +70,8 @@ status_t CameraProperties::initialize()
     LOG_FUNCTION_NAME;
 
     status_t ret;
+
+    Mutex::Autolock lock(mLock);
 
     if(mInitialized)
         return NO_ERROR;

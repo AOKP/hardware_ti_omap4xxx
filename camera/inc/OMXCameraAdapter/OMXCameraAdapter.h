@@ -338,11 +338,11 @@ public:
 
 public:
 
-    OMXCameraAdapter();
+    OMXCameraAdapter(size_t sensor_index);
     ~OMXCameraAdapter();
 
     ///Initialzes the camera adapter creates any resources required
-    virtual status_t initialize(CameraProperties::Properties*, int sensor_index=0);
+    virtual status_t initialize(CameraProperties::Properties*);
 
     //APIs to configure Camera adapter and get the current parameter set
     virtual status_t setParameters(const CameraParameters& params);
@@ -866,7 +866,7 @@ private:
     unsigned int mIter;
     nsecs_t mLastFPSTime;
 
-    int mSensorIndex;
+    size_t mSensorIndex;
     CodingMode mCodingMode;
 
     // Time source delta of ducati & system time

@@ -771,7 +771,7 @@ public:
 public:
 
     ///Initialzes the camera adapter creates any resources required
-    virtual int initialize(CameraProperties::Properties*, int sensor_index=0) = 0;
+    virtual int initialize(CameraProperties::Properties*) = 0;
 
     virtual int setErrorHandler(ErrorNotifier *errorNotifier) = 0;
 

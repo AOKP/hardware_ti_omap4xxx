@@ -45,11 +45,10 @@ namespace android {
 //frames skipped before recalculating the framerate
 #define FPS_PERIOD 30
 
-static OMXCameraAdapter *gCameraAdapter = NULL;
 Mutex gAdapterLock;
 /*--------------------Camera Adapter Class STARTS here-----------------------------*/
 
-status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int sensor_index)
+status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
 {
     LOG_FUNCTION_NAME;
 
@@ -83,250 +82,203 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps, int se
        return NO_INIT;
     }
 
-    if ( mComponentState != OMX_StateExecuting ){
-        ///Update the preview and image capture port indexes
-        mCameraAdapterParameters.mPrevPortIndex = OMX_CAMERA_PORT_VIDEO_OUT_PREVIEW;
-        // temp changed in order to build OMX_CAMERA_PORT_VIDEO_OUT_IMAGE;
-        mCameraAdapterParameters.mImagePortIndex = OMX_CAMERA_PORT_IMAGE_OUT_IMAGE;
-        mCameraAdapterParameters.mMeasurementPortIndex = OMX_CAMERA_PORT_VIDEO_OUT_MEASUREMENT;
-        //currently not supported use preview port instead
-        mCameraAdapterParameters.mVideoPortIndex = OMX_CAMERA_PORT_VIDEO_OUT_PREVIEW;
+    ///Update the preview and image capture port indexes
+    mCameraAdapterParameters.mPrevPortIndex = OMX_CAMERA_PORT_VIDEO_OUT_PREVIEW;
+    // temp changed in order to build OMX_CAMERA_PORT_VIDEO_OUT_IMAGE;
+    mCameraAdapterParameters.mImagePortIndex = OMX_CAMERA_PORT_IMAGE_OUT_IMAGE;
+    mCameraAdapterParameters.mMeasurementPortIndex = OMX_CAMERA_PORT_VIDEO_OUT_MEASUREMENT;
+    //currently not supported use preview port instead
+    mCameraAdapterParameters.mVideoPortIndex = OMX_CAMERA_PORT_VIDEO_OUT_PREVIEW;
 
-        if(!mCameraAdapterParameters.mHandleComp)
-            {
-            ///Get the handle to the OMX Component
-            eError = OMXCameraAdapter::OMXCameraGetHandle(&mCameraAdapterParameters.mHandleComp, (OMX_PTR)this);
-
-            if(eError!=OMX_ErrorNone)
-                {
-                CAMHAL_LOGEB("OMX_GetHandle -0x%x", eError);
-                }
-            GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
-
-
-             eError = OMX_SendCommand(mCameraAdapterParameters.mHandleComp,
-                                          OMX_CommandPortDisable,
-                                          OMX_ALL,
-                                          NULL);
-
-             if(eError!=OMX_ErrorNone)
-                 {
-                 CAMHAL_LOGEB("OMX_SendCommand(OMX_CommandPortDisable) -0x%x", eError);
-                 }
-
-             GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
-
-             ///Register for port enable event
-             ret = RegisterForEvent(mCameraAdapterParameters.mHandleComp,
-                                         OMX_EventCmdComplete,
-                                         OMX_CommandPortEnable,
-                                         mCameraAdapterParameters.mPrevPortIndex,
-                                         mInitSem);
-             if(ret!=NO_ERROR)
-                 {
-                 CAMHAL_LOGEB("Error in registering for event %d", ret);
-                 goto EXIT;
-                 }
-
-            ///Enable PREVIEW Port
-             eError = OMX_SendCommand(mCameraAdapterParameters.mHandleComp,
-                                         OMX_CommandPortEnable,
-                                         mCameraAdapterParameters.mPrevPortIndex,
-                                         NULL);
-
-             if(eError!=OMX_ErrorNone)
-                 {
-                 CAMHAL_LOGEB("OMX_SendCommand(OMX_CommandPortEnable) -0x%x", eError);
-                 }
-
-             GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
-
-             //Wait for the port enable event to occur
-             ret = mInitSem.WaitTimeout(OMX_CMD_TIMEOUT);
-
-             //If somethiing bad happened while we wait
-             if (mComponentState == OMX_StateInvalid)
-               {
-                 CAMHAL_LOGEA("Invalid State after Enable Preview Port Exitting!!!");
-                 goto EXIT;
-               }
-
-             if ( NO_ERROR == ret )
-                 {
-                 CAMHAL_LOGDA("-Port enable event arrived");
-                 }
-             else
-                 {
-                 ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
-                                    OMX_EventCmdComplete,
-                                    OMX_CommandPortEnable,
-                                    mCameraAdapterParameters.mPrevPortIndex,
-                                    NULL);
-                 CAMHAL_LOGEA("Timeout for enabling preview port expired!");
-                 goto EXIT;
-                 }
-
-            }
-        else
-            {
-            OMXCameraPortParameters * mPreviewData =
-                &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex];
-
-            //Apply default configs before trying to swtich to a new sensor
-            if ( NO_ERROR != setFormat(OMX_CAMERA_PORT_VIDEO_OUT_PREVIEW, *mPreviewData) )
-                {
-                CAMHAL_LOGEB("Error 0x%x while applying defaults", ret);
-                goto EXIT;
-                }
-            }
+    ///Get the handle to the OMX Component
+    eError = OMXCameraAdapter::OMXCameraGetHandle(&mCameraAdapterParameters.mHandleComp, (OMX_PTR)this);
+    if(eError != OMX_ErrorNone) {
+        CAMHAL_LOGEB("OMX_GetHandle -0x%x", eError);
     }
-    ///Select the sensor
+    GOTO_EXIT_IF((eError != OMX_ErrorNone), eError);
+
+        CAMHAL_LOGEB("OMX_GetHandle -0x%x sensor_index = %lu", eError, mSensorIndex);
+    eError = OMX_SendCommand(mCameraAdapterParameters.mHandleComp,
+                                  OMX_CommandPortDisable,
+                                  OMX_ALL,
+                                  NULL);
+
+    if(eError != OMX_ErrorNone) {
+         CAMHAL_LOGEB("OMX_SendCommand(OMX_CommandPortDisable) -0x%x", eError);
+    }
+    GOTO_EXIT_IF((eError != OMX_ErrorNone), eError);
+
+    // Register for port enable event
+    ret = RegisterForEvent(mCameraAdapterParameters.mHandleComp,
+                                 OMX_EventCmdComplete,
+                                 OMX_CommandPortEnable,
+                                 mCameraAdapterParameters.mPrevPortIndex,
+                                 mInitSem);
+    if(ret != NO_ERROR) {
+         CAMHAL_LOGEB("Error in registering for event %d", ret);
+         goto EXIT;
+    }
+
+    // Enable PREVIEW Port
+    eError = OMX_SendCommand(mCameraAdapterParameters.mHandleComp,
+                                 OMX_CommandPortEnable,
+                                 mCameraAdapterParameters.mPrevPortIndex,
+                                 NULL);
+    if(eError != OMX_ErrorNone) {
+        CAMHAL_LOGEB("OMX_SendCommand(OMX_CommandPortEnable) -0x%x", eError);
+    }
+    GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
+
+    // Wait for the port enable event to occur
+    ret = mInitSem.WaitTimeout(OMX_CMD_TIMEOUT);
+    if ( NO_ERROR == ret ) {
+         CAMHAL_LOGDA("-Port enable event arrived");
+    } else {
+         ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
+                            OMX_EventCmdComplete,
+                            OMX_CommandPortEnable,
+                            mCameraAdapterParameters.mPrevPortIndex,
+                            NULL);
+         CAMHAL_LOGEA("Timeout for enabling preview port expired!");
+         goto EXIT;
+     }
+
+    // Select the sensor
     OMX_CONFIG_SENSORSELECTTYPE sensorSelect;
     OMX_INIT_STRUCT_PTR (&sensorSelect, OMX_CONFIG_SENSORSELECTTYPE);
-    sensorSelect.eSensor = (OMX_SENSORSELECT)sensor_index;
+    sensorSelect.eSensor = (OMX_SENSORSELECT) mSensorIndex;
     eError = OMX_SetConfig(mCameraAdapterParameters.mHandleComp, ( OMX_INDEXTYPE ) OMX_TI_IndexConfigSensorSelect, &sensorSelect);
-
-    if ( OMX_ErrorNone != eError )
-        {
-        CAMHAL_LOGEB("Error while selecting the sensor index as %d - 0x%x", sensor_index, eError);
+    if ( OMX_ErrorNone != eError ) {
+        CAMHAL_LOGEB("Error while selecting the sensor index as %d - 0x%x", mSensorIndex, eError);
         return BAD_VALUE;
-        }
-    else
-        {
-        CAMHAL_LOGDB("Sensor %d selected successfully", sensor_index);
-        }
+    } else {
+        CAMHAL_LOGDB("Sensor %d selected successfully", mSensorIndex);
+    }
 
     printComponentVersion(mCameraAdapterParameters.mHandleComp);
 
-    mSensorIndex = sensor_index;
     mBracketingEnabled = false;
     mBracketingBuffersQueuedCount = 0;
     mBracketingRange = 1;
     mLastBracetingBufferIdx = 0;
     mOMXStateSwitch = false;
 
-    if ( mComponentState != OMX_StateExecuting ){
-        mCaptureSignalled = false;
-        mCaptureConfigured = false;
-        mRecording = false;
-        mWaitingForSnapshot = false;
-        mSnapshotCount = 0;
-        mComponentState = OMX_StateLoaded;
+    mCaptureSignalled = false;
+    mCaptureConfigured = false;
+    mRecording = false;
+    mWaitingForSnapshot = false;
+    mSnapshotCount = 0;
+    mComponentState = OMX_StateLoaded;
 
-        mCapMode = HIGH_QUALITY;
-        mIPP = IPP_NULL;
-        mVstabEnabled = false;
-        mVnfEnabled = false;
-        mBurstFrames = 1;
-        mCapturedFrames = 0;
-        mPictureQuality = 100;
-        mCurrentZoomIdx = 0;
-        mTargetZoomIdx = 0;
-        mPreviousZoomIndx = 0;
-        mReturnZoomStatus = false;
-        mZoomInc = 1;
-        mZoomParameterIdx = 0;
-        mExposureBracketingValidEntries = 0;
-        mSensorOverclock = false;
+    mCapMode = HIGH_QUALITY;
+    mIPP = IPP_NULL;
+    mVstabEnabled = false;
+    mVnfEnabled = false;
+    mBurstFrames = 1;
+    mCapturedFrames = 0;
+    mPictureQuality = 100;
+    mCurrentZoomIdx = 0;
+    mTargetZoomIdx = 0;
+    mPreviousZoomIndx = 0;
+    mReturnZoomStatus = false;
+    mZoomInc = 1;
+    mZoomParameterIdx = 0;
+    mExposureBracketingValidEntries = 0;
+    mSensorOverclock = false;
 
-        mDeviceOrientation = 0;
-        mCapabilities = caps;
+    mDeviceOrientation = 0;
+    mCapabilities = caps;
 
-        mEXIFData.mGPSData.mAltitudeValid = false;
-        mEXIFData.mGPSData.mDatestampValid = false;
-        mEXIFData.mGPSData.mLatValid = false;
-        mEXIFData.mGPSData.mLongValid = false;
-        mEXIFData.mGPSData.mMapDatumValid = false;
-        mEXIFData.mGPSData.mProcMethodValid = false;
-        mEXIFData.mGPSData.mVersionIdValid = false;
-        mEXIFData.mGPSData.mTimeStampValid = false;
-        mEXIFData.mModelValid = false;
-        mEXIFData.mMakeValid = false;
+    mEXIFData.mGPSData.mAltitudeValid = false;
+    mEXIFData.mGPSData.mDatestampValid = false;
+    mEXIFData.mGPSData.mLatValid = false;
+    mEXIFData.mGPSData.mLongValid = false;
+    mEXIFData.mGPSData.mMapDatumValid = false;
+    mEXIFData.mGPSData.mProcMethodValid = false;
+    mEXIFData.mGPSData.mVersionIdValid = false;
+    mEXIFData.mGPSData.mTimeStampValid = false;
+    mEXIFData.mModelValid = false;
+    mEXIFData.mMakeValid = false;
 
-        // initialize command handling thread
-        if(mCommandHandler.get() == NULL)
-            mCommandHandler = new CommandHandler(this);
+    // initialize command handling thread
+    if(mCommandHandler.get() == NULL)
+        mCommandHandler = new CommandHandler(this);
 
-        if ( NULL == mCommandHandler.get() )
-        {
-            CAMHAL_LOGEA("Couldn't create command handler");
-            return NO_MEMORY;
-        }
-
-        ret = mCommandHandler->run("CallbackThread", PRIORITY_URGENT_DISPLAY);
-        if ( ret != NO_ERROR )
-        {
-            if( ret == INVALID_OPERATION){
-                CAMHAL_LOGDA("command handler thread already runnning!!");
-            }else
-            {
-                CAMHAL_LOGEA("Couldn't run command handlerthread");
-                return ret;
-            }
-        }
-
-        // initialize omx callback handling thread
-        if(mOMXCallbackHandler.get() == NULL)
-            mOMXCallbackHandler = new OMXCallbackHandler(this);
-
-        if ( NULL == mOMXCallbackHandler.get() )
-        {
-            CAMHAL_LOGEA("Couldn't create omx callback handler");
-            return NO_MEMORY;
-        }
-
-        ret = mOMXCallbackHandler->run("OMXCallbackThread", PRIORITY_URGENT_DISPLAY);
-        if ( ret != NO_ERROR )
-        {
-            if( ret == INVALID_OPERATION){
-                CAMHAL_LOGDA("omx callback handler thread already runnning!!");
-            }else
-            {
-                CAMHAL_LOGEA("Couldn't run omx callback handler thread");
-                return ret;
-            }
-        }
-
-        //Remove any unhandled events
-        if ( !mEventSignalQ.isEmpty() )
-            {
-            for (unsigned int i = 0 ; i < mEventSignalQ.size() ; i++ )
-                {
-                TIUTILS::Message *msg = mEventSignalQ.itemAt(i);
-                //remove from queue and free msg
-                mEventSignalQ.removeAt(i);
-                if ( NULL != msg )
-                    {
-                    free(msg);
-                    }
-                }
-            }
-
-        OMX_INIT_STRUCT_PTR (&mRegionPriority, OMX_TI_CONFIG_3A_REGION_PRIORITY);
-        OMX_INIT_STRUCT_PTR (&mFacePriority, OMX_TI_CONFIG_3A_FACE_PRIORITY);
-        mRegionPriority.nPortIndex = OMX_ALL;
-        mFacePriority.nPortIndex = OMX_ALL;
-
-        //Setting this flag will that the first setParameter call will apply all 3A settings
-        //and will not conditionally apply based on current values.
-        mFirstTimeInit = true;
-
-        memset(mExposureBracketingValues, 0, EXP_BRACKET_RANGE*sizeof(int));
-        mMeasurementEnabled = false;
-        mFaceDetectionRunning = false;
-        mFaceDetectionPaused = false;
-
-        memset(&mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex], 0, sizeof(OMXCameraPortParameters));
-        memset(&mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex], 0, sizeof(OMXCameraPortParameters));
-
-        //Initialize 3A defaults
-        ret = apply3ADefaults(mParameters3A);
-        if ( NO_ERROR != ret )
-            {
-            goto EXIT;
-            }
-
+    if ( NULL == mCommandHandler.get() )
+    {
+        CAMHAL_LOGEA("Couldn't create command handler");
+        return NO_MEMORY;
     }
+
+    ret = mCommandHandler->run("CallbackThread", PRIORITY_URGENT_DISPLAY);
+    if ( ret != NO_ERROR )
+    {
+        if( ret == INVALID_OPERATION){
+            CAMHAL_LOGDA("command handler thread already runnning!!");
+        }else
+        {
+            CAMHAL_LOGEA("Couldn't run command handlerthread");
+            return ret;
+        }
+    }
+
+    // initialize omx callback handling thread
+    if(mOMXCallbackHandler.get() == NULL)
+        mOMXCallbackHandler = new OMXCallbackHandler(this);
+
+    if ( NULL == mOMXCallbackHandler.get() )
+    {
+        CAMHAL_LOGEA("Couldn't create omx callback handler");
+        return NO_MEMORY;
+    }
+
+    ret = mOMXCallbackHandler->run("OMXCallbackThread", PRIORITY_URGENT_DISPLAY);
+    if ( ret != NO_ERROR )
+    {
+        if( ret == INVALID_OPERATION){
+            CAMHAL_LOGDA("omx callback handler thread already runnning!!");
+        }else
+        {
+            CAMHAL_LOGEA("Couldn't run omx callback handler thread");
+            return ret;
+        }
+    }
+
+    //Remove any unhandled events
+    if (!mEventSignalQ.isEmpty()) {
+        for (unsigned int i = 0 ;i < mEventSignalQ.size(); i++ ) {
+            TIUTILS::Message *msg = mEventSignalQ.itemAt(i);
+            //remove from queue and free msg
+            mEventSignalQ.removeAt(i);
+            if ( NULL != msg ) {
+                free(msg);
+            }
+        }
+    }
+
+    OMX_INIT_STRUCT_PTR (&mRegionPriority, OMX_TI_CONFIG_3A_REGION_PRIORITY);
+    OMX_INIT_STRUCT_PTR (&mFacePriority, OMX_TI_CONFIG_3A_FACE_PRIORITY);
+    mRegionPriority.nPortIndex = OMX_ALL;
+    mFacePriority.nPortIndex = OMX_ALL;
+
+    //Setting this flag will that the first setParameter call will apply all 3A settings
+    //and will not conditionally apply based on current values.
+    mFirstTimeInit = true;
+
+    memset(mExposureBracketingValues, 0, EXP_BRACKET_RANGE*sizeof(int));
+    mMeasurementEnabled = false;
+    mFaceDetectionRunning = false;
+    mFaceDetectionPaused = false;
+
+    memset(&mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex], 0, sizeof(OMXCameraPortParameters));
+    memset(&mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex], 0, sizeof(OMXCameraPortParameters));
+
+    //Initialize 3A defaults
+    ret = apply3ADefaults(mParameters3A);
+    if ( NO_ERROR != ret ) {
+        goto EXIT;
+    }
+
     LOG_FUNCTION_NAME_EXIT;
     return ErrorUtils::omxToAndroidError(eError);
 
@@ -3245,10 +3197,11 @@ bool OMXCameraAdapter::OMXCallbackHandler::Handler()
     return false;
 }
 
-OMXCameraAdapter::OMXCameraAdapter():mComponentState (OMX_StateLoaded)
+OMXCameraAdapter::OMXCameraAdapter(size_t sensor_index): mComponentState (OMX_StateLoaded)
 {
     LOG_FUNCTION_NAME;
 
+    mSensorIndex = sensor_index;
     mPictureRotation = 0;
     // Initial values
     mTimeSourceDelta = 0;
@@ -3341,30 +3294,26 @@ OMXCameraAdapter::~OMXCameraAdapter()
         mOMXCallbackHandler.clear();
     }
 
-    gCameraAdapter = NULL;
-
     LOG_FUNCTION_NAME_EXIT;
 }
 
-extern "C" CameraAdapter* CameraAdapter_Factory()
+extern "C" CameraAdapter* CameraAdapter_Factory(size_t sensor_index)
 {
+    CameraAdapter *adapter = NULL;
     Mutex::Autolock lock(gAdapterLock);
 
     LOG_FUNCTION_NAME;
 
-    if ( NULL == gCameraAdapter )
-        {
-        CAMHAL_LOGDA("Creating new Camera adapter instance");
-        gCameraAdapter= new OMXCameraAdapter();
-        }
-    else
-        {
-        CAMHAL_LOGDA("Reusing existing Camera adapter instance");
-        }
+    adapter = new OMXCameraAdapter(sensor_index);
+    if ( adapter ) {
+        CAMHAL_LOGDB("New OMX Camera adapter instance created for sensor %d",sensor_index);
+    } else {
+        CAMHAL_LOGEA("Camera adapter create failed!");
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 
-    return gCameraAdapter;
+    return adapter;
 }
 
 OMX_ERRORTYPE OMXCameraAdapter::OMXCameraGetHandle(OMX_HANDLETYPE *handle, OMX_PTR pAppData )
@@ -3415,6 +3364,8 @@ extern "C" int CameraAdapter_Capabilities(CameraProperties::Properties* properti
     OMX_TI_CAPTYPE caps;
 
     LOG_FUNCTION_NAME;
+
+    Mutex::Autolock lock(gAdapterLock);
 
     if (!properties_array) {
         CAMHAL_LOGEB("invalid param: properties = 0x%p", properties_array);
