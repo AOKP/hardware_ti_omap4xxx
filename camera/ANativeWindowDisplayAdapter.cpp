@@ -177,8 +177,8 @@ ANativeWindowDisplayAdapter::ANativeWindowDisplayAdapter():mDisplayThread(NULL),
     mFailedDQs = 0;
 
     mPaused = false;
-    mXOff = 0;
-    mYOff = 0;
+    mXOff = -1;
+    mYOff = -1;
     mFirstInit = false;
 
     mFD = -1;
@@ -454,8 +454,8 @@ int ANativeWindowDisplayAdapter::disableDisplay(bool cancel_buffer)
         mDisplayEnabled = false;
 
         ///Reset the offset values
-        mXOff = 0;
-        mYOff = 0;
+        mXOff = -1;
+        mYOff = -1;
 
         ///Reset the frame width and height values
         mFrameWidth =0;
