@@ -47,6 +47,23 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
 
     LOG_FUNCTION_NAME;
 
+    str = params.get(CameraParameters::KEY_SCENE_MODE);
+    mode = getLUTvalue_HALtoOMX( str, SceneLUT);
+    if (  mFirstTimeInit || (( str != NULL ) && ( mParameters3A.SceneMode != mode )) ){
+      if ( 0 <= mode ){
+        mParameters3A.SceneMode = mode;
+        mPending3Asettings |= SetSceneMode;
+        if ((mode == OMX_Manual) && (mFirstTimeInit == false)){//Auto mode
+          mFirstTimeInit = true;
+        }
+      }
+      else{
+        mParameters3A.SceneMode = OMX_Manual;
+      }
+
+      CAMHAL_LOGVB("SceneMode %d", mParameters3A.SceneMode);
+    }
+
     str = params.get(TICameraParameters::KEY_EXPOSURE_MODE);
     mode = getLUTvalue_HALtoOMX( str, ExpLUT);
     if ( ( str != NULL ) && ( mParameters3A.Exposure != mode ))
@@ -170,23 +187,6 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
 
         mParameters3A.EVCompensation = params.getInt(CameraParameters::KEY_EXPOSURE_COMPENSATION);
         mPending3Asettings |= SetEVCompensation;
-        }
-
-    str = params.get(CameraParameters::KEY_SCENE_MODE);
-    mode = getLUTvalue_HALtoOMX( str, SceneLUT);
-    if (  mFirstTimeInit || (( str != NULL ) && ( mParameters3A.SceneMode != mode )) )
-        {
-        if ( 0 <= mode )
-            {
-            mParameters3A.SceneMode = mode;
-            mPending3Asettings |= SetSceneMode;
-            }
-        else
-            {
-            mParameters3A.SceneMode = OMX_Manual;
-            }
-
-        CAMHAL_LOGDB("SceneMode %d", mParameters3A.SceneMode);
         }
 
     str = params.get(CameraParameters::KEY_FLASH_MODE);
