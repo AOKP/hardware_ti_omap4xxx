@@ -40,22 +40,24 @@ status_t OMXCameraAdapter::setParametersFocus(const CameraParameters &params,
 {
     status_t ret = NO_ERROR;
     const char *str = NULL;
-    Mutex::Autolock lock(mFocusAreasLock);
+    Vector< sp<CameraArea> > tempAreas;
     size_t MAX_FOCUS_AREAS;
 
-
     LOG_FUNCTION_NAME;
+
+    Mutex::Autolock lock(mFocusAreasLock);
 
     str = params.get(CameraParameters::KEY_FOCUS_AREAS);
 
     MAX_FOCUS_AREAS = atoi(params.get(CameraParameters::KEY_MAX_NUM_FOCUS_AREAS));
 
-    mFocusAreas.clear();
     if ( NULL != str ) {
-        ret = CameraArea::parseAreas(str, ( strlen(str) + 1 ), mFocusAreas);
+        ret = CameraArea::parseAreas(str, ( strlen(str) + 1 ), tempAreas);
     }
 
-    if ( NO_ERROR == ret ) {
+    if ( (NO_ERROR == ret) && CameraArea::areAreasDifferent(mFocusAreas, tempAreas) ) {
+        mFocusAreas.clear();
+        mFocusAreas = tempAreas;
         if ( MAX_FOCUS_AREAS < mFocusAreas.size() ) {
             CAMHAL_LOGEB("Focus areas supported %d, focus areas set %d",
                          MAX_FOCUS_AREAS,

@@ -162,6 +162,8 @@ public:
         return mWeight;
         }
 
+    bool compare(const sp<CameraArea> &area);
+
     static status_t parseAreas(const char *area,
                                size_t areaLength,
                                Vector< sp<CameraArea> > &areas);
@@ -172,8 +174,9 @@ public:
                               ssize_t right,
                               ssize_t weight);
 
-private:
+    static bool areAreasDifferent(Vector< sp<CameraArea> > &, Vector< sp<CameraArea> > &);
 
+protected:
     static const ssize_t TOP = -1000;
     static const ssize_t LEFT = -1000;
     static const ssize_t BOTTOM = 1000;

@@ -271,15 +271,21 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
     str = params.get(CameraParameters::KEY_METERING_AREAS);
     if ( (str != NULL) ) {
         size_t MAX_METERING_AREAS;
+        Vector< sp<CameraArea> > tempAreas;
+
         MAX_METERING_AREAS = atoi(params.get(CameraParameters::KEY_MAX_NUM_METERING_AREAS));
 
         Mutex::Autolock lock(mMeteringAreasLock);
 
-        mMeteringAreas.clear();
+        ret = CameraArea::parseAreas(str, ( strlen(str) + 1 ), tempAreas);
 
-        ret = CameraArea::parseAreas(str, ( strlen(str) + 1 ), mMeteringAreas);
+        CAMHAL_LOGVB("areAreasDifferent? = %d",
+                     CameraArea::areAreasDifferent(mMeteringAreas, tempAreas));
 
-        if ( NO_ERROR == ret ) {
+        if ( (NO_ERROR == ret) && CameraArea::areAreasDifferent(mMeteringAreas, tempAreas) ) {
+            mMeteringAreas.clear();
+            mMeteringAreas = tempAreas;
+
             if ( MAX_METERING_AREAS >= mMeteringAreas.size() ) {
                 CAMHAL_LOGDB("Setting Metering Areas %s",
                         params.get(CameraParameters::KEY_METERING_AREAS));

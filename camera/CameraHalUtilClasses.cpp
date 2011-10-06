@@ -334,6 +334,29 @@ status_t CameraArea::parseAreas(const char *area,
     return ret;
 }
 
+bool CameraArea::areAreasDifferent(Vector< sp<CameraArea> > &area1,
+                                    Vector< sp<CameraArea> > &area2) {
+    if (area1.size() != area2.size()) {
+        return true;
+    }
+
+    // not going to care about sorting order for now
+    for (int i = 0; i < area1.size(); i++) {
+        if (!area1.itemAt(i)->compare(area2.itemAt(i))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool CameraArea::compare(const sp<CameraArea> &area) {
+    return ((mTop == area->mTop) && (mLeft == area->mLeft) &&
+            (mBottom == area->mBottom) && (mRight == area->mRight) &&
+            (mWeight == area->mWeight));
+}
+
+
 /*--------------------CameraArea Class ENDS here-----------------------------*/
 
 };
