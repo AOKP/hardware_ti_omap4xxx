@@ -144,7 +144,7 @@ status_t OMXCameraAdapter::setParametersAlgo(const CameraParameters &params,
                     }
                 }
             }
-        else
+        else if(mParams.get(TICameraParameters::KEY_GBCE) || mFirstTimeInit)
             {
             //Disable GBCE by default
             setGBCE(OMXCameraAdapter::BRIGHTNESS_OFF);
@@ -182,7 +182,7 @@ status_t OMXCameraAdapter::setParametersAlgo(const CameraParameters &params,
                     }
                 }
             }
-        else
+        else if(mParams.get(TICameraParameters::KEY_GLBCE) || mFirstTimeInit)
             {
             //Disable GLBCE by default
             setGLBCE(OMXCameraAdapter::BRIGHTNESS_OFF);
