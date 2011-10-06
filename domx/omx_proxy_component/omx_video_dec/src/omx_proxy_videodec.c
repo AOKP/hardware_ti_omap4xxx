@@ -342,7 +342,7 @@ OMX_ERRORTYPE PROXY_VIDDEC_GetParameter(OMX_IN OMX_HANDLETYPE hComponent,
 	}
 #endif
 	eError = PROXY_GetParameter(hComponent,nParamIndex, pParamStruct);
-	PROXY_assert(eError == OMX_ErrorNone,
+	PROXY_assert((eError == OMX_ErrorNone) || (eError == OMX_ErrorNoMore),
 		    eError," Error in Proxy GetParameter");
 
 	if( nParamIndex == OMX_IndexParamPortDefinition)
