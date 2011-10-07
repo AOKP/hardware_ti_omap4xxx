@@ -265,9 +265,9 @@ public:
         SetThumb                = 1 << 1,
         SetExpBracket           = 1 << 2,
         SetQuality              = 1 << 3,
-        SetRotation             = 1 << 3,
-        E3aSettingMax,
-        E3AsettingsAll = ( ((E3aSettingMax -1 ) << 1) -1 ) /// all possible flags raised
+        SetRotation             = 1 << 4,
+        ECaptureSettingMax,
+        ECapturesettingsAll = ( ((ECaptureSettingMax -1 ) << 1) -1 ) /// all possible flags raised
     };
 
     class GPSData
