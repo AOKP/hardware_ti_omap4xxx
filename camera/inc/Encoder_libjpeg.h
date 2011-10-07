@@ -109,11 +109,13 @@ class Encoder_libjpeg : public Thread {
                         void* cookie2,
                         void* cookie3)
             : Thread(false), mMainInput(main_jpeg), mThumbnailInput(tn_jpeg), mCb(cb),
-              mCookie1(cookie1), mCookie2(cookie2), mCookie3(cookie3), mType(type) {
+              mCancelEncoding(false), mCookie1(cookie1), mCookie2(cookie2), mCookie3(cookie3),
+              mType(type), mThumb(NULL) {
             this->incStrong(this);
         }
 
         ~Encoder_libjpeg() {
+            CAMHAL_LOGVB("~Encoder_libjpeg(%p)", this);
         }
 
         virtual bool threadLoop() {
@@ -121,18 +123,19 @@ class Encoder_libjpeg : public Thread {
             sp<Encoder_libjpeg> tn = NULL;
             if (mThumbnailInput) {
                 // start thread to encode thumbnail
-                tn = new Encoder_libjpeg(mThumbnailInput, NULL, NULL, mType, NULL, NULL, NULL);
-                tn->run();
+                mThumb = new Encoder_libjpeg(mThumbnailInput, NULL, NULL, mType, NULL, NULL, NULL);
+                mThumb->run();
             }
 
             // encode our main image
             size = encode(mMainInput);
 
             // check if it is main jpeg thread
-            if(tn.get()) {
+            if(mThumb.get()) {
                 // wait until tn jpeg thread exits.
-                tn->join();
-                tn.clear();
+                mThumb->join();
+                mThumb.clear();
+                mThumb = NULL;
                 if(mCb) {
                     mCb(mMainInput, mThumbnailInput, mType, mCookie1, mCookie2, mCookie3);
                 }
@@ -142,14 +145,23 @@ class Encoder_libjpeg : public Thread {
             return false;
         }
 
+        void cancel() {
+           if (mThumb.get()) {
+               mThumb->cancel();
+           }
+           mCancelEncoding = true;
+        }
+
     private:
         params* mMainInput;
         params* mThumbnailInput;
         encoder_libjpeg_callback_t mCb;
+        bool mCancelEncoding;
         void* mCookie1;
         void* mCookie2;
         void* mCookie3;
         CameraFrame::FrameType mType;
+        sp<Encoder_libjpeg> mThumb;
 
         size_t encode(params*);
 };

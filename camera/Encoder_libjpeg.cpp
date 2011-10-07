@@ -367,7 +367,7 @@ size_t Encoder_libjpeg::encode(params* input) {
     row_src = src;
     row_uv = src + out_width * out_height * bpp;
 
-    while (cinfo.next_scanline < cinfo.image_height) {
+    while ((cinfo.next_scanline < cinfo.image_height) && !mCancelEncoding) {
         JSAMPROW row[1];    /* pointer to JSAMPLE row[s] */
 
         // convert input yuv format to yuv444
@@ -388,7 +388,10 @@ size_t Encoder_libjpeg::encode(params* input) {
         }
     }
 
-    jpeg_finish_compress(&cinfo);
+    // no need to finish encoding routine if we are prematurely stopping
+    // we will end up crashing in dest_mgr since data is incomplete
+    if (!mCancelEncoding)
+        jpeg_finish_compress(&cinfo);
     jpeg_destroy_compress(&cinfo);
 
     if (resize_src) free(resize_src);

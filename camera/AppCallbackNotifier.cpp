@@ -31,6 +31,7 @@
 namespace android {
 
 const int AppCallbackNotifier::NOTIFIER_TIMEOUT = -1;
+KeyedVector<void*, sp<Encoder_libjpeg> > gEncoderQueue;
 
 void AppCallbackNotifierEncoderCallback(void* main_jpeg,
                                         void* thumb_jpeg,
@@ -53,6 +54,7 @@ void AppCallbackNotifier::EncoderDoneCb(void* main_jpeg, void* thumb_jpeg, Camer
     Encoder_libjpeg::params *main_param = NULL, *thumb_param = NULL;
     size_t jpeg_size;
     uint8_t* src = NULL;
+    sp<Encoder_libjpeg> encoder = NULL;
 
     LOG_FUNCTION_NAME;
 
@@ -144,7 +146,14 @@ void AppCallbackNotifier::EncoderDoneCb(void* main_jpeg, void* thumb_jpeg, Camer
         delete (ExifElementsTable*) cookie2;
     }
 
-    mFrameProvider->returnFrame(src, type);
+    if (mNotifierState == AppCallbackNotifier::NOTIFIER_STARTED) {
+        encoder = gEncoderQueue.valueFor(src);
+        if (encoder.get()) {
+            gEncoderQueue.removeItem(src);
+            encoder.clear();
+        }
+        mFrameProvider->returnFrame(src, type);
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 }
@@ -868,6 +877,7 @@ void AppCallbackNotifier::notifyFrame()
                                                       raw_picture,
                                                       exif_data);
                     encoder->run();
+                    gEncoderQueue.add(frame->mBuffer, encoder);
                     encoder.clear();
                     }
                 else if ( ( CameraFrame::IMAGE_FRAME == frame->mFrameType ) &&
@@ -1668,6 +1678,8 @@ status_t AppCallbackNotifier::start()
     mNotifierState = AppCallbackNotifier::NOTIFIER_STARTED;
     CAMHAL_LOGDA(" --> AppCallbackNotifier NOTIFIER_STARTED \n");
 
+    gEncoderQueue.clear();
+
     LOG_FUNCTION_NAME_EXIT;
 
     return NO_ERROR;
@@ -1689,6 +1701,16 @@ status_t AppCallbackNotifier::stop()
 
     mNotifierState = AppCallbackNotifier::NOTIFIER_STOPPED;
     CAMHAL_LOGDA(" --> AppCallbackNotifier NOTIFIER_STOPPED \n");
+    }
+
+    while(!gEncoderQueue.isEmpty()) {
+        sp<Encoder_libjpeg> encoder = gEncoderQueue.valueAt(0);
+        if(encoder.get()) {
+            encoder->cancel();
+            encoder->join();
+            encoder.clear();
+        }
+        gEncoderQueue.removeItemsAt(0);
     }
 
     LOG_FUNCTION_NAME_EXIT;
