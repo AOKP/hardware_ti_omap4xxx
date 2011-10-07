@@ -1277,15 +1277,15 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
     if (state) {
         /* check whether we can clone and/or dock */
         char value[PROPERTY_VALUE_MAX];
-        property_get("persist.hwc.hdmi.docking.enabled", value, "1");
+        property_get("persist.hwc.docking.enabled", value, "1");
         hwc_dev->ext |= EXT_DOCK * (atoi(value) > 0);
-        property_get("persist.hwc.hdmi.mirroring.enabled", value, "1");
+        property_get("persist.hwc.mirroring.enabled", value, "1");
         hwc_dev->ext |= EXT_MIRROR * (atoi(value) > 0);
 
         /* get cloning transformation */
-        property_get("persist.hwc.hdmi.docking.transform", value, "0");
+        property_get("persist.hwc.docking.transform", value, "0");
         hwc_dev->ext |= (atoi(value) & EXT_TRANSFORM) << EXT_DOCK_TRANSFORM_SHIFT;
-        property_get("persist.hwc.hdmi.mirroring.transform", value, hwc_dev->fb_dev->base.height > hwc_dev->fb_dev->base.width ? "3" : "0");
+        property_get("persist.hwc.mirroring.transform", value, hwc_dev->fb_dev->base.height > hwc_dev->fb_dev->base.width ? "3" : "0");
         hwc_dev->ext |= atoi(value) & EXT_TRANSFORM;
 
         __u32 xres = (hwc_dev->ext & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
