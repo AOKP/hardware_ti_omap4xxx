@@ -207,7 +207,6 @@ extern "C"
 		OMX_BOOL bUseIon;
 		OMX_BOOL bMapIonBuffers;
 #endif
-		int secure_misc_drv_fd;
 	} PROXY_COMPONENT_PRIVATE;
 
 
