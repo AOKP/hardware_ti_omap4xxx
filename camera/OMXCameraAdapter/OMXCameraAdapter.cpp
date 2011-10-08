@@ -189,6 +189,8 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
 
     mDeviceOrientation = 0;
     mCapabilities = caps;
+    mZoomUpdating = false;
+    mZoomUpdate = false;
 
     mEXIFData.mGPSData.mAltitudeValid = false;
     mEXIFData.mGPSData.mDatestampValid = false;
