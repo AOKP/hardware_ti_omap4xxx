@@ -913,13 +913,50 @@ struct counts {
     unsigned int BGR;
     unsigned int NV12;
     unsigned int dockable;
+    unsigned int protected;
 
     unsigned int max_hw_overlays;
     unsigned int max_scaling_overlays;
     unsigned int mem;
 };
 
-static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts *num)
+static void gather_layer_statistics(omap4_hwc_device_t *hwc_dev, struct counts *num, hwc_layer_list_t *list)
+{
+    unsigned int i;
+
+    /* Figure out how many layers we can support via DSS */
+    for (i = 0; list && i < list->numHwLayers; i++) {
+        hwc_layer_t *layer = &list->hwLayers[i];
+        IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
+
+        layer->compositionType = HWC_FRAMEBUFFER;
+
+        if (omap4_hwc_is_valid_layer(hwc_dev, layer, handle)) {
+            num->possible_overlay_layers++;
+
+            /* NV12 layers can only be rendered on scaling overlays */
+            if (scaled(layer) || is_NV12(handle))
+                num->scaled_layers++;
+
+            if (is_BGR(handle))
+                num->BGR++;
+            else if (is_RGB(handle))
+                num->RGB++;
+            else if (is_NV12(handle))
+                num->NV12++;
+
+            if (dockable(layer))
+                num->dockable++;
+
+            if (is_protected(layer))
+                num->protected++;
+
+            num->mem += mem1d(handle);
+        }
+    }
+}
+
+static void decide_supported_cloning(omap4_hwc_device_t *hwc_dev, struct counts *num)
 {
     omap4_hwc_ext_t *ext = &hwc_dev->ext;
     int nonscaling_ovls = NUM_NONSCALING_OVERLAYS;
@@ -973,9 +1010,13 @@ static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts 
         num->max_hw_overlays = hwc_dev->ext_ovls;
 
     num->max_scaling_overlays = num->max_hw_overlays - nonscaling_ovls;
+}
 
-    int on_tv = hwc_dev->ext.on_tv && hwc_dev->ext.current.enabled;
-    int tform = hwc_dev->ext.current.enabled && (hwc_dev->ext.current.rotation || hwc_dev->ext.current.hflip);
+static int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts *num)
+{
+    omap4_hwc_ext_t *ext = &hwc_dev->ext;
+    int on_tv = ext->on_tv && ext->current.enabled;
+    int tform = ext->current.enabled && (ext->current.rotation || ext->current.hflip);
 
     return  !hwc_dev->force_sgx &&
             /* must have at least one layer if using composition bypass to get sync object */
@@ -997,8 +1038,9 @@ static inline int can_dss_render_layer(omap4_hwc_device_t *hwc_dev,
 {
     IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
 
-    int on_tv = hwc_dev->ext.on_tv && hwc_dev->ext.current.enabled;
-    int tform = hwc_dev->ext.current.enabled && (hwc_dev->ext.current.rotation || hwc_dev->ext.current.hflip);
+    omap4_hwc_ext_t *ext = &hwc_dev->ext;
+    int on_tv = ext->on_tv && ext->current.enabled;
+    int tform = ext->current.enabled && (ext->current.rotation || ext->current.hflip);
 
     return omap4_hwc_is_valid_layer(hwc_dev, layer, handle) &&
            /* cannot rotate non-NV12 layers on external display */
@@ -1028,33 +1070,9 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     memset(dsscomp, 0x0, sizeof(*dsscomp));
     dsscomp->sync_id = sync_id++;
 
-    /* Figure out how many layers we can support via DSS */
-    for (i = 0; list && i < list->numHwLayers; i++) {
-        hwc_layer_t *layer = &list->hwLayers[i];
-        IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
+    gather_layer_statistics(hwc_dev, &num, list);
 
-        layer->compositionType = HWC_FRAMEBUFFER;
-
-        if (omap4_hwc_is_valid_layer(hwc_dev, layer, handle)) {
-            num.possible_overlay_layers++;
-
-            /* NV12 layers can only be rendered on scaling overlays */
-            if (scaled(layer) || is_NV12(handle))
-                num.scaled_layers++;
-
-            if (is_BGR(handle))
-                num.BGR++;
-            else if (is_RGB(handle))
-                num.RGB++;
-            else if (is_NV12(handle))
-                num.NV12++;
-
-            if (dockable(layer))
-                num.dockable++;
-
-            num.mem += mem1d(handle);
-        }
-    }
+    decide_supported_cloning(hwc_dev, &num);
 
     /* Disable the forced SGX rendering if there is only one layer */
     if (hwc_dev->force_sgx && num.composited_layers <= 1)
@@ -1069,19 +1087,6 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         /* Use SGX for composition plus first 3 layers that are DSS renderable */
         hwc_dev->use_sgx = 1;
         hwc_dev->swap_rb = is_BGR_format(hwc_dev->fb_dev->base.format);
-    }
-    if (debug) {
-        LOGD("prepare (%d) - %s (comp=%d, poss=%d/%d scaled, RGB=%d,BGR=%d,NV12=%d) (ext=%s%s%ddeg%s %dex/%dmx (last %dex,%din)\n",
-             dsscomp->sync_id,
-             hwc_dev->use_sgx ? "SGX+OVL" : "all-OVL",
-             num.composited_layers,
-             num.possible_overlay_layers, num.scaled_layers,
-             num.RGB, num.BGR, num.NV12,
-             hwc_dev->ext.on_tv ? "tv+" : "",
-             hwc_dev->ext.current.enabled ? hwc_dev->ext.current.docking ? "dock+" : "mirror+" : "OFF+",
-             hwc_dev->ext.current.rotation * 90,
-             hwc_dev->ext.current.hflip ? "+hflip" : "",
-             hwc_dev->ext_ovls, num.max_hw_overlays, hwc_dev->last_ext_ovls, hwc_dev->last_int_ovls);
     }
 
     /* setup pipes */
@@ -1259,6 +1264,18 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     if (z != dsscomp->num_ovls || dsscomp->num_ovls > MAX_HW_OVERLAYS)
         LOGE("**** used %d z-layers for %d overlays\n", z, dsscomp->num_ovls);
 
+    /* verify all z-orders and overlay indices are distinct */
+    int ix;
+    for (i = z = ix = 0; i < dsscomp->num_ovls; i++) {
+        struct dss2_ovl_cfg *c = &dsscomp->ovls[i].cfg;
+
+        if (z & (1 << c->zorder))
+            LOGE("**** used z-order #%d multiple times", c->zorder);
+        if (ix & (1 << c->ix))
+            LOGE("**** used ovl index #%d multiple times", c->ix);
+        z |= 1 << c->zorder;
+        ix |= 1 << c->ix;
+    }
     dsscomp->mode = DSSCOMP_SETUP_DISPLAY;
     dsscomp->mgrs[0].ix = 0;
     dsscomp->mgrs[0].alpha_blending = 1;
@@ -1271,6 +1288,22 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         dsscomp->num_mgrs++;
         hwc_dev->ext_ovls = dsscomp->num_ovls - hwc_dev->post2_layers;
     }
+
+    if (debug) {
+        omap4_hwc_ext_t *ext = &hwc_dev->ext;
+        LOGD("prepare (%d) - %s (comp=%d, poss=%d/%d scaled, RGB=%d,BGR=%d,NV12=%d) (ext=%s%s%ddeg%s %dex/%dmx (last %dex,%din)\n",
+             dsscomp->sync_id,
+             hwc_dev->use_sgx ? "SGX+OVL" : "all-OVL",
+             num.composited_layers,
+             num.possible_overlay_layers, num.scaled_layers,
+             num.RGB, num.BGR, num.NV12,
+             ext->on_tv ? "tv+" : "",
+             ext->current.enabled ? ext->current.docking ? "dock+" : "mirror+" : "OFF+",
+             ext->current.rotation * 90,
+             ext->current.hflip ? "+hflip" : "",
+             hwc_dev->ext_ovls, num.max_hw_overlays, hwc_dev->last_ext_ovls, hwc_dev->last_int_ovls);
+    }
+
     pthread_mutex_unlock(&hwc_dev->lock);
     return 0;
 }
