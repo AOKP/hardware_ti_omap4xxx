@@ -485,7 +485,11 @@ private:
 
     //Flash modes
     status_t setFlashMode(Gen3A_settings& Gen3A);
+    status_t getFlashMode(Gen3A_settings& Gen3A);
+
+    // Focus modes
     status_t setFocusMode(Gen3A_settings& Gen3A);
+    status_t getFocusMode(Gen3A_settings& Gen3A);
 
     //Exposure Modes
     status_t setExposureMode(Gen3A_settings& Gen3A);
@@ -498,12 +502,19 @@ private:
     status_t setSaturation(Gen3A_settings& Gen3A);
     status_t setISO(Gen3A_settings& Gen3A);
     status_t setEffect(Gen3A_settings& Gen3A);
+    status_t setMeteringAreas(Gen3A_settings& Gen3A);
 
+    status_t getEVCompensation(Gen3A_settings& Gen3A);
+    status_t getWBMode(Gen3A_settings& Gen3A);
+    status_t getSharpness(Gen3A_settings& Gen3A);
+    status_t getSaturation(Gen3A_settings& Gen3A);
+    status_t getISO(Gen3A_settings& Gen3A);
+
+    // 3A locks
     status_t setExposureLock(Gen3A_settings& Gen3A);
     status_t setFocusLock(Gen3A_settings& Gen3A);
     status_t setWhiteBalanceLock(Gen3A_settings& Gen3A);
     status_t set3ALock(OMX_BOOL toggleExp, OMX_BOOL toggleWb, OMX_BOOL toggleFocus);
-    status_t setMeteringAreas(Gen3A_settings& Gen3A);
 
     //API to set FrameRate using VFR interface
     status_t setVFramerate(OMX_U32 minFrameRate,OMX_U32 maxFrameRate);
