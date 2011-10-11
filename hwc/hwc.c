@@ -81,6 +81,7 @@ struct omap4_hwc_ext {
     /* configuration */
     __u32 last_xres_used;               /* resolution and pixel ratio used for mode selection */
     __u32 last_yres_used;
+    __u32 last_mode;                    /* 2-s complement of last HDMI mode set, 0 if none */
     float last_xpy;
     __u16 width;                        /* external screen dimensions */
     __u16 height;
@@ -763,7 +764,10 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         struct dsscomp_setup_display_data sdis = { .ix = 1, };
         sdis.mode = d.dis.modedb[best];
         LOGD("picking #%d", best);
-        ioctl(hwc_dev->dsscomp_fd, DSSCOMP_SETUP_DISPLAY, &sdis);
+        /* only reconfigure on change */
+        if (ext->last_mode != ~best)
+            ioctl(hwc_dev->dsscomp_fd, DSSCOMP_SETUP_DISPLAY, &sdis);
+        ext->last_mode = ~best;
     } else {
         __u32 ext_width = d.dis.width_in_mm;
         __u32 ext_height = d.dis.height_in_mm;
@@ -1430,6 +1434,8 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
             else
                 ext->mirror.enabled = 0;
         }
+    } else {
+        ext->last_mode = 0;
     }
     omap4_hwc_create_ext_matrix(ext);
     LOGI("external display changed (state=%d, mirror={%s tform=%ddeg%s}, dock={%s tform=%ddeg%s}, tv=%d", state,
