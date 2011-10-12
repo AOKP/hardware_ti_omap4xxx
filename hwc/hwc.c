@@ -1565,7 +1565,7 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
 
     /* get the board specific clone properties */
     /* 0:0:1280:720 */
-    if (property_get("hwc.hdmi.mirror.region", value, "") <= 0 ||
+    if (property_get("persist.hwc.mirroring.region", value, "") <= 0 ||
         sscanf(value, "%d:%d:%d:%d",
                &hwc_dev->ext.mirror_region.left, &hwc_dev->ext.mirror_region.top,
                &hwc_dev->ext.mirror_region.right, &hwc_dev->ext.mirror_region.bottom) != 4 ||
