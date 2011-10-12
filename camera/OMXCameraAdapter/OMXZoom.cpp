@@ -67,7 +67,12 @@ status_t OMXCameraAdapter::setParametersZoom(const CameraParameters &params,
 
             //Immediate zoom should be applied instantly ( CTS requirement )
             mCurrentZoomIdx = mTargetZoomIdx;
-            doZoom(mCurrentZoomIdx);
+            if(!mZoomUpdating) {
+                doZoom(mCurrentZoomIdx);
+                mZoomUpdating = true;
+            } else {
+                mZoomUpdate = true;
+            }
 
             CAMHAL_LOGDB("Zoom by App %d", zoom);
             }
@@ -134,6 +139,8 @@ status_t OMXCameraAdapter::advanceZoom()
 {
     status_t ret = NO_ERROR;
     AdapterState state;
+    Mutex::Autolock lock(mZoomLock);
+
     BaseCameraAdapter::getState(state);
 
     if ( mReturnZoomStatus )
@@ -204,17 +211,26 @@ status_t OMXCameraAdapter::advanceZoom()
     else if ( (mCurrentZoomIdx == mTargetZoomIdx ) &&
               ( ZOOM_ACTIVE & state ) )
         {
-        ret = BaseCameraAdapter::setState(CameraAdapter::CAMERA_STOP_SMOOTH_ZOOM);
+            ret = BaseCameraAdapter::setState(CameraAdapter::CAMERA_STOP_SMOOTH_ZOOM);
 
-        if ( NO_ERROR == ret )
-            {
-            ret = BaseCameraAdapter::commitState();
-            }
-        else
-            {
-            ret |= BaseCameraAdapter::rollbackState();
-            }
+            if ( NO_ERROR == ret )
+                {
+                ret = BaseCameraAdapter::commitState();
+                }
+            else
+                {
+                ret |= BaseCameraAdapter::rollbackState();
+                }
+
         }
+
+    if(mZoomUpdate) {
+        doZoom(mTargetZoomIdx);
+        mZoomUpdate = false;
+        mZoomUpdating = true;
+    } else {
+        mZoomUpdating = false;
+    }
 
     return ret;
 }
