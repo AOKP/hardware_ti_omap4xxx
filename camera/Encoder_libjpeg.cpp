@@ -36,6 +36,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
+#include <math.h>
 
 extern "C" {
     #include "jpeglib.h"
@@ -207,6 +208,58 @@ const char* ExifElementsTable::degreesToExifOrientation(const char* degrees) {
     return NULL;
 }
 
+void ExifElementsTable::stringToRational(const char* str, unsigned int* num, unsigned int* den) {
+    int len;
+    char * tempVal = NULL;
+
+    if (str != NULL) {
+        len = strlen(str);
+        tempVal = (char*) malloc( sizeof(char) * (len + 1));
+    }
+
+    if (tempVal != NULL) {
+        // convert the decimal string into a rational
+        size_t den_len;
+        char *ctx;
+        unsigned int numerator = 0;
+        unsigned int denominator = 0;
+        char* temp = NULL;
+
+        memset(tempVal, '\0', len + 1);
+        strncpy(tempVal, str, len);
+        temp = strtok_r(tempVal, ".", &ctx);
+
+        if (temp != NULL)
+            numerator = atoi(temp);
+
+        if (!numerator)
+            numerator = 1;
+
+        temp = strtok_r(NULL, ".", &ctx);
+        if (temp != NULL) {
+            den_len = strlen(temp);
+            if(HUGE_VAL == den_len ) {
+                den_len = 0;
+            }
+
+            denominator = static_cast<unsigned int>(pow(10, den_len));
+            numerator = numerator * denominator + atoi(temp);
+        } else {
+            denominator = 1;
+        }
+
+        free(tempVal);
+
+        *num = numerator;
+        *den = denominator;
+    }
+}
+
+bool ExifElementsTable::isAsciiTag(const char* tag) {
+    // TODO(XXX): Add tags as necessary
+    return (strcmp(tag, TAG_GPS_PROCESSING_METHOD) == 0);
+}
+
 void ExifElementsTable::insertExifToJpeg(unsigned char* jpeg, size_t jpeg_size) {
     ReadMode_t read_mode = (ReadMode_t)(READ_METADATA | READ_IMAGE);
 
@@ -264,7 +317,11 @@ status_t ExifElementsTable::insertElement(const char* tag, const char* value) {
         return NO_MEMORY;
     }
 
-    value_length = strlen(value);
+    if (isAsciiTag(tag)) {
+        value_length = sizeof(ExifAsciiPrefix) + strlen(value + sizeof(ExifAsciiPrefix));
+    } else {
+        value_length = strlen(value);
+    }
 
     if (IsGpsTag(tag)) {
         table[position].GpsTag = TRUE;
@@ -280,7 +337,7 @@ status_t ExifElementsTable::insertElement(const char* tag, const char* value) {
     table[position].Value = (char*) malloc(sizeof(char) * (value_length + 1));
 
     if (table[position].Value) {
-        strcpy(table[position].Value, value);
+        memcpy(table[position].Value, value, value_length + 1);
         table[position].DataLength = value_length + 1;
     }
 
