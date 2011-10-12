@@ -844,16 +844,26 @@ void AppCallbackNotifier::notifyFrame()
 
                     main_jpeg = (Encoder_libjpeg::params*)
                                     malloc(sizeof(Encoder_libjpeg::params));
+
+                    // Video snapshot with LDCNSF on adds a few bytes start offset
+                    // and a few bytes on every line. They must be skipped.
+                    int rightCrop = frame->mAlignment/2 - frame->mWidth;
+
+                    CAMHAL_LOGDB("Video snapshot right crop = %d", rightCrop);
+                    CAMHAL_LOGDB("Video snapshot offset = %d", frame->mOffset);
+
                     if (main_jpeg) {
                         main_jpeg->src = (uint8_t*) frame->mBuffer;
                         main_jpeg->src_size = frame->mLength;
                         main_jpeg->dst = (uint8_t*) buf;
                         main_jpeg->dst_size = frame->mLength;
                         main_jpeg->quality = encode_quality;
-                        main_jpeg->in_width = frame->mWidth;
+                        main_jpeg->in_width = frame->mAlignment/2; // use stride here
                         main_jpeg->in_height = frame->mHeight;
-                        main_jpeg->out_width = frame->mWidth;
+                        main_jpeg->out_width = frame->mAlignment/2;
                         main_jpeg->out_height = frame->mHeight;
+                        main_jpeg->right_crop = rightCrop;
+                        main_jpeg->start_offset = frame->mOffset;
                         main_jpeg->format = CameraParameters::PIXEL_FORMAT_YUV422I;
                     }
 
@@ -882,6 +892,8 @@ void AppCallbackNotifier::notifyFrame()
                         tn_jpeg->in_height = height;
                         tn_jpeg->out_width = tn_width;
                         tn_jpeg->out_height = tn_height;
+                        tn_jpeg->right_crop = 0;
+                        tn_jpeg->start_offset = 0;
                         tn_jpeg->format = CameraParameters::PIXEL_FORMAT_YUV420SP;;
                     }
 
