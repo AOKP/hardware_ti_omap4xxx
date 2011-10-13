@@ -78,8 +78,9 @@ struct omap4_hwc_ext {
     struct ext_transform_t last;        /* last-used settings */
 
     /* configuration */
-    __u32 last_xres_used;               /* resolution used for mode selection */
+    __u32 last_xres_used;               /* resolution and pixel ratio used for mode selection */
     __u32 last_yres_used;
+    float last_xpy;
     __u16 width;                        /* external screen dimensions */
     __u16 height;
     __u32 xres;                         /* external screen resolution */
@@ -390,12 +391,12 @@ static inline int m_round(float x)
 }
 
 /*
- * assuming xratio:yratio original pixel ratio, calculate the adjusted width
+ * assuming xpy (xratio:yratio) original pixel ratio, calculate the adjusted width
  * and height for a screen of xres/yres and physical size of width/height.
  * The adjusted size is the largest that fits into the screen.
  */
 static void get_max_dimensions(__u32 orig_xres, __u32 orig_yres,
-                               __u32 orig_xratio, __u32 orig_yratio,
+                               float xpy,
                                __u32 scr_xres, __u32 scr_yres,
                                __u32 scr_width, __u32 scr_height,
                                __u32 *adj_xres, __u32 *adj_yres)
@@ -409,14 +410,10 @@ static void get_max_dimensions(__u32 orig_xres, __u32 orig_yres,
         scr_width = scr_xres;
         scr_height = scr_yres;
     }
-    if (!orig_xratio || !orig_yratio) {
-        orig_xratio = 1;
-        orig_yratio = 1;
-    }
 
     /* trim to keep aspect ratio */
-    float x_factor = orig_xres * orig_xratio * (float) scr_height;
-    float y_factor = orig_yres * orig_yratio * (float) scr_width;
+    float x_factor = orig_xres * xpy * scr_height;
+    float y_factor = orig_yres *       scr_width;
 
     /* allow for tolerance so we avoid scaling if framebuffer is standard size */
     if (x_factor < y_factor * (1.f - ASPECT_RATIO_TOLERANCE))
@@ -431,8 +428,7 @@ static void set_ext_matrix(omap4_hwc_ext_t *ext, struct hwc_rect region)
     int orig_h = HEIGHT(region);
 
     /* assume 1:1 lcd pixel ratio */
-    int source_x = 1;
-    int source_y = 1;
+    float xpy = 1.;
 
     /* reorientation matrix is:
        m = (center-from-target-center) * (scale-to-target) * (mirror) * (rotate) * (center-to-original-center) */
@@ -445,12 +441,12 @@ static void set_ext_matrix(omap4_hwc_ext_t *ext, struct hwc_rect region)
 
     if (ext->current.rotation & 1) {
         swap(orig_w, orig_h);
-        swap(source_x, source_y);
+        xpy = 1. / xpy;
     }
 
     /* get target size */
     __u32 adj_xres, adj_yres;
-    get_max_dimensions(orig_w, orig_h, source_x, source_y,
+    get_max_dimensions(orig_w, orig_h, xpy,
                        ext->xres, ext->yres, ext->width, ext->height,
                        &adj_xres, &adj_yres);
 
@@ -553,8 +549,9 @@ omap4_hwc_adjust_ext_layer(omap4_hwc_ext_t *ext, struct dss2_ovl_info *ovl)
     struct dss2_ovl_cfg *oc = &ovl->cfg;
     float x, y, w, h;
 
-    /* crop to clone region */
-    if (crop_to_rect(&ovl->cfg, ext->mirror_region)) {
+    /* crop to clone region if mirroring */
+    if (!ext->current.docking &&
+        crop_to_rect(&ovl->cfg, ext->mirror_region) != 0) {
         ovl->cfg.enabled = 0;
         return;
     }
@@ -673,7 +670,7 @@ static int omap4_hwc_is_valid_layer(omap4_hwc_device_t *hwc_dev,
 }
 
 static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres, __u32 yres,
-					__u32 xratio, __u32 yratio)
+                                        float xpy)
 {
     struct _qdis {
         struct dsscomp_display_info dis;
@@ -714,7 +711,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         if (mode_area == 0)
             continue;
 
-        get_max_dimensions(xres, yres, xratio, yratio, d.modedb[i].xres, d.modedb[i].yres,
+        get_max_dimensions(xres, yres, xpy, d.modedb[i].xres, d.modedb[i].yres,
                            ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
 
         /* we need to ensure that even TILER2D buffers can be scaled */
@@ -767,7 +764,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         __u32 ext_height = d.dis.height_in_mm;
         __u32 ext_fb_xres, ext_fb_yres;
 
-        get_max_dimensions(xres, yres, xratio, yratio, d.dis.timings.x_res, d.dis.timings.y_res,
+        get_max_dimensions(xres, yres, xpy, d.dis.timings.x_res, d.dis.timings.y_res,
                            ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
         if (!d.dis.timings.pixel_clock ||
             d.dis.mgr.interlaced ||
@@ -780,6 +777,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
     }
     ext->last_xres_used = xres;
     ext->last_yres_used = yres;
+    ext->last_xpy = xpy;
     if (d.dis.channel == OMAP_DSS_CHANNEL_DIGIT)
         ext->on_tv = 1;
     return 0;
@@ -816,7 +814,14 @@ static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts 
         /* reserve just a video pipeline for HDMI if docking */
         hwc_dev->ext_ovls = num->dockable ? 1 : 0;
         num->max_hw_overlays -= max(hwc_dev->ext_ovls, hwc_dev->last_ext_ovls);
-        ext->current = ext->dock;
+
+        /* use mirroring transform if we are auto-switching to docking mode while mirroring*/
+        if (ext->mirror.enabled) {
+            ext->current = ext->mirror;
+            ext->current.docking = 1;
+        } else {
+            ext->current = ext->dock;
+        }
     } else if (ext->mirror.enabled) {
         /*
          * otherwise, manage just from half the pipelines.  NOTE: there is
@@ -1071,7 +1076,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                 __u32 yres = HEIGHT(hwc_dev->ext.mirror_region);
                 if (hwc_dev->ext.current.rotation & 1)
                    swap(xres, yres);
-                omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1, 1);
+                omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1.);
                 set_ext_matrix(&hwc_dev->ext, hwc_dev->ext.mirror_region);
             }
         }
@@ -1087,21 +1092,24 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             o->ba = ix;
 
             if (hwc_dev->ext.current.docking) {
-                /* full screen video */
-                o->cfg.win.x = 0;
-                o->cfg.win.y = 0;
+                /* full screen video after transformation */
+                __u32 xres = o->cfg.crop.w, yres = o->cfg.crop.h;
+                if ((hwc_dev->ext.current.rotation + o->cfg.rotation) & 1)
+                    swap(xres, yres);
+                float xpy = (float) o->cfg.win.w / o->cfg.win.h;
                 if (o->cfg.rotation & 1)
-                    swap(o->cfg.win.w, o->cfg.win.h);
-                o->cfg.rotation = 0;
-                o->cfg.mirror = 0;
+                    xpy = o->cfg.crop.h / xpy / o->cfg.crop.w;
+                else
+                    xpy = o->cfg.crop.h * xpy / o->cfg.crop.w;
+                if (hwc_dev->ext.current.rotation & 1)
+                    xpy = 1. / xpy;
 
                 /* adjust hdmi mode based on resolution */
-                if (o->cfg.crop.w != hwc_dev->ext.last_xres_used ||
-                    o->cfg.crop.h != hwc_dev->ext.last_yres_used) {
-                    LOGD("set up HDMI for %d*%d\n", o->cfg.crop.w, o->cfg.crop.h);
-                    if (omap4_hwc_set_best_hdmi_mode(hwc_dev, o->cfg.crop.w, o->cfg.crop.h,
-                                                     o->cfg.win.w * o->cfg.crop.h,
-                                                     o->cfg.win.h * o->cfg.crop.w)) {
+                if (xres != hwc_dev->ext.last_xres_used ||
+                    yres != hwc_dev->ext.last_yres_used ||
+                    xpy != hwc_dev->ext.last_xpy) {
+                    LOGD("set up HDMI for %d*%d\n", xres, yres);
+                    if (omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, xpy)) {
                         o->cfg.enabled = 0;
                         hwc_dev->ext.current.enabled = 0;
                         continue;
@@ -1403,7 +1411,7 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
             __u32 yres = HEIGHT(ext->mirror_region);
             if (ext->mirror.rotation & 1)
                swap(xres, yres);
-            int res = omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1, 1);
+            int res = omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1.);
             if (!res)
                 ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
             else
