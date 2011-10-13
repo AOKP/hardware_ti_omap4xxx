@@ -79,6 +79,7 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
         }
 
     if (mComponentState != OMX_StateLoaded && mComponentState != OMX_StateInvalid) {
+       CAMHAL_LOGEB("Error mComponentState %d is invalid!", mComponentState);
        LOG_FUNCTION_NAME_EXIT;
        return NO_INIT;
     }
@@ -218,7 +219,8 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
     {
         if( ret == INVALID_OPERATION){
             CAMHAL_LOGDA("command handler thread already runnning!!");
-        }else
+	    ret = NO_ERROR;
+        } else
         {
             CAMHAL_LOGEA("Couldn't run command handlerthread");
             return ret;
@@ -240,6 +242,7 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
     {
         if( ret == INVALID_OPERATION){
             CAMHAL_LOGDA("omx callback handler thread already runnning!!");
+	    ret = NO_ERROR;
         }else
         {
             CAMHAL_LOGEA("Couldn't run omx callback handler thread");
@@ -279,6 +282,7 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
     //Initialize 3A defaults
     ret = apply3ADefaults(mParameters3A);
     if ( NO_ERROR != ret ) {
+        CAMHAL_LOGEA("Couldn't apply 3A defaults!");
         goto EXIT;
     }
 
