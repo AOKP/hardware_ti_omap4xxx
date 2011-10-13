@@ -85,6 +85,7 @@ struct omap4_hwc_ext {
     __u32 xres;                         /* external screen resolution */
     __u32 yres;
     float m[2][3];                      /* external transformation matrix */
+    hwc_rect_t mirror_region;           /* region of screen to mirror */
 };
 typedef struct omap4_hwc_ext omap4_hwc_ext_t;
 
@@ -424,8 +425,11 @@ static void get_max_dimensions(__u32 orig_xres, __u32 orig_yres,
         *adj_yres = (__u32) (y_factor * *adj_yres / x_factor + 0.5);
 }
 
-static void set_ext_matrix(omap4_hwc_ext_t *ext, int orig_w, int orig_h)
+static void set_ext_matrix(omap4_hwc_ext_t *ext, struct hwc_rect region)
 {
+    int orig_w = WIDTH(region);
+    int orig_h = HEIGHT(region);
+
     /* assume 1:1 lcd pixel ratio */
     int source_x = 1;
     int source_y = 1;
@@ -434,7 +438,7 @@ static void set_ext_matrix(omap4_hwc_ext_t *ext, int orig_w, int orig_h)
        m = (center-from-target-center) * (scale-to-target) * (mirror) * (rotate) * (center-to-original-center) */
 
     memcpy(ext->m, m_unit, sizeof(m_unit));
-    m_translate(ext->m, -orig_w >> 1, -orig_h >> 1);
+    m_translate(ext->m, -(orig_w >> 1) - region.left, -(orig_h >> 1) - region.top);
     m_rotate(ext->m, ext->current.rotation);
     if (ext->current.hflip)
         m_scale(ext->m, 1, -1, 1, 1);
@@ -455,7 +459,7 @@ static void set_ext_matrix(omap4_hwc_ext_t *ext, int orig_w, int orig_h)
 }
 
 static void
-omap4_hwc_create_ext_matrix(omap4_hwc_ext_t *ext, omap4_hwc_device_t *hwc_dev)
+omap4_hwc_create_ext_matrix(omap4_hwc_ext_t *ext)
 {
     /* use VGA external resolution as default */
     if (!ext->xres ||
@@ -467,8 +471,80 @@ omap4_hwc_create_ext_matrix(omap4_hwc_ext_t *ext, omap4_hwc_device_t *hwc_dev)
     /* if docking, we cannot create the matrix ahead of time as it depends on input size */
     if (ext->mirror.enabled) {
         ext->current = ext->mirror;
-        set_ext_matrix(ext, hwc_dev->fb_dev->base.width, hwc_dev->fb_dev->base.height);
+        set_ext_matrix(ext, ext->mirror_region);
     }
+}
+
+static int
+crop_to_rect(struct dss2_ovl_cfg *cfg, struct hwc_rect vis_rect)
+{
+    struct {
+        int xy[2];
+        int wh[2];
+    } crop, win;
+    struct {
+        int lt[2];
+        int rb[2];
+    } vis;
+    win.xy[0] = cfg->win.x; win.xy[1] = cfg->win.y;
+    win.wh[0] = cfg->win.w; win.wh[1] = cfg->win.h;
+    crop.xy[0] = cfg->crop.x; crop.xy[1] = cfg->crop.y;
+    crop.wh[0] = cfg->crop.w; crop.wh[1] = cfg->crop.h;
+    vis.lt[0] = vis_rect.left; vis.lt[1] = vis_rect.top;
+    vis.rb[0] = vis_rect.right; vis.rb[1] = vis_rect.bottom;
+
+    int c, swap = cfg->rotation & 1;
+
+    /* align crop window with display coordinates */
+    if (swap)
+        crop.xy[1] -= (crop.wh[1] = -crop.wh[1]);
+    if (cfg->rotation & 2)
+        crop.xy[!swap] -= (crop.wh[!swap] = -crop.wh[!swap]);
+    if ((!cfg->mirror) ^ !(cfg->rotation & 2))
+        crop.xy[swap] -= (crop.wh[swap] = -crop.wh[swap]);
+
+    for (c = 0; c < 2; c++) {
+        /* see if complete buffer is outside the vis or it is
+          fully cropped or scaled to 0 */
+        if (win.wh[c] <= 0 || vis.rb[c] <= vis.lt[c] ||
+            win.xy[c] + win.wh[c] <= vis.lt[c] ||
+            win.xy[c] >= vis.rb[c] ||
+            !crop.wh[c ^ swap])
+            return -ENOENT;
+
+        /* crop left/top */
+        if (win.xy[c] < vis.lt[c]) {
+            /* correction term */
+            int a = (vis.lt[c] - win.xy[c]) * crop.wh[c ^ swap] / win.wh[c];
+            crop.xy[c ^ swap] += a;
+            crop.wh[c ^ swap] -= a;
+            win.wh[c] -= vis.lt[c] - win.xy[c];
+            win.xy[c] = vis.lt[c];
+        }
+        /* crop right/bottom */
+        if (win.xy[c] + win.wh[c] > vis.rb[c]) {
+            crop.wh[c ^ swap] = crop.wh[c ^ swap] * (vis.rb[c] - win.xy[c]) / win.wh[c];
+            win.wh[c] = vis.rb[c] - win.xy[c];
+        }
+
+        if (!crop.wh[c ^ swap] || !win.wh[c])
+            return -ENOENT;
+    }
+
+    /* realign crop window to buffer coordinates */
+    if (cfg->rotation & 2)
+        crop.xy[!swap] -= (crop.wh[!swap] = -crop.wh[!swap]);
+    if ((!cfg->mirror) ^ !(cfg->rotation & 2))
+        crop.xy[swap] -= (crop.wh[swap] = -crop.wh[swap]);
+    if (swap)
+        crop.xy[1] -= (crop.wh[1] = -crop.wh[1]);
+
+    cfg->win.x = win.xy[0]; cfg->win.y = win.xy[1];
+    cfg->win.w = win.wh[0]; cfg->win.h = win.wh[1];
+    cfg->crop.x = crop.xy[0]; cfg->crop.y = crop.xy[1];
+    cfg->crop.w = crop.wh[0]; cfg->crop.h = crop.wh[1];
+
+    return 0;
 }
 
 static void
@@ -476,6 +552,12 @@ omap4_hwc_adjust_ext_layer(omap4_hwc_ext_t *ext, struct dss2_ovl_info *ovl)
 {
     struct dss2_ovl_cfg *oc = &ovl->cfg;
     float x, y, w, h;
+
+    /* crop to clone region */
+    if (crop_to_rect(&ovl->cfg, ext->mirror_region)) {
+        ovl->cfg.enabled = 0;
+        return;
+    }
 
     /* display position */
     x = ext->m[0][0] * oc->win.x + ext->m[0][1] * oc->win.y + ext->m[0][2];
@@ -985,10 +1067,12 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 
             /* reset mode if we are coming from docking */
             if (hwc_dev->ext.last.docking) {
-                __u32 xres = (hwc_dev->ext.current.rotation & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
-                __u32 yres = (hwc_dev->ext.current.rotation & 1) ? hwc_dev->fb_dev->base.width : hwc_dev->fb_dev->base.height;
+                __u32 xres = WIDTH(hwc_dev->ext.mirror_region);
+                __u32 yres = HEIGHT(hwc_dev->ext.mirror_region);
+                if (hwc_dev->ext.current.rotation & 1)
+                   swap(xres, yres);
                 omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1, 1);
-                set_ext_matrix(&hwc_dev->ext, hwc_dev->fb_dev->base.width, hwc_dev->fb_dev->base.height);
+                set_ext_matrix(&hwc_dev->ext, hwc_dev->ext.mirror_region);
             }
         }
 
@@ -1024,7 +1108,12 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                     }
                 }
 
-                set_ext_matrix(&hwc_dev->ext, o->cfg.win.w, o->cfg.win.h);
+                struct hwc_rect region = {
+                    .left = o->cfg.win.x, .top = o->cfg.win.y,
+                    .right = o->cfg.win.x + o->cfg.win.w,
+                    .bottom = o->cfg.win.y + o->cfg.win.h
+                };
+                set_ext_matrix(&hwc_dev->ext, region);
             }
             omap4_hwc_adjust_ext_layer(&hwc_dev->ext, o);
             dsscomp->num_ovls++;
@@ -1310,8 +1399,10 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
 
         /* select best mode for mirroring */
         if (ext->mirror.enabled) {
-            __u32 xres = (ext->mirror.rotation & 1) ? hwc_dev->fb_dev->base.height : hwc_dev->fb_dev->base.width;
-            __u32 yres = (ext->mirror.rotation & 1) ? hwc_dev->fb_dev->base.width : hwc_dev->fb_dev->base.height;
+            __u32 xres = WIDTH(ext->mirror_region);
+            __u32 yres = HEIGHT(ext->mirror_region);
+            if (ext->mirror.rotation & 1)
+               swap(xres, yres);
             int res = omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1, 1);
             if (!res)
                 ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
@@ -1319,7 +1410,7 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
                 ext->mirror.enabled = 0;
         }
     }
-    omap4_hwc_create_ext_matrix(ext, hwc_dev);
+    omap4_hwc_create_ext_matrix(ext);
     LOGI("external display changed (state=%d, mirror={%s tform=%ddeg%s}, dock={%s tform=%ddeg%s}, tv=%d", state,
          ext->mirror.enabled ? "enabled" : "disabled",
          ext->mirror.rotation * 90,
@@ -1471,6 +1562,21 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     hwc_dev->flags_rgb_order = atoi(value);
     property_get("debug.hwc.nv12_only", value, "0");
     hwc_dev->flags_nv12_only = atoi(value);
+
+    /* get the board specific clone properties */
+    /* 0:0:1280:720 */
+    if (property_get("hwc.hdmi.mirror.region", value, "") <= 0 ||
+        sscanf(value, "%d:%d:%d:%d",
+               &hwc_dev->ext.mirror_region.left, &hwc_dev->ext.mirror_region.top,
+               &hwc_dev->ext.mirror_region.right, &hwc_dev->ext.mirror_region.bottom) != 4 ||
+        hwc_dev->ext.mirror_region.left >= hwc_dev->ext.mirror_region.right ||
+        hwc_dev->ext.mirror_region.top >= hwc_dev->ext.mirror_region.bottom) {
+        struct hwc_rect fb_region = { .right = hwc_dev->fb_dev->base.width, .bottom = hwc_dev->fb_dev->base.height };
+        hwc_dev->ext.mirror_region = fb_region;
+    }
+    LOGI("clone region is set to (%d,%d) to (%d,%d)",
+         hwc_dev->ext.mirror_region.left, hwc_dev->ext.mirror_region.top,
+         hwc_dev->ext.mirror_region.right, hwc_dev->ext.mirror_region.bottom);
 
     /* read switch state */
     int sw_fd = open("/sys/class/switch/hdmi/state", O_RDONLY);
