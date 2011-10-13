@@ -63,7 +63,12 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
                 // set preset scene mode immediately instead of in next FBD
                 // for feedback params to work properly since they need to be read
                 // by application in subsequent getParameters()
-                return setScene(mParameters3A);
+                ret |= setScene(mParameters3A);
+                // re-apply EV compensation after setting scene mode since it probably reset it
+                if(mParameters3A.EVCompensation) {
+                   setEVCompensation(mParameters3A);
+                }
+                return ret;
             } else {
                 mPending3Asettings |= SetSceneMode;
             }
@@ -681,7 +686,6 @@ status_t OMXCameraAdapter::setScene(Gen3A_settings& Gen3A)
             // Get preset scene mode feedback
             getFocusMode(Gen3A);
             getFlashMode(Gen3A);
-            getEVCompensation(Gen3A);
             getWBMode(Gen3A);
 
             // TODO(XXX): Re-enable these for mainline
@@ -1534,16 +1538,18 @@ status_t OMXCameraAdapter::apply3Asettings( Gen3A_settings& Gen3A )
      * There is only one exception to this rule,
      * the manual a.k.a. auto scene.
      */
-    if ( ( SetSceneMode & mPending3Asettings ) )
-        {
+    if (SetSceneMode & mPending3Asettings) {
         mPending3Asettings &= ~SetSceneMode;
-        return setScene(Gen3A);
+        ret |= setScene(Gen3A);
+        // re-apply EV compensation after setting scene mode since it probably reset it
+        if(Gen3A.EVCompensation) {
+            setEVCompensation(Gen3A);
         }
-    else if ( OMX_Manual != Gen3A.SceneMode )
-        {
-        mPending3Asettings = 0;
-        return NO_ERROR;
-        }
+        return ret;
+    } else if (OMX_Manual != Gen3A.SceneMode) {
+        // only certain settings are allowed when scene mode is set
+        mPending3Asettings &= SetEVCompensation;
+    }
 
     for( currSett = 1; currSett < E3aSettingMax; currSett <<= 1)
         {
