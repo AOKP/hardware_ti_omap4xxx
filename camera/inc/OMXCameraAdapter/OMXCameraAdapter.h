@@ -732,6 +732,7 @@ private:
     static const char DEFAULT_SCENE_MODE[];
     static const char DEFAULT_SHARPNESS[];
     static const char DEFAULT_VSTAB[];
+    static const char DEFAULT_VSTAB_SUPPORTED[];
     static const char DEFAULT_WB[];
     static const char DEFAULT_ZOOM[];
     static const char DEFAULT_MAX_FD_HW_FACES[];

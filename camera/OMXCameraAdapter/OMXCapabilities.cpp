@@ -1052,6 +1052,7 @@ status_t OMXCameraAdapter::insertDefaults(CameraProperties::Properties* params, 
     params->set(CameraProperties::SCENE_MODE, DEFAULT_SCENE_MODE);
     params->set(CameraProperties::SHARPNESS, DEFAULT_SHARPNESS);
     params->set(CameraProperties::VSTAB, DEFAULT_VSTAB);
+    params->set(CameraProperties::VSTAB_SUPPORTED, DEFAULT_VSTAB_SUPPORTED);
     params->set(CameraProperties::WHITEBALANCE, DEFAULT_WB);
     params->set(CameraProperties::ZOOM, DEFAULT_ZOOM);
     params->set(CameraProperties::MAX_FD_HW_FACES, DEFAULT_MAX_FD_HW_FACES);
