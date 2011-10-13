@@ -133,14 +133,8 @@ SensorListener::~SensorListener() {
 status_t SensorListener::initialize() {
     status_t ret = NO_ERROR;
     SensorManager& mgr(SensorManager::getInstance());
-    Sensor const* const* list;
-    ssize_t count = 0;
-    Sensor const* accelerometer;
 
     LOG_FUNCTION_NAME;
-
-    count = mgr.getSensorList(&list);
-    CAMHAL_LOGDB("numSensors = %lu", count);
 
     mSensorEventQueue = mgr.createEventQueue();
 
