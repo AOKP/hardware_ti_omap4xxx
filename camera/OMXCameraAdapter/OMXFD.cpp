@@ -231,7 +231,7 @@ status_t OMXCameraAdapter::detectFaces(OMX_BUFFERHEADERTYPE* pBuffHeader,
             CAMHAL_LOGEB("OMX_TI_PLATFORMPRIVATE size mismatch: expected = %d, received = %d",
                          ( unsigned int ) sizeof(OMX_TI_PLATFORMPRIVATE),
                          ( unsigned int ) platformPrivate->nSize);
-            ret = -EINVAL;
+            return -EINVAL;
         }
     }  else {
         CAMHAL_LOGEA("Invalid OMX_TI_PLATFORMPRIVATE");
