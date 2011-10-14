@@ -678,7 +678,7 @@ private:
 class MemoryManager : public BufferProvider, public virtual RefBase
 {
 public:
-    MemoryManager():mIonFd(0){ }
+    MemoryManager():mIonFd(-1){ }
 
     ///Initializes the memory manager creates any resources required
     status_t initialize() { return NO_ERROR; }
