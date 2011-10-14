@@ -21,7 +21,8 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 	OMX_ERRORTYPE eError = OMX_ErrorNone;
 	OMX_COMPONENTTYPE *pHandle = NULL;
 	PROXY_COMPONENT_PRIVATE *pComponentPrivate = NULL;
-	OMX_U8 enable = 1, mode;
+	const OMX_U8 enable = 1, disable = 0;
+        OMX_U8 mode;
 	int ret;
 
 	pHandle = (OMX_COMPONENTTYPE *) hComponent;
@@ -60,30 +61,35 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 	TIMM_OSAL_Memcpy(pComponentPrivate->cCompName, COMPONENT_NAME,
 	    strlen(COMPONENT_NAME) + 1);
 
-	if(DUCATI_IN_SECURE_MODE == 0)
+	pComponentPrivate->secure_misc_drv_fd = open("/dev/rproc_user", O_SYNC | O_RDWR);
+	if (pComponentPrivate->secure_misc_drv_fd < 0)
 	{
-		DUCATI_IN_SECURE_MODE = 1;
-		pComponentPrivate->secure_misc_drv_fd = open("/dev/rproc_user", O_SYNC | O_RDWR);
-		if (pComponentPrivate->secure_misc_drv_fd < 0)
-		{
-			DOMX_ERROR("Can't open rproc_user device 0x%x\n", errno);
-			return OMX_ErrorInsufficientResources;
-		}
-
-		ret = write(pComponentPrivate->secure_misc_drv_fd, &enable, sizeof(enable));
-                if(ret != 1)
-                {
-                        DOMX_ERROR("errno from setting secure mode = %x",errno);
-                }
-		PROXY_assert(ret == 1, OMX_ErrorUndefined,"ERROR: Unable to set secure mode");
-		DOMX_DEBUG("ret value from Misc driver for secure playback = 0x%x\n", ret);
-
-		ret = read(pComponentPrivate->secure_misc_drv_fd, &mode, sizeof(mode));
-		PROXY_assert(mode == enable, OMX_ErrorUndefined,"ERROR: We are not in secure mode");
-		DOMX_DEBUG("secure mode recieved from Misc driver for secure playback = 0x%x\n", mode);
+		DOMX_ERROR("Can't open rproc_user device 0x%x\n", errno);
+		return OMX_ErrorInsufficientResources;
 	}
 
-	SECURE_COMPONENTS_RUNNING++;
+        ret = write(pComponentPrivate->secure_misc_drv_fd, &enable, sizeof(enable));
+        if(ret != 1)
+        {
+            DOMX_ERROR("errno from setting secure mode = %x",errno);
+	    ret = write(pComponentPrivate->secure_misc_drv_fd, &disable, sizeof(disable));
+	    if (ret < 0)
+	    {
+	        DOMX_ERROR("Setting unsecure mode failed");
+            }
+
+	    ret = close(pComponentPrivate->secure_misc_drv_fd);
+	    if (ret < 0)
+	    {
+		DOMX_ERROR("Can't close the driver");
+	    }
+            eError = OMX_ErrorInsufficientResources;
+            goto EXIT;
+        }
+
+	ret = read(pComponentPrivate->secure_misc_drv_fd, &mode, sizeof(mode));
+	PROXY_assert(mode == enable, OMX_ErrorUndefined,"ERROR: We are not in secure mode");
+	DOMX_DEBUG("secure mode recieved from Misc driver for secure playback = 0x%x\n", mode);
 
 	eError = OMX_ProxyViddecInit(hComponent);
 	pHandle->ComponentDeInit = PROXY_VIDDEC_Secure_ComponentDeInit;
@@ -93,6 +99,11 @@ OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent)
 	pComponentPrivate->bMapIonBuffers = OMX_FALSE;
 #endif
 	EXIT:
+                if(eError != OMX_ErrorNone)
+                {
+                    TIMM_OSAL_Free(pHandle->pComponentPrivate);
+                    pHandle->pComponentPrivate = NULL;
+                }
 		return eError;
 }
 
@@ -102,7 +113,7 @@ OMX_ERRORTYPE PROXY_VIDDEC_Secure_ComponentDeInit(OMX_HANDLETYPE hComponent)
 	OMX_COMPONENTTYPE *pHandle = NULL;
 	PROXY_COMPONENT_PRIVATE *pComponentPrivate = NULL;
 	int ret;
-	OMX_U8 disable = 0;
+	const OMX_U8 disable = 0;
         int secure_misc_drv_fd;
 
 	pHandle = (OMX_COMPONENTTYPE *) hComponent;
@@ -119,23 +130,17 @@ OMX_ERRORTYPE PROXY_VIDDEC_Secure_ComponentDeInit(OMX_HANDLETYPE hComponent)
         }
         pComponentPrivate = NULL;
 
-	if(DUCATI_IN_SECURE_MODE == 1 && SECURE_COMPONENTS_RUNNING == 1)
+        ret = write(secure_misc_drv_fd, &disable, sizeof(disable));
+	if (ret < 0)
 	{
-		ret = write(secure_misc_drv_fd, &disable, sizeof(disable));
-		if (ret < 0)
-		{
-			DOMX_ERROR("Setting unsecure mode failed");
-		}
+	        DOMX_ERROR("Setting unsecure mode failed");
+        }
 
-		ret = close(secure_misc_drv_fd);
-		if (ret < 0)
-		{
-			DOMX_ERROR("Can't close the driver");
-		}
-		DUCATI_IN_SECURE_MODE = 0;
+	ret = close(secure_misc_drv_fd);
+	if (ret < 0)
+	{
+		DOMX_ERROR("Can't close the driver");
 	}
-
-	SECURE_COMPONENTS_RUNNING--;
 
 	return eError;
 }
