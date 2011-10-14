@@ -1113,7 +1113,8 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                 /* adjust hdmi mode based on resolution */
                 if (xres != hwc_dev->ext.last_xres_used ||
                     yres != hwc_dev->ext.last_yres_used ||
-                    xpy != hwc_dev->ext.last_xpy) {
+                    xpy < hwc_dev->ext.last_xpy * (1.f - ASPECT_RATIO_TOLERANCE) ||
+                    xpy * (1.f - ASPECT_RATIO_TOLERANCE) > hwc_dev->ext.last_xpy) {
                     LOGD("set up HDMI for %d*%d\n", xres, yres);
                     if (omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, xpy)) {
                         o->cfg.enabled = 0;
