@@ -2820,6 +2820,11 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             }
             }
 
+        if ( (nextState & CAPTURE_ACTIVE) )
+            {
+            mPending3Asettings |= SetFocus;
+            }
+
         ///Prepare the frames to be sent - initialize CameraFrame object and reference count
         if( mWaitingForSnapshot &&  (mCapturedFrames > 0) )
             {
