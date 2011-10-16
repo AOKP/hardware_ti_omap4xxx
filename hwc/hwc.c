@@ -19,7 +19,6 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <sys/ioctl.h>
 #include <linux/fb.h>
 
@@ -112,7 +111,6 @@ struct omap4_hwc_device {
     int dsscomp_fd;
     int fb_fd;
     int hdmi_fb_fd;
-    int pipe_fds[2];
 
     IMG_framebuffer_device_public_t *fb_dev;
     struct dsscomp_setup_dispc_data dsscomp_data;
@@ -131,9 +129,6 @@ struct omap4_hwc_device {
 
     int flags_rgb_order;
     int flags_nv12_only;
-    int idle;
-
-    int force_sgx;
 };
 typedef struct omap4_hwc_device omap4_hwc_device_t;
 
@@ -939,7 +934,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     }
 
     /* phase 3 logic */
-    if (!hwc_dev->force_sgx && can_dss_render_all(hwc_dev, &num)) {
+    if (can_dss_render_all(hwc_dev, &num)) {
         /* All layers can be handled by the DSS -- don't use SGX for composition */
         hwc_dev->use_sgx = 0;
         hwc_dev->swap_rb = num.BGR != 0;
@@ -975,8 +970,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         hwc_layer_t *layer = &list->hwLayers[i];
         IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
 
-        if (!hwc_dev->force_sgx &&
-            dsscomp->num_ovls < num.max_hw_overlays &&
+        if (dsscomp->num_ovls < num.max_hw_overlays &&
             can_dss_render_layer(hwc_dev, layer) &&
             mem_used + mem1d(handle) < MAX_TILER_SLOT &&
             /* can't have a transparent overlay in the middle of the framebuffer stack */
@@ -1272,11 +1266,6 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
 
         //dump_dsscomp(dsscomp);
 
-        // signal the event thread that a post has happened
-        write(hwc_dev->pipe_fds[1], "s", 1);
-        if (hwc_dev->force_sgx > 0)
-            hwc_dev->force_sgx--;
-
         err = hwc_dev->fb_dev->Post2((framebuffer_device_t *)hwc_dev->fb_dev,
                                  hwc_dev->buffers,
                                  hwc_dev->post2_layers,
@@ -1328,7 +1317,6 @@ static void omap4_hwc_dump(struct hwc_composer_device *dev, char *buff, int buff
     int i;
 
     len = dump_printf(buff, buff_len, len, "omap4_hwc %d:\n", dsscomp->num_ovls);
-    len = dump_printf(buff, buff_len, len, "  idle timeout: %dms\n", hwc_dev->idle);
 
     for (i = 0; i < dsscomp->num_ovls; i++) {
         struct dss2_ovl_cfg *cfg = &dsscomp->ovls[i].cfg;
@@ -1467,59 +1455,14 @@ static void *omap4_hwc_hdmi_thread(void *data)
 {
     omap4_hwc_device_t *hwc_dev = data;
     static char uevent_desc[4096];
-    struct pollfd fds[2];
-    int prev_force_sgx = 0;
-    int timeout;
-    int err;
-
     uevent_init();
-
-    fds[0].fd = uevent_get_fd();
-    fds[0].events = POLLIN;
-    fds[1].fd = hwc_dev->pipe_fds[0];
-    fds[1].events = POLLIN;
-
-    timeout = hwc_dev->idle ? hwc_dev->idle : -1;
 
     memset(uevent_desc, 0, sizeof(uevent_desc));
 
     do {
-        err = poll(fds, hwc_dev->idle ? 2 : 1, timeout);
-
-        if (err == 0) {
-            if (hwc_dev->idle) {
-                pthread_mutex_lock(&hwc_dev->lock);
-                prev_force_sgx = hwc_dev->force_sgx;
-                hwc_dev->force_sgx = 2;
-                pthread_mutex_unlock(&hwc_dev->lock);
-
-                if (!prev_force_sgx && hwc_dev->procs && hwc_dev->procs->invalidate) {
-                    hwc_dev->procs->invalidate(hwc_dev->procs);
-                    timeout = -1;
-                }
-
-                continue;
-            }
-        }
-
-        if (err == -1) {
-            if (errno != EINTR)
-                LOGE("event error: %m");
-            continue;
-        }
-
-        if (hwc_dev->idle && fds[1].revents & POLLIN) {
-            char c;
-            read(hwc_dev->pipe_fds[0], &c, 1);
-            if (!hwc_dev->force_sgx)
-                timeout = hwc_dev->idle ? hwc_dev->idle : -1;
-        }
-
-        if (fds[0].revents & POLLIN) {
-            /* keep last 2 zeroes to ensure double 0 termination */
-            uevent_next_event(uevent_desc, sizeof(uevent_desc) - 2);
-            handle_uevents(hwc_dev, uevent_desc);
-        }
+        /* keep last 2 zeroes to ensure double 0 termination */
+        uevent_next_event(uevent_desc, sizeof(uevent_desc) - 2);
+        handle_uevents(hwc_dev, uevent_desc);
     } while (1);
 
     return NULL;
@@ -1607,12 +1550,6 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
         goto done;
     }
 
-    if (pipe(hwc_dev->pipe_fds) == -1) {
-            LOGE("failed to event pipe (%d): %m", errno);
-            err = -errno;
-            goto done;
-    }
-
     if (pthread_mutex_init(&hwc_dev->lock, NULL)) {
             LOGE("failed to create mutex (%d): %m", errno);
             err = -errno;
@@ -1633,8 +1570,6 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     hwc_dev->flags_rgb_order = atoi(value);
     property_get("debug.hwc.nv12_only", value, "0");
     hwc_dev->flags_nv12_only = atoi(value);
-    property_get("debug.hwc.idle", value, "250");
-    hwc_dev->idle = atoi(value);
 
     /* get the board specific clone properties */
     /* 0:0:1280:720 */
