@@ -29,6 +29,8 @@
 #include "OMXCameraAdapter.h"
 #include "ErrorUtils.h"
 
+#undef TRUE
+
 namespace android {
 
 status_t OMXCameraAdapter::setParametersAlgo(const CameraParameters &params,
@@ -220,8 +222,8 @@ status_t OMXCameraAdapter::setParametersAlgo(const CameraParameters &params,
 
     ///Set VSTAB Configuration
     bool vstabEnabled = false;
-    if ( params.getInt(TICameraParameters::KEY_VSTAB)  > 0 )
-        {
+    valstr = params.get(CameraParameters::KEY_VIDEO_STABILIZATION);
+    if (valstr && strcmp(valstr, CameraParameters::TRUE) == 0) {
         CAMHAL_LOGDA("VSTAB Enabled");
         vstabEnabled = true;
         }

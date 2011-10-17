@@ -39,8 +39,6 @@ static const char KEY_CAMERA_NAME[];
 static const  char KEY_S3D_SUPPORTED[];
 static const char  KEY_BURST[];
 static const  char KEY_CAP_MODE[];
-static const  char KEY_VSTAB[];
-static const  char KEY_VSTAB_VALUES[];
 static const  char KEY_VNF[];
 static const  char KEY_SATURATION[];
 static const  char KEY_BRIGHTNESS[];

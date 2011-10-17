@@ -985,21 +985,6 @@ public:
     void        releaseRecordingFrame(const void *opaque);
 
     /**
-     * Set the camera parameters specific to Video Recording.
-     */
-    bool        setVideoModeParameters();
-
-    /**
-     * Reset the camera parameters specific to Video Recording.
-     */
-    bool       resetVideoModeParameters();
-
-    /**
-     * Restart the preview with setParameter.
-     */
-    status_t        restartPreview();
-
-    /**
      * Start auto focus, the notification callback routine is called
      * with CAMERA_MSG_FOCUS once when focusing is complete. autoFocus()
      * will be called again if another auto focus is needed.
@@ -1099,6 +1084,15 @@ private:
 
     /** @name internalFunctionsPrivate */
     //@{
+
+    /**  Set the camera parameters specific to Video Recording. */
+    bool        setVideoModeParameters(const CameraParameters&);
+
+    /** Reset the camera parameters specific to Video Recording. */
+    bool       resetVideoModeParameters();
+
+    /** Restart the preview with setParameter. */
+    status_t        restartPreview();
 
     status_t parseResolution(const char *resStr, int &width, int &height);
 
