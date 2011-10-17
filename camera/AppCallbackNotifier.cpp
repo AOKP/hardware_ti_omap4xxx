@@ -104,6 +104,12 @@ void AppCallbackNotifier::EncoderDoneCb(void* main_jpeg, void* thumb_jpeg, Camer
     }
     } // scope for mutex lock
 
+    if (!mRawAvailable) {
+        dummyRaw();
+    } else {
+        mRawAvailable = false;
+    }
+
     // Send the callback to the application only if the notifier is started and the message is enabled
     if(picture && (mNotifierState==AppCallbackNotifier::NOTIFIER_STARTED) &&
                   (mCameraHal->msgTypeEnabled(CAMERA_MSG_COMPRESSED_IMAGE)))
