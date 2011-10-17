@@ -44,24 +44,33 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
     status_t ret = NO_ERROR;
     int mode = 0;
     const char *str = NULL;
+    BaseCameraAdapter::AdapterState nextState;
+    BaseCameraAdapter::getNextState(nextState);
 
     LOG_FUNCTION_NAME;
 
     str = params.get(CameraParameters::KEY_SCENE_MODE);
     mode = getLUTvalue_HALtoOMX( str, SceneLUT);
-    if (  mFirstTimeInit || (( str != NULL ) && ( mParameters3A.SceneMode != mode )) ){
-      if ( 0 <= mode ){
-        mParameters3A.SceneMode = mode;
-        mPending3Asettings |= SetSceneMode;
-        if ((mode == OMX_Manual) && (mFirstTimeInit == false)){//Auto mode
-          mFirstTimeInit = true;
+    if ( mFirstTimeInit || ((str != NULL) && ( mParameters3A.SceneMode != mode )) ) {
+        if ( 0 <= mode ) {
+            mParameters3A.SceneMode = mode;
+            if ((mode == OMX_Manual) && (mFirstTimeInit == false)){//Auto mode
+                mFirstTimeInit = true;
+            }
+            if ((mode != OMX_Manual) &&
+                (state & PREVIEW_ACTIVE) && !(nextState & CAPTURE_ACTIVE)) {
+                // if setting preset scene mode, previewing, and not in the middle of capture
+                // set preset scene mode immediately instead of in next FBD
+                // for feedback params to work properly since they need to be read
+                // by application in subsequent getParameters()
+                return setScene(mParameters3A);
+            } else {
+                mPending3Asettings |= SetSceneMode;
+            }
+        } else {
+            mParameters3A.SceneMode = OMX_Manual;
         }
-      }
-      else{
-        mParameters3A.SceneMode = OMX_Manual;
-      }
-
-      CAMHAL_LOGVB("SceneMode %d", mParameters3A.SceneMode);
+        CAMHAL_LOGVB("SceneMode %d", mParameters3A.SceneMode);
     }
 
     str = params.get(TICameraParameters::KEY_EXPOSURE_MODE);
@@ -499,6 +508,38 @@ status_t OMXCameraAdapter::setFlashMode(Gen3A_settings& Gen3A)
     return ErrorUtils::omxToAndroidError(eError);
 }
 
+status_t OMXCameraAdapter::getFlashMode(Gen3A_settings& Gen3A)
+{
+    status_t ret = NO_ERROR;
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+    OMX_IMAGE_PARAM_FLASHCONTROLTYPE flash;
+
+    LOG_FUNCTION_NAME;
+
+    if ( OMX_StateInvalid == mComponentState ) {
+        CAMHAL_LOGEA("OMX component is in invalid state");
+        return NO_INIT;
+    }
+
+    OMX_INIT_STRUCT_PTR (&flash, OMX_IMAGE_PARAM_FLASHCONTROLTYPE);
+    flash.nPortIndex = OMX_ALL;
+
+    eError =  OMX_GetConfig(mCameraAdapterParameters.mHandleComp,
+                            (OMX_INDEXTYPE) OMX_IndexConfigFlashControl,
+                            &flash);
+
+    if ( OMX_ErrorNone != eError ) {
+        CAMHAL_LOGEB("Error while getting flash mode 0x%x", eError);
+    } else {
+        Gen3A.FlashMode = flash.eFlashControl;
+        CAMHAL_LOGDB("Gen3A.FlashMode 0x%x", Gen3A.FlashMode);
+    }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return ErrorUtils::omxToAndroidError(eError);
+}
+
 status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
 {
     status_t ret = NO_ERROR;
@@ -579,6 +620,37 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
     return ErrorUtils::omxToAndroidError(eError);
 }
 
+status_t OMXCameraAdapter::getFocusMode(Gen3A_settings& Gen3A)
+{
+    status_t ret = NO_ERROR;
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+    OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focus;
+    size_t top, left, width, height, weight;
+
+    LOG_FUNCTION_NAME;
+
+    if (OMX_StateInvalid == mComponentState) {
+        CAMHAL_LOGEA("OMX component is in invalid state");
+        return NO_INIT;
+    }
+
+    OMX_INIT_STRUCT_PTR (&focus, OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE);
+    focus.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
+    eError = OMX_GetConfig(mCameraAdapterParameters.mHandleComp,
+                           OMX_IndexConfigFocusControl, &focus);
+
+    if (OMX_ErrorNone != eError) {
+        CAMHAL_LOGEB("Error while configuring focus mode 0x%x", eError);
+    } else {
+        Gen3A.Focus = focus.eFocusControl;
+        CAMHAL_LOGDB("Gen3A.Focus 0x%x", Gen3A.Focus);
+    }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return ErrorUtils::omxToAndroidError(eError);
+}
+
 status_t OMXCameraAdapter::setScene(Gen3A_settings& Gen3A)
 {
     OMX_ERRORTYPE eError = OMX_ErrorNone;
@@ -600,14 +672,24 @@ status_t OMXCameraAdapter::setScene(Gen3A_settings& Gen3A)
     eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
                             ( OMX_INDEXTYPE ) OMX_TI_IndexConfigSceneMode,
                             &scene);
-    if ( OMX_ErrorNone != eError )
-        {
+
+    if (OMX_ErrorNone != eError) {
         CAMHAL_LOGEB("Error while configuring scene mode 0x%x", eError);
-        }
-    else
-        {
+    } else {
         CAMHAL_LOGDA("Camera scene configured successfully");
+        if (Gen3A.SceneMode != OMX_Manual) {
+            // Get preset scene mode feedback
+            getFocusMode(Gen3A);
+            getFlashMode(Gen3A);
+            getEVCompensation(Gen3A);
+            getWBMode(Gen3A);
+
+            // TODO(XXX): Re-enable these for mainline
+            // getSharpness(Gen3A);
+            // getSaturation(Gen3A);
+            // getISO(Gen3A);
         }
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 
@@ -652,6 +734,37 @@ status_t OMXCameraAdapter::setEVCompensation(Gen3A_settings& Gen3A)
         CAMHAL_LOGDB("EV Compensation 0x%x configured successfully",
                      ( unsigned int ) expValues.xEVCompensation);
         }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return ErrorUtils::omxToAndroidError(eError);
+}
+
+status_t OMXCameraAdapter::getEVCompensation(Gen3A_settings& Gen3A)
+{
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+    OMX_CONFIG_EXPOSUREVALUETYPE expValues;
+
+    LOG_FUNCTION_NAME;
+
+    if ( OMX_StateInvalid == mComponentState ) {
+        CAMHAL_LOGEA("OMX component is in invalid state");
+        return NO_INIT;
+    }
+
+    OMX_INIT_STRUCT_PTR (&expValues, OMX_CONFIG_EXPOSUREVALUETYPE);
+    expValues.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
+
+    OMX_GetConfig(mCameraAdapterParameters.mHandleComp,
+                  OMX_IndexConfigCommonExposureValue,
+                  &expValues);
+
+    if ( OMX_ErrorNone != eError ) {
+        CAMHAL_LOGEB("Error while getting EV Compensation error = 0x%x", eError);
+    } else {
+        Gen3A.EVCompensation = (10 * expValues.xEVCompensation) / (1 << Q16_OFFSET);
+        CAMHAL_LOGDB("Gen3A.EVCompensation 0x%x", Gen3A.EVCompensation);
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 
@@ -705,6 +818,37 @@ status_t OMXCameraAdapter::setWBMode(Gen3A_settings& Gen3A)
         CAMHAL_LOGDB("Whitebalance mode 0x%x configured successfully",
                      ( unsigned int ) wb.eWhiteBalControl);
         }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return eError;
+}
+
+status_t OMXCameraAdapter::getWBMode(Gen3A_settings& Gen3A)
+{
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+    OMX_CONFIG_WHITEBALCONTROLTYPE wb;
+
+    LOG_FUNCTION_NAME;
+
+    if ( OMX_StateInvalid == mComponentState ) {
+        CAMHAL_LOGEA("OMX component is in invalid state");
+        return NO_INIT;
+    }
+
+    OMX_INIT_STRUCT_PTR (&wb, OMX_CONFIG_WHITEBALCONTROLTYPE);
+    wb.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
+
+    eError = OMX_GetConfig(mCameraAdapterParameters.mHandleComp,
+                           OMX_IndexConfigCommonWhiteBalance,
+                           &wb);
+
+    if (OMX_ErrorNone != eError) {
+        CAMHAL_LOGEB("Error while getting Whitebalance mode error = 0x%x", eError);
+    } else {
+        Gen3A.WhiteBallance = wb.eWhiteBalControl;
+        CAMHAL_LOGDB("Gen3A.WhiteBallance 0x%x", Gen3A.WhiteBallance);
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 
@@ -868,6 +1012,37 @@ status_t OMXCameraAdapter::setSharpness(Gen3A_settings& Gen3A)
     return ErrorUtils::omxToAndroidError(eError);
 }
 
+status_t OMXCameraAdapter::getSharpness(Gen3A_settings& Gen3A)
+{
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+    OMX_IMAGE_CONFIG_PROCESSINGLEVELTYPE procSharpness;
+
+    LOG_FUNCTION_NAME;
+
+    if (OMX_StateInvalid == mComponentState) {
+        CAMHAL_LOGEA("OMX component is in invalid state");
+        return NO_INIT;
+    }
+
+    OMX_INIT_STRUCT_PTR (&procSharpness, OMX_IMAGE_CONFIG_PROCESSINGLEVELTYPE);
+    procSharpness.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
+
+    eError = OMX_GetConfig(mCameraAdapterParameters.mHandleComp,
+                           (OMX_INDEXTYPE)OMX_IndexConfigSharpeningLevel,
+                           &procSharpness);
+
+    if (OMX_ErrorNone != eError) {
+        CAMHAL_LOGEB("Error while configuring Sharpness error = 0x%x", eError);
+    } else {
+        Gen3A.Sharpness = procSharpness.nLevel;
+        CAMHAL_LOGDB("Gen3A.Sharpness 0x%x", Gen3A.Sharpness);
+    }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return ErrorUtils::omxToAndroidError(eError);
+}
+
 status_t OMXCameraAdapter::setSaturation(Gen3A_settings& Gen3A)
 {
     OMX_ERRORTYPE eError = OMX_ErrorNone;
@@ -899,6 +1074,37 @@ status_t OMXCameraAdapter::setSaturation(Gen3A_settings& Gen3A)
         CAMHAL_LOGDB("Saturation 0x%x configured successfully",
                      ( unsigned int ) saturation.nSaturation);
         }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return ErrorUtils::omxToAndroidError(eError);
+}
+
+status_t OMXCameraAdapter::getSaturation(Gen3A_settings& Gen3A)
+{
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+    OMX_CONFIG_SATURATIONTYPE saturation;
+
+    LOG_FUNCTION_NAME;
+
+    if (OMX_StateInvalid == mComponentState) {
+        CAMHAL_LOGEA("OMX component is in invalid state");
+        return NO_INIT;
+    }
+
+    OMX_INIT_STRUCT_PTR (&saturation, OMX_CONFIG_SATURATIONTYPE);
+    saturation.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
+
+    eError = OMX_GetConfig( mCameraAdapterParameters.mHandleComp,
+                         OMX_IndexConfigCommonSaturation,
+                         &saturation);
+
+    if (OMX_ErrorNone != eError) {
+        CAMHAL_LOGEB("Error while getting Saturation error = 0x%x", eError);
+    } else {
+        Gen3A.Saturation = saturation.nSaturation;
+        CAMHAL_LOGDB("Gen3A.Saturation 0x%x", Gen3A.Saturation);
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 
@@ -949,6 +1155,37 @@ status_t OMXCameraAdapter::setISO(Gen3A_settings& Gen3A)
         CAMHAL_LOGDB("ISO 0x%x configured successfully",
                      ( unsigned int ) expValues.nSensitivity);
         }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return ErrorUtils::omxToAndroidError(eError);
+}
+
+status_t OMXCameraAdapter::getISO(Gen3A_settings& Gen3A)
+{
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+    OMX_CONFIG_EXPOSUREVALUETYPE expValues;
+
+    LOG_FUNCTION_NAME;
+
+    if (OMX_StateInvalid == mComponentState) {
+        CAMHAL_LOGEA("OMX component is in invalid state");
+        return NO_INIT;
+    }
+
+    OMX_INIT_STRUCT_PTR (&expValues, OMX_CONFIG_EXPOSUREVALUETYPE);
+    expValues.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
+
+    OMX_GetConfig( mCameraAdapterParameters.mHandleComp,
+                   OMX_IndexConfigCommonExposureValue,
+                   &expValues);
+
+    if (OMX_ErrorNone != eError) {
+        CAMHAL_LOGEB("Error while getting ISO error = 0x%x", eError);
+    } else {
+        Gen3A.ISO = expValues.nSensitivity;
+        CAMHAL_LOGDB("Gen3A.ISO %d", Gen3A.ISO);
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 

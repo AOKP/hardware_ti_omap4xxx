@@ -99,7 +99,7 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
     }
     GOTO_EXIT_IF((eError != OMX_ErrorNone), eError);
 
-        CAMHAL_LOGEB("OMX_GetHandle -0x%x sensor_index = %lu", eError, mSensorIndex);
+    CAMHAL_LOGVB("OMX_GetHandle -0x%x sensor_index = %lu", eError, mSensorIndex);
     eError = OMX_SendCommand(mCameraAdapterParameters.mHandleComp,
                                   OMX_CommandPortDisable,
                                   OMX_ALL,
@@ -621,128 +621,16 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
     const char *valstr = NULL;
     LOG_FUNCTION_NAME;
 
-#ifdef PARAM_FEEDBACK
+    params.set(CameraParameters::KEY_EXPOSURE_COMPENSATION, mParameters3A.EVCompensation);
 
-    OMX_CONFIG_WHITEBALCONTROLTYPE wb;
-    OMX_CONFIG_FLICKERCANCELTYPE flicker;
-    OMX_CONFIG_SCENEMODETYPE scene;
-    OMX_IMAGE_PARAM_FLASHCONTROLTYPE flash;
-    OMX_CONFIG_BRIGHTNESSTYPE brightness;
-    OMX_CONFIG_CONTRASTTYPE contrast;
-    OMX_IMAGE_CONFIG_PROCESSINGLEVELTYPE procSharpness;
-    OMX_CONFIG_SATURATIONTYPE saturation;
-    OMX_CONFIG_IMAGEFILTERTYPE effect;
-    OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focus;
+    valstr = getLUTvalue_OMXtoHAL(mParameters3A.WhiteBallance, WBalLUT);
+    if (valstr) params.set(CameraParameters::KEY_WHITE_BALANCE , valstr);
 
-    exp.nSize = sizeof(OMX_CONFIG_EXPOSURECONTROLTYPE);
-    exp.nVersion = mLocalVersionParam;
-    exp.nPortIndex = OMX_ALL;
+    valstr = getLUTvalue_OMXtoHAL(mParameters3A.FlashMode, FlashLUT);
+    if (valstr) params.set(CameraParameters::KEY_FLASH_MODE, valstr);
 
-    expValues.nSize = sizeof(OMX_CONFIG_EXPOSUREVALUETYPE);
-    expValues.nVersion = mLocalVersionParam;
-    expValues.nPortIndex = OMX_ALL;
-
-    wb.nSize = sizeof(OMX_CONFIG_WHITEBALCONTROLTYPE);
-    wb.nVersion = mLocalVersionParam;
-    wb.nPortIndex = OMX_ALL;
-
-    flicker.nSize = sizeof(OMX_CONFIG_FLICKERCANCELTYPE);
-    flicker.nVersion = mLocalVersionParam;
-    flicker.nPortIndex = OMX_ALL;
-
-    scene.nSize = sizeof(OMX_CONFIG_SCENEMODETYPE);
-    scene.nVersion = mLocalVersionParam;
-    scene.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
-
-    flash.nSize = sizeof(OMX_IMAGE_PARAM_FLASHCONTROLTYPE);
-    flash.nVersion = mLocalVersionParam;
-    flash.nPortIndex = OMX_ALL;
-
-
-    brightness.nSize = sizeof(OMX_CONFIG_BRIGHTNESSTYPE);
-    brightness.nVersion = mLocalVersionParam;
-    brightness.nPortIndex = OMX_ALL;
-
-    contrast.nSize = sizeof(OMX_CONFIG_CONTRASTTYPE);
-    contrast.nVersion = mLocalVersionParam;
-    contrast.nPortIndex = OMX_ALL;
-
-    procSharpness.nSize = sizeof( OMX_IMAGE_CONFIG_PROCESSINGLEVELTYPE );
-    procSharpness.nVersion = mLocalVersionParam;
-    procSharpness.nPortIndex = OMX_ALL;
-
-    saturation.nSize = sizeof(OMX_CONFIG_SATURATIONTYPE);
-    saturation.nVersion = mLocalVersionParam;
-    saturation.nPortIndex = OMX_ALL;
-
-    effect.nSize = sizeof(OMX_CONFIG_IMAGEFILTERTYPE);
-    effect.nVersion = mLocalVersionParam;
-    effect.nPortIndex = OMX_ALL;
-
-    focus.nSize = sizeof(OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE);
-    focus.nVersion = mLocalVersionParam;
-    focus.nPortIndex = OMX_ALL;
-
-    OMX_GetConfig( mCameraAdapterParameters.mHandleComp,OMX_IndexConfigCommonExposure, &exp);
-    OMX_GetConfig( mCameraAdapterParameters.mHandleComp, OMX_IndexConfigCommonWhiteBalance, &wb);
-    OMX_GetConfig( mCameraAdapterParameters.mHandleComp, (OMX_INDEXTYPE)OMX_IndexConfigFlickerCancel, &flicker );
-    OMX_GetConfig( mCameraAdapterParameters.mHandleComp, (OMX_INDEXTYPE)OMX_IndexParamSceneMode, &scene);
-    OMX_GetParameter( mCameraAdapterParameters.mHandleComp, (OMX_INDEXTYPE)OMX_IndexParamFlashControl, &flash);
-    OMX_GetConfig( mCameraAdapterParameters.mHandleComp, OMX_IndexConfigCommonBrightness, &brightness);
-    OMX_GetConfig( mCameraAdapterParameters.mHandleComp, OMX_IndexConfigCommonContrast, &contrast);
-    OMX_GetConfig( mCameraAdapterParameters.mHandleComp, (OMX_INDEXTYPE)OMX_IndexConfigSharpeningLevel, &procSharpness);
-    OMX_GetConfig( mCameraAdapterParameters.mHandleComp, OMX_IndexConfigCommonSaturation, &saturation);
-    OMX_GetConfig( mCameraAdapterParameters.mHandleComp, OMX_IndexConfigCommonImageFilter, &effect);
-    OMX_GetConfig( mCameraAdapterParameters.mHandleComp, OMX_IndexConfigFocusControl, &focus);
-
-    char * str = NULL;
-
-    for(int i = 0; i < ExpLUT.size; i++)
-        if( ExpLUT.Table[i].omxDefinition == exp.eExposureControl )
-            str = (char*)ExpLUT.Table[i].userDefinition;
-    params.set( TICameraParameters::KEY_EXPOSURE_MODE , str);
-
-    for(int i = 0; i < WBalLUT.size; i++)
-        if( WBalLUT.Table[i].omxDefinition == wb.eWhiteBalControl )
-            str = (char*)WBalLUT.Table[i].userDefinition;
-    params.set( CameraParameters::KEY_WHITE_BALANCE , str );
-
-    for(int i = 0; i < FlickerLUT.size; i++)
-        if( FlickerLUT.Table[i].omxDefinition == flicker.eFlickerCancel )
-            str = (char*)FlickerLUT.Table[i].userDefinition;
-    params.set( CameraParameters::KEY_ANTIBANDING , str );
-
-    for(int i = 0; i < SceneLUT.size; i++)
-        if( SceneLUT.Table[i].omxDefinition == scene.eSceneMode )
-            str = (char*)SceneLUT.Table[i].userDefinition;
-    params.set( CameraParameters::KEY_SCENE_MODE , str );
-
-    for(int i = 0; i < FlashLUT.size; i++)
-        if( FlashLUT.Table[i].omxDefinition == flash.eFlashControl )
-            str = (char*)FlashLUT.Table[i].userDefinition;
-    params.set( CameraParameters::KEY_FLASH_MODE, str );
-
-    for(int i = 0; i < EffLUT.size; i++)
-        if( EffLUT.Table[i].omxDefinition == effect.eImageFilter )
-            str = (char*)EffLUT.Table[i].userDefinition;
-    params.set( CameraParameters::KEY_EFFECT , str );
-
-    for(int i = 0; i < FocusLUT.size; i++)
-        if( FocusLUT.Table[i].omxDefinition == focus.eFocusControl )
-            str = (char*)FocusLUT.Table[i].userDefinition;
-
-    params.set( CameraParameters::KEY_FOCUS_MODE , str );
-
-    int comp = ((expValues.xEVCompensation * 10) >> Q16_OFFSET);
-
-    params.set(CameraParameters::KEY_EXPOSURE_COMPENSATION, comp );
-    params.set( TICameraParameters::KEY_MAN_EXPOSURE, expValues.nShutterSpeedMsec);
-    params.set( TICameraParameters::KEY_BRIGHTNESS, brightness.nBrightness);
-    params.set( TICameraParameters::KEY_CONTRAST, contrast.nContrast );
-    params.set( TICameraParameters::KEY_SHARPNESS, procSharpness.nLevel);
-    params.set( TICameraParameters::KEY_SATURATION, saturation.nSaturation);
-
-#else
+    valstr = getLUTvalue_OMXtoHAL(mParameters3A.Focus, FocusLUT);
+    if (valstr) params.set(CameraParameters::KEY_FOCUS_MODE, valstr);
 
     //Query focus distances only during CAF, Infinity
     //or when focus is running
@@ -827,7 +715,6 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
         params.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, valstr);
       }
 
-#endif
 
     LOG_FUNCTION_NAME_EXIT;
 }
