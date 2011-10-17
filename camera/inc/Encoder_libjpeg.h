@@ -31,7 +31,6 @@ extern "C" {
 #include "jhead.h"
 }
 namespace android {
-
 /**
  * libjpeg encoder class - uses libjpeg to encode yuv
  */
@@ -75,6 +74,8 @@ class ExifElementsTable {
         status_t insertExifThumbnailImage(const char*, int);
         void saveJpeg(unsigned char* picture, size_t jpeg_size);
         static const char* degreesToExifOrientation(const char*);
+        static void stringToRational(const char*, unsigned int*, unsigned int*);
+        static bool isAsciiTag(const char* tag);
     private:
         ExifElement_t table[MAX_EXIF_TAGS_SUPPORTED];
         unsigned int gps_tag_count;
@@ -136,10 +137,12 @@ class Encoder_libjpeg : public Thread {
                 mThumb->join();
                 mThumb.clear();
                 mThumb = NULL;
-                if(mCb) {
-                    mCb(mMainInput, mThumbnailInput, mType, mCookie1, mCookie2, mCookie3);
-                }
             }
+
+            if(mCb) {
+                mCb(mMainInput, mThumbnailInput, mType, mCookie1, mCookie2, mCookie3);
+            }
+
             // encoder thread runs, self-destructs, and then exits
             this->decStrong(this);
             return false;

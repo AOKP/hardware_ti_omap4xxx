@@ -1942,6 +1942,12 @@ status_t BaseCameraAdapter::setState(CameraCommands operation)
                     mNextState = PREVIEW_STATE;
                     break;
 
+                case CAMERA_PERFORM_AUTOFOCUS:
+                    CAMHAL_LOGDB("Adapter state switch VIDEO_STATE->VIDEO_AF_STATE event = 0x%x",
+                                 operation);
+                    mNextState = VIDEO_AF_STATE;
+                    break;
+
                 case CAMERA_START_SMOOTH_ZOOM:
                     CAMHAL_LOGDB("Adapter state switch VIDEO_STATE->VIDEO_ZOOM_STATE event = 0x%x",
                                  operation);
@@ -1962,6 +1968,27 @@ status_t BaseCameraAdapter::setState(CameraCommands operation)
 
                 default:
                     CAMHAL_LOGEB("Adapter state switch VIDEO_STATE Invalid Op! event = 0x%x",
+                                 operation);
+                    ret = INVALID_OPERATION;
+                    break;
+
+                }
+
+            break;
+
+        case VIDEO_AF_STATE:
+
+            switch ( operation )
+                {
+
+                case CAMERA_CANCEL_AUTOFOCUS:
+                    CAMHAL_LOGDB("Adapter state switch VIDEO_AF_STATE->VIDEO_STATE event = 0x%x",
+                                 operation);
+                    mNextState = VIDEO_STATE;
+                    break;
+
+                default:
+                    CAMHAL_LOGEB("Adapter state switch VIDEO_AF_STATE Invalid Op! event = 0x%x",
                                  operation);
                     ret = INVALID_OPERATION;
                     break;

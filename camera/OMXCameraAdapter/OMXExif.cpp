@@ -31,8 +31,6 @@
 
 namespace android {
 
-const char OMXCameraAdapter::EXIFASCIIPrefix [] = { 0x41, 0x53, 0x43, 0x49, 0x49, 0x0, 0x0, 0x0 };
-
 status_t OMXCameraAdapter::setParametersEXIF(const CameraParameters &params,
                                              BaseCameraAdapter::AdapterState state)
 {
@@ -319,53 +317,17 @@ status_t OMXCameraAdapter::setupEXIF()
 
         if ( ( OMX_TI_TagReadWrite == exifTags->eStatusFocalLength ))
         {
-                char *ctx;
-                int len;
-                char* temp = (char*) mParams.get(CameraParameters::KEY_FOCAL_LENGTH);
-                char * tempVal = NULL;
-                if(temp != NULL)
-                {
-                    len = strlen(temp);
-                    tempVal = (char*) malloc( sizeof(char) * (len + 1));
-                }
-                if(tempVal != NULL)
-                {
-                    memset(tempVal, '\0', len + 1);
-                    strncpy(tempVal, temp, len);
-                    CAMHAL_LOGDB("KEY_FOCAL_LENGTH = %s", tempVal);
-
-                    // convert the decimal string into a rational
-                    size_t den_len;
-                    OMX_U32 numerator = 0;
-                    OMX_U32 denominator = 0;
-                    char* temp = strtok_r(tempVal, ".", &ctx);
-
-                    if(temp != NULL)
-                        numerator = atoi(temp);
-
-                    temp = strtok_r(NULL, ".", &ctx);
-                    if(temp != NULL)
-                    {
-                        den_len = strlen(temp);
-                        if(HUGE_VAL == den_len )
-                            {
-                            den_len = 0;
-                            }
-                        denominator = static_cast<OMX_U32>(pow(10, den_len));
-                        numerator = numerator*denominator + atoi(temp);
-                    }else{
-                        denominator = 1;
-                    }
-
-                    free(tempVal);
-
-                    exifTags->ulFocalLength[0] = numerator;
-                    exifTags->ulFocalLength[1] = denominator;
-                    CAMHAL_LOGVB("exifTags->ulFocalLength = [%u] [%u]",
-                                 (unsigned int)(exifTags->ulFocalLength[0]),
-                                 (unsigned int)(exifTags->ulFocalLength[1]));
-                    exifTags->eStatusFocalLength = OMX_TI_TagUpdated;
-                }
+            unsigned int numerator = 0, denominator = 0;
+            ExifElementsTable::stringToRational(mParams.get(CameraParameters::KEY_FOCAL_LENGTH),
+                                                &numerator, &denominator);
+            if (numerator || denominator) {
+                exifTags->ulFocalLength[0] = (OMX_U32) numerator;
+                exifTags->ulFocalLength[1] = (OMX_U32) denominator;
+                CAMHAL_LOGVB("exifTags->ulFocalLength = [%u] [%u]",
+                             (unsigned int)(exifTags->ulFocalLength[0]),
+                             (unsigned int)(exifTags->ulFocalLength[1]));
+                exifTags->eStatusFocalLength = OMX_TI_TagUpdated;
+            }
         }
 
          if ( OMX_TI_TagReadWrite == exifTags->eStatusDateTime )
@@ -472,12 +434,12 @@ status_t OMXCameraAdapter::setupEXIF()
              ( mEXIFData.mGPSData.mProcMethodValid ) )
             {
             exifTags->pGpsProcessingMethodBuff = ( OMX_S8 * ) ( sharedPtr - sharedBuffer.pSharedBuff );
-            memcpy(sharedPtr, EXIFASCIIPrefix, sizeof(EXIFASCIIPrefix));
-            sharedPtr += sizeof(EXIFASCIIPrefix);
+            memcpy(sharedPtr, ExifAsciiPrefix, sizeof(ExifAsciiPrefix));
+            sharedPtr += sizeof(ExifAsciiPrefix);
 
             memcpy(sharedPtr,
                    mEXIFData.mGPSData.mProcMethod,
-                   ( GPS_PROCESSING_SIZE - sizeof(EXIFASCIIPrefix) ) );
+                   ( GPS_PROCESSING_SIZE - sizeof(ExifAsciiPrefix) ) );
             exifTags->ulGpsProcessingMethodBuffSizeBytes = GPS_PROCESSING_SIZE;
             exifTags->eStatusGpsProcessingMethod = OMX_TI_TagUpdated;
             sharedPtr += GPS_PROCESSING_SIZE;
@@ -556,8 +518,17 @@ status_t OMXCameraAdapter::setupEXIF_libjpeg(ExifElementsTable* exifTable)
      }
 
     if ((NO_ERROR == ret)) {
-        ret = exifTable->insertElement(TAG_FOCALLENGTH,
-                                       mParams.get(CameraParameters::KEY_FOCAL_LENGTH));
+        unsigned int numerator = 0, denominator = 0;
+        ExifElementsTable::stringToRational(mParams.get(CameraParameters::KEY_FOCAL_LENGTH),
+                                            &numerator, &denominator);
+        if (numerator || denominator) {
+            char temp_value[256]; // arbitrarily long string
+            snprintf(temp_value,
+                 sizeof(temp_value)/sizeof(char),
+                 "%u/%u", numerator, denominator);
+            ret = exifTable->insertElement(TAG_FOCALLENGTH, temp_value);
+
+        }
     }
 
     if ((NO_ERROR == ret)) {
@@ -597,7 +568,7 @@ status_t OMXCameraAdapter::setupEXIF_libjpeg(ExifElementsTable* exifTable)
                  "%d/%d,%d/%d,%d/%d",
                  abs(mEXIFData.mGPSData.mLatDeg), 1,
                  abs(mEXIFData.mGPSData.mLatMin), 1,
-                 abs(mEXIFData.mGPSData.mLatSec), 1);
+                 abs(mEXIFData.mGPSData.mLatSec), abs(mEXIFData.mGPSData.mLatSecDiv));
         ret = exifTable->insertElement(TAG_GPS_LAT, temp_value);
     }
 
@@ -612,7 +583,7 @@ status_t OMXCameraAdapter::setupEXIF_libjpeg(ExifElementsTable* exifTable)
                  "%d/%d,%d/%d,%d/%d",
                  abs(mEXIFData.mGPSData.mLongDeg), 1,
                  abs(mEXIFData.mGPSData.mLongMin), 1,
-                 abs(mEXIFData.mGPSData.mLongSec), 1);
+                 abs(mEXIFData.mGPSData.mLongSec), abs(mEXIFData.mGPSData.mLongSecDiv));
         ret = exifTable->insertElement(TAG_GPS_LONG, temp_value);
     }
 
@@ -644,11 +615,10 @@ status_t OMXCameraAdapter::setupEXIF_libjpeg(ExifElementsTable* exifTable)
     if ((NO_ERROR == ret) && (mEXIFData.mGPSData.mProcMethodValid)) {
         char temp_value[GPS_PROCESSING_SIZE];
 
-        memcpy(temp_value, EXIFASCIIPrefix, sizeof(EXIFASCIIPrefix));
-        memcpy(temp_value + sizeof(EXIFASCIIPrefix),
-               mEXIFData.mGPSData.mProcMethod,
-               (GPS_PROCESSING_SIZE - sizeof(EXIFASCIIPrefix)));
-
+        memcpy(temp_value, ExifAsciiPrefix, sizeof(ExifAsciiPrefix));
+        memcpy(temp_value + sizeof(ExifAsciiPrefix),
+               mParams.get(CameraParameters::KEY_GPS_PROCESSING_METHOD),
+               (GPS_PROCESSING_SIZE - sizeof(ExifAsciiPrefix)));
         ret = exifTable->insertElement(TAG_GPS_PROCESSING_METHOD, temp_value);
     }
 
