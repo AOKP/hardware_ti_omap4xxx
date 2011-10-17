@@ -118,7 +118,7 @@ public:
     static const char S3D2D_PREVIEW[];
     static const char S3D2D_PREVIEW_MODES[];
     static const char VSTAB[];
-    static const char VSTAB_VALUES[];
+    static const char VSTAB_SUPPORTED[];
     static const char FRAMERATE_RANGE[];
     static const char FRAMERATE_RANGE_IMAGE[];
     static const char FRAMERATE_RANGE_VIDEO[];

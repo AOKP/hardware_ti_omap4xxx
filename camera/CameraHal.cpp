@@ -291,13 +291,21 @@ int CameraHal::setParameters(const CameraParameters& params)
                 }
             }
 
-            if ((valstr = params.get(TICameraParameters::KEY_VSTAB)) != NULL) {
-                if ((params.getInt(TICameraParameters::KEY_VSTAB)==0) || (params.getInt(TICameraParameters::KEY_VSTAB)==1)) {
-                    CAMHAL_LOGDB("VSTAB set %s", params.get(TICameraParameters::KEY_VSTAB));
-                    mParameters.set(TICameraParameters::KEY_VSTAB, valstr);
-                } else {
+            if ((valstr = params.get(CameraParameters::KEY_VIDEO_STABILIZATION)) != NULL) {
+                // make sure we support vstab...if we don't and application is trying to set
+                // vstab then return an error
+                if (strcmp(mCameraProperties->get(CameraProperties::VSTAB_SUPPORTED),
+                           CameraParameters::TRUE) == 0) {
+                    CAMHAL_LOGDB("VSTAB %s",
+                                  params.get(CameraParameters::KEY_VIDEO_STABILIZATION));
+                    mParameters.set(CameraParameters::KEY_VIDEO_STABILIZATION,
+                                    params.get(CameraParameters::KEY_VIDEO_STABILIZATION));
+                } else if (strcmp(valstr, CameraParameters::TRUE) == 0) {
                     CAMHAL_LOGEB("ERROR: Invalid VSTAB: %s", valstr);
                     ret = -EINVAL;
+                } else {
+                    mParameters.set(CameraParameters::KEY_VIDEO_STABILIZATION,
+                                    CameraParameters::FALSE);
                 }
             }
 
@@ -395,7 +403,7 @@ int CameraHal::setParameters(const CameraParameters& params)
                 {
                 CAMHAL_LOGDB("Recording Hint is set to %s", valstr);
                 mParameters.set(CameraParameters::KEY_RECORDING_HINT, valstr);
-                restartPreviewRequired = setVideoModeParameters();
+                restartPreviewRequired = setVideoModeParameters(params);
                 videoMode = true;
                 int w, h;
 
@@ -1817,7 +1825,7 @@ status_t CameraHal::startRecording( )
     if ( (valstr == NULL) ||
          ( (valstr != NULL) && (strcmp(valstr, CameraParameters::TRUE) != 0) ) )
         {
-        restartPreviewRequired = setVideoModeParameters();
+        restartPreviewRequired = setVideoModeParameters(mParameters);
 
         if(restartPreviewRequired)
             {
@@ -1885,7 +1893,7 @@ status_t CameraHal::startRecording( )
    @todo Modify the policies for enabling VSTAB & VNF usecase based later.
 
  */
-bool CameraHal::setVideoModeParameters()
+bool CameraHal::setVideoModeParameters(const CameraParameters& params)
 {
     const char *valstr = NULL;
     bool restartPreviewRequired = false;
@@ -1905,40 +1913,50 @@ bool CameraHal::setVideoModeParameters()
 
     // Check if CAPTURE_MODE is VIDEO_MODE, since VSTAB & VNF work only in VIDEO_MODE.
     valstr = mParameters.get(TICameraParameters::KEY_CAP_MODE);
-    if (strcmp(valstr, (const char *) TICameraParameters::VIDEO_MODE) == 0)
-        {
-        // Enable VSTAB, if not enabled already
-        valstr = mParameters.get(TICameraParameters::KEY_VSTAB);
-        if ( (valstr == NULL) ||
-            ( (valstr != NULL) && (strcmp(valstr, "1") != 0) ) )
-            {
-            CAMHAL_LOGDA("Enable VSTAB");
-            mParameters.set(TICameraParameters::KEY_VSTAB, "1");
-            restartPreviewRequired = true;
+    if (strcmp(valstr, (const char *) TICameraParameters::VIDEO_MODE) == 0) {
+       // set VSTAB. restart is required if vstab value has changed
+       if (params.get(CameraParameters::KEY_VIDEO_STABILIZATION) != NULL) {
+            // make sure we support vstab
+            if (strcmp(mCameraProperties->get(CameraProperties::VSTAB_SUPPORTED),
+                       CameraParameters::TRUE) == 0) {
+                valstr = mParameters.get(CameraParameters::KEY_VIDEO_STABILIZATION);
+                // vstab value has changed
+                if ((valstr != NULL) &&
+                     strcmp(valstr, params.get(CameraParameters::KEY_VIDEO_STABILIZATION)) != 0) {
+                    restartPreviewRequired = true;
+                }
+                mParameters.set(CameraParameters::KEY_VIDEO_STABILIZATION,
+                                params.get(CameraParameters::KEY_VIDEO_STABILIZATION));
             }
+        } else if (mParameters.get(CameraParameters::KEY_VIDEO_STABILIZATION)) {
+            // vstab was configured but now unset
+            restartPreviewRequired = true;
+            mParameters.remove(CameraParameters::KEY_VIDEO_STABILIZATION);
+        }
 
-        // Enable VNF, if not enabled already
-        valstr = mParameters.get(TICameraParameters::KEY_VNF);
-        if ( (valstr == NULL) ||
-            ( (valstr != NULL) && (strcmp(valstr, "1") != 0) ) )
-            {
+        // Set VNF
+        if (params.get(TICameraParameters::KEY_VNF) == NULL) {
             CAMHAL_LOGDA("Enable VNF");
             mParameters.set(TICameraParameters::KEY_VNF, "1");
             restartPreviewRequired = true;
+        } else {
+            valstr = mParameters.get(TICameraParameters::KEY_VNF);
+            if (valstr && strcmp(valstr, params.get(TICameraParameters::KEY_VNF)) != 0) {
+                restartPreviewRequired = true;
             }
+            mParameters.set(TICameraParameters::KEY_VNF, params.get(TICameraParameters::KEY_VNF));
+        }
 
         // For VSTAB alone for 1080p resolution, padded width goes > 2048, which cannot be rendered by GPU.
         // In such case, there is support in Ducati for combination of VSTAB & VNF requiring padded width < 2048.
         // So we are forcefully enabling VNF, if VSTAB is enabled for 1080p resolution.
-        valstr = mParameters.get(TICameraParameters::KEY_VSTAB);
-        if ((valstr != NULL) && (strcmp(valstr, "1") == 0) && (mPreviewWidth == 1920))
-            {
+        valstr = mParameters.get(CameraParameters::KEY_VIDEO_STABILIZATION);
+        if (valstr && (strcmp(valstr, CameraParameters::TRUE) == 0) && (mPreviewWidth == 1920)) {
             CAMHAL_LOGDA("Force Enable VNF for 1080p");
             mParameters.set(TICameraParameters::KEY_VNF, "1");
             restartPreviewRequired = true;
-            }
         }
-
+    }
     LOG_FUNCTION_NAME_EXIT;
 
     return restartPreviewRequired;
@@ -1968,30 +1986,11 @@ bool CameraHal::resetVideoModeParameters()
 
     // Set CAPTURE_MODE to VIDEO_MODE, if not set already and Restart Preview
     valstr = mParameters.get(TICameraParameters::KEY_CAP_MODE);
-    if ( (valstr != NULL) && (strcmp(valstr, (const char *) TICameraParameters::VIDEO_MODE) == 0) )
-        {
+    if ((valstr != NULL) && (strcmp(valstr, TICameraParameters::VIDEO_MODE) == 0)) {
         CAMHAL_LOGDA("Reset Capture-Mode to default");
         mParameters.set(TICameraParameters::KEY_CAP_MODE, "");
         restartPreviewRequired = true;
-        }
-
-    // Enable VSTAB, if not enabled already
-    valstr = mParameters.get(TICameraParameters::KEY_VSTAB);
-    if (  (valstr != NULL) && (strcmp(valstr, "1") == 0) )
-        {
-        CAMHAL_LOGDA("Disable VSTAB");
-        mParameters.set(TICameraParameters::KEY_VSTAB, "0");
-        restartPreviewRequired = true;
-        }
-
-    // Enable VNF, if not enabled already
-    valstr = mParameters.get(TICameraParameters::KEY_VNF);
-    if (  (valstr != NULL) && (strcmp(valstr, "1") == 0) )
-        {
-        CAMHAL_LOGDA("Disable VNF");
-        mParameters.set(TICameraParameters::KEY_VNF, "0");
-        restartPreviewRequired = true;
-        }
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 
@@ -3221,8 +3220,7 @@ void CameraHal::insertSupportedParams()
     p.set(TICameraParameters::KEY_S3D2D_PREVIEW_MODE,mCameraProperties->get(CameraProperties::S3D2D_PREVIEW_MODES));
     p.set(TICameraParameters::KEY_AUTOCONVERGENCE_MODE, mCameraProperties->get(CameraProperties::AUTOCONVERGENCE_MODE));
     p.set(TICameraParameters::KEY_MANUALCONVERGENCE_VALUES, mCameraProperties->get(CameraProperties::MANUALCONVERGENCE_VALUES));
-    p.set(TICameraParameters::KEY_VSTAB,mCameraProperties->get(CameraProperties::VSTAB));
-    p.set(TICameraParameters::KEY_VSTAB_VALUES,mCameraProperties->get(CameraProperties::VSTAB_VALUES));
+    p.set(CameraParameters::KEY_VIDEO_STABILIZATION_SUPPORTED, mCameraProperties->get(CameraProperties::VSTAB_SUPPORTED));
     p.set(CameraParameters::KEY_SUPPORTED_PREVIEW_FPS_RANGE, mCameraProperties->get(CameraProperties::FRAMERATE_RANGE_SUPPORTED));
     p.set(TICameraParameters::KEY_SENSOR_ORIENTATION, mCameraProperties->get(CameraProperties::SENSOR_ORIENTATION));
     p.set(TICameraParameters::KEY_SENSOR_ORIENTATION_VALUES, mCameraProperties->get(CameraProperties::SENSOR_ORIENTATION_VALUES));
@@ -3308,8 +3306,7 @@ void CameraHal::initDefaultParameters()
     p.set(TICameraParameters::KEY_S3D2D_PREVIEW, mCameraProperties->get(CameraProperties::S3D2D_PREVIEW));
     p.set(TICameraParameters::KEY_AUTOCONVERGENCE, mCameraProperties->get(CameraProperties::AUTOCONVERGENCE));
     p.set(TICameraParameters::KEY_MANUALCONVERGENCE_VALUES, mCameraProperties->get(CameraProperties::MANUALCONVERGENCE_VALUES));
-    p.set(TICameraParameters::KEY_VSTAB,mCameraProperties->get(CameraProperties::VSTAB));
-    p.set(TICameraParameters::KEY_VSTAB_VALUES,mCameraProperties->get(CameraProperties::VSTAB_VALUES));
+    p.set(CameraParameters::KEY_VIDEO_STABILIZATION, mCameraProperties->get(CameraProperties::VSTAB));
     p.set(CameraParameters::KEY_FOCAL_LENGTH, mCameraProperties->get(CameraProperties::FOCAL_LENGTH));
     p.set(CameraParameters::KEY_HORIZONTAL_VIEW_ANGLE, mCameraProperties->get(CameraProperties::HOR_ANGLE));
     p.set(CameraParameters::KEY_VERTICAL_VIEW_ANGLE, mCameraProperties->get(CameraProperties::VER_ANGLE));
