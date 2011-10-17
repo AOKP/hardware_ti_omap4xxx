@@ -389,7 +389,7 @@ int CameraHal::setParameters(const CameraParameters& params)
 
             if ( ( oldWidth != w ) || ( oldHeight != h ) )
                 {
-                mDynamicPreviewSwitch = true;
+                restartPreviewRequired |= true;
                 }
 
             CAMHAL_LOGDB("PreviewResolution by App %d x %d", w, h);
@@ -403,7 +403,7 @@ int CameraHal::setParameters(const CameraParameters& params)
                 {
                 CAMHAL_LOGDB("Recording Hint is set to %s", valstr);
                 mParameters.set(CameraParameters::KEY_RECORDING_HINT, valstr);
-                restartPreviewRequired = setVideoModeParameters(params);
+                restartPreviewRequired |= setVideoModeParameters(params);
                 videoMode = true;
                 int w, h;
 
@@ -423,7 +423,7 @@ int CameraHal::setParameters(const CameraParameters& params)
                 {
                 CAMHAL_LOGDB("Recording Hint is set to %s", valstr);
                 mParameters.set(CameraParameters::KEY_RECORDING_HINT, valstr);
-                restartPreviewRequired = resetVideoModeParameters();
+                restartPreviewRequired |= resetVideoModeParameters();
                 params.getPreviewSize(&mVideoWidth, &mVideoHeight);
                 }
             else
@@ -440,7 +440,7 @@ int CameraHal::setParameters(const CameraParameters& params)
             // then Video Mode parameters may remain present in ImageCapture activity as well.
             CAMHAL_LOGDA("Recording Hint is set to NULL");
             mParameters.set(CameraParameters::KEY_RECORDING_HINT, "");
-            restartPreviewRequired = resetVideoModeParameters();
+            restartPreviewRequired |= resetVideoModeParameters();
             params.getPreviewSize(&mVideoWidth, &mVideoHeight);
             }
 
@@ -1002,11 +1002,14 @@ int CameraHal::setParameters(const CameraParameters& params)
 
     // Restart Preview if needed by KEY_RECODING_HINT only if preview is already running.
     // If preview is not started yet, Video Mode parameters will take effect on next startPreview()
-    if(restartPreviewRequired && previewEnabled())
-        {
-        CAMHAL_LOGDA("Restarting Preview as needed by KEY_RECODING_HINT");
+    if (restartPreviewRequired && previewEnabled()) {
+        CAMHAL_LOGDA("Restarting Preview");
         ret = restartPreview();
-        }
+    } else if (restartPreviewRequired && !previewEnabled() && mDisplayPaused) {
+        CAMHAL_LOGDA("Stopping Preview");
+        forceStopPreview();
+    }
+
     if (ret != NO_ERROR)
         {
         CAMHAL_LOGEA("Failed to restart Preview");
@@ -1459,15 +1462,7 @@ status_t CameraHal::startPreview()
         {
             mAppCallbackNotifier->enableMsgType (CAMERA_MSG_PREVIEW_FRAME);
         }
-        if ( mDynamicPreviewSwitch )
-            {
-            forceStopPreview();
-            mDynamicPreviewSwitch = false;
-            }
-        else
-            {
-            return ret;
-            }
+        return ret;
         }
 
 
@@ -1620,7 +1615,6 @@ status_t CameraHal::startPreview()
 
     mPreviewEnabled = true;
     mPreviewStartInProgress = false;
-    mDynamicPreviewSwitch = false;
     return ret;
 
     error:
@@ -2028,7 +2022,7 @@ status_t CameraHal::restartPreview()
         tmpvalstr[sizeof(tmpvalstr)-1] = 0;
         }
 
-    stopPreview();
+    forceStopPreview();
 
     {
         Mutex::Autolock lock(mLock);
@@ -2795,7 +2789,6 @@ CameraHal::CameraHal(int cameraId)
     mRecordingEnabled = 0;
     mRecordEnabled = 0;
     mSensorListener = NULL;
-    mDynamicPreviewSwitch = false;
     mVideoWidth = 0;
     mVideoHeight = 0;
 
