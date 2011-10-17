@@ -621,8 +621,6 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
     const char *valstr = NULL;
     LOG_FUNCTION_NAME;
 
-    params.set(CameraParameters::KEY_EXPOSURE_COMPENSATION, mParameters3A.EVCompensation);
-
     valstr = getLUTvalue_OMXtoHAL(mParameters3A.WhiteBallance, WBalLUT);
     if (valstr) params.set(CameraParameters::KEY_WHITE_BALANCE , valstr);
 
