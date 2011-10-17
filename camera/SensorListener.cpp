@@ -137,6 +137,11 @@ status_t SensorListener::initialize() {
     LOG_FUNCTION_NAME;
 
     mSensorEventQueue = mgr.createEventQueue();
+    if (mSensorEventQueue == NULL) {
+        CAMHAL_LOGEA("createEventQueue returned NULL");
+        ret = NO_INIT;
+        goto out;
+    }
 
     sp<Looper> mLooper = new Looper(false);
     mLooper->addFd(mSensorEventQueue->getFd(), 0, ALOOPER_EVENT_INPUT, sensor_events_listener, this);
