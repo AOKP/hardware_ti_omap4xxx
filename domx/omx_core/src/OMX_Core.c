@@ -47,6 +47,12 @@
 #include "timm_osal_trace.h"
 #include "timm_osal_mutex.h"
 
+#ifdef CHECK_SECURE_STATE
+#include <sys/ioctl.h>
+#include <errno.h>
+#include <fcntl.h>
+#endif
+
 /** size for the array of allocated components.  Sets the maximum
  * number of components that can be allocated at once */
 #define MAXCOMP (50)
@@ -100,7 +106,6 @@ char *tComponentName[MAXCOMP][MAX_ROLES] = {
 //AD
 extern OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent);
 
-
 #define CORE_assert  CORE_paramCheck
 #define CORE_require CORE_paramCheck
 #define CORE_ensure  CORE_paramCheck
@@ -112,9 +117,6 @@ extern OMX_ERRORTYPE OMX_ComponentInit(OMX_HANDLETYPE hComponent);
     if(S) TIMM_OSAL_Error(" - %s", S);\
     goto EXIT; }\
     } while(0)
-
-OMX_U32 DUCATI_IN_SECURE_MODE = 0;
-OMX_U32 SECURE_COMPONENTS_RUNNING = 0;
 
 /******************************Public*Routine******************************\
 * OMX_Init()
@@ -189,6 +191,10 @@ OMX_ERRORTYPE OMX_GetHandle(OMX_HANDLETYPE * pHandle,
 	char buf[sizeof(prefix) + MAXNAMESIZE + sizeof(postfix)];
 	const char *pErr = dlerror();
 	char *dlError = NULL;
+#ifdef CHECK_SECURE_STATE
+        int secure_misc_drv_fd,ret;
+        OMX_U8 mode, enable=1;
+#endif
 	if (pthread_mutex_lock(&mutex) != 0)
 	{
 		TIMM_OSAL_Error("Core: Error in Mutex lock");
@@ -231,15 +237,40 @@ OMX_ERRORTYPE OMX_GetHandle(OMX_HANDLETYPE * pHandle,
 	strcat(buf, cComponentName);	/* checked already, so strcpy and strcat are  */
 	strcat(buf, postfix);	/* are safe to use in this context. */
 
-	if(DUCATI_IN_SECURE_MODE == 1)
+#ifdef CHECK_SECURE_STATE
+        //Dont return errors from misc driver to the user if any.
+        //Since this affects all usecases, secure and non-secure.
+        //Do log the errors though.
+        secure_misc_drv_fd = open("/dev/rproc_user", O_SYNC | O_RDONLY);
+	if (secure_misc_drv_fd < 0)
 	{
-		if(strstr(cComponentName,"secure") == NULL)
-		{
-			TIMM_OSAL_Error("non-secure component not supported in secure mode");
-			eError = OMX_ErrorComponentNotFound;
-			goto EXIT;
-		}
+		TIMM_OSAL_Error("Can't open misc driver device 0x%x\n", errno);
 	}
+
+	ret = read(secure_misc_drv_fd, &mode, sizeof(mode));
+	if (ret < 0)
+	{
+		TIMM_OSAL_Error("Can't read from the misc driver");
+	}
+        if(mode == enable && strstr(cComponentName,"secure") == NULL)
+	{
+		TIMM_OSAL_Error("non-secure component not supported in secure mode");
+		eError = OMX_ErrorComponentNotFound;
+	}
+	ret = close(secure_misc_drv_fd);
+	if (ret < 0)
+	{
+		TIMM_OSAL_Error("Can't close the misc driver");
+	}
+        //Dont allow non-secure usecases if we are in secure state.
+        //Else some of the memory regions will be unexpected firewalled.
+        //This provides a clean exit in case we are in secure mode.
+        if(eError == OMX_ErrorComponentNotFound)
+        {
+                goto EXIT;
+        }
+#endif
+
 //#if 0
 	pModules[i] = dlopen(buf, RTLD_LAZY | RTLD_GLOBAL);
 	if (pModules[i] == NULL)
