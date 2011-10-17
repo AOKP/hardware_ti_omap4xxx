@@ -1901,6 +1901,12 @@ status_t OMXCameraAdapter::stopPreview()
         return NO_INIT;
         }
 
+    ret = disableImagePort();
+    if ( NO_ERROR != ret ) {
+        CAMHAL_LOGEB("disable image port failed 0x%x", ret);
+        goto EXIT;
+    }
+
     CAMHAL_LOGDB("Average framerate: %f", mFPS);
 
     //Avoid state switching of the OMX Component

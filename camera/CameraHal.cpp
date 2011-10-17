@@ -1189,14 +1189,10 @@ status_t CameraHal::allocImageBufs(unsigned int width, unsigned int height, size
 
     bytes = size;
 
-    ///Always allocate the buffers for image capture using MemoryManager
-    if ( NO_ERROR == ret )
-        {
-        if( ( NULL != mImageBufs ) )
-            {
-            ret = freeImageBufs();
-            }
-        }
+    // allocate image buffers only if not already allocated
+    if(NULL != mImageBufs) {
+        return NO_ERROR;
+    }
 
     if ( NO_ERROR == ret )
         {
@@ -1298,16 +1294,10 @@ void releaseImageBuffers(void *userData)
 {
     LOG_FUNCTION_NAME;
 
-// Make releaseImageBuffers a no-op for now because it is racing against AppCallbackNotifier
-// in the home screen use-case. Image capture buffers are anyways reallocated on subsequent
-// captures and also released as part of final camera hal cleanup
-#if 0
-    if ( NULL != userData )
-        {
+    if (NULL != userData) {
         CameraHal *c = reinterpret_cast<CameraHal *>(userData);
         c->freeImageBufs();
-        }
-#endif
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 }
