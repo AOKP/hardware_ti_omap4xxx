@@ -621,14 +621,16 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
     const char *valstr = NULL;
     LOG_FUNCTION_NAME;
 
-    valstr = getLUTvalue_OMXtoHAL(mParameters3A.WhiteBallance, WBalLUT);
-    if (valstr) params.set(CameraParameters::KEY_WHITE_BALANCE , valstr);
+    if( mParameters3A.SceneMode != OMX_Manual ) {
+       valstr = getLUTvalue_OMXtoHAL(mParameters3A.WhiteBallance, WBalLUT);
+       if (valstr) params.set(CameraParameters::KEY_WHITE_BALANCE , valstr);
 
-    valstr = getLUTvalue_OMXtoHAL(mParameters3A.FlashMode, FlashLUT);
-    if (valstr) params.set(CameraParameters::KEY_FLASH_MODE, valstr);
+       valstr = getLUTvalue_OMXtoHAL(mParameters3A.FlashMode, FlashLUT);
+       if (valstr) params.set(CameraParameters::KEY_FLASH_MODE, valstr);
 
-    valstr = getLUTvalue_OMXtoHAL(mParameters3A.Focus, FocusLUT);
-    if (valstr) params.set(CameraParameters::KEY_FOCUS_MODE, valstr);
+       valstr = getLUTvalue_OMXtoHAL(mParameters3A.Focus, FocusLUT);
+       if (valstr) params.set(CameraParameters::KEY_FOCUS_MODE, valstr);
+    }
 
     //Query focus distances only during CAF, Infinity
     //or when focus is running
