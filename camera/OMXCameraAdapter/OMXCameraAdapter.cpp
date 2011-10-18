@@ -2810,16 +2810,6 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             }
             }
 
-        stat |= advanceZoom();
-
-        // On the fly update to 3A settings not working
-        // Do not update 3A here if we are in the middle of a capture
-        // or in the middle of transitioning to it
-        if( mPending3Asettings && ((nextState & CAPTURE_ACTIVE) == 0))
-            {
-            apply3Asettings(mParameters3A);
-            }
-
         ///Prepare the frames to be sent - initialize CameraFrame object and reference count
         if( mWaitingForSnapshot &&  (mCapturedFrames > 0) )
             {
@@ -2870,6 +2860,16 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
 
         if(mDebugFcs)
             CAMHAL_LOGEB("C[%d] D[%d] E[%d]", mFramesWithDucati, mFramesWithDisplay, mFramesWithEncoder);
+
+        stat |= advanceZoom();
+
+        // On the fly update to 3A settings not working
+        // Do not update 3A here if we are in the middle of a capture
+        // or in the middle of transitioning to it
+        if( mPending3Asettings && ((nextState & CAPTURE_ACTIVE) == 0))
+            {
+            apply3Asettings(mParameters3A);
+            }
 
         }
     else if( pBuffHeader->nOutputPortIndex == OMX_CAMERA_PORT_VIDEO_OUT_MEASUREMENT )
@@ -3366,6 +3366,8 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraGetHandle(OMX_HANDLETYPE *handle, OMX_P
                 //might have rendered the currently open rpmsg-omx device
                 //useless. so we might need to re-open it again
                 OMX_Deinit();
+            } else {
+                break;
             }
         }
         //Sleep for 100 mS
