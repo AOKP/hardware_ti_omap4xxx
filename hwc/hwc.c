@@ -72,6 +72,7 @@ struct omap4_hwc_ext {
     /* support */
     struct ext_transform_t mirror;      /* mirroring settings */
     struct ext_transform_t dock;        /* docking settings */
+    __u8 avoid_mode_change;             /* use HDMI mode used for mirroring if possible */
 
     /* state */
     __u8 on_tv;                         /* using a tv */
@@ -82,6 +83,7 @@ struct omap4_hwc_ext {
     __u32 last_xres_used;               /* resolution and pixel ratio used for mode selection */
     __u32 last_yres_used;
     __u32 last_mode;                    /* 2-s complement of last HDMI mode set, 0 if none */
+    __u32 mirror_mode;                  /* 2-s complement of mode used when mirroring */
     float last_xpy;
     __u16 width;                        /* external screen dimensions */
     __u16 height;
@@ -730,23 +732,26 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
 
         /* prefer CEA modes */
         if (d.modedb[i].flag & (FB_FLAG_RATIO_4_3 | FB_FLAG_RATIO_16_9))
-            score |= (1 << 30);
+            score = 1;
 
         /* prefer to upscale (1% tolerance) */
-        if (ext_fb_xres >= xres * 99 / 100 && ext_fb_yres >= yres * 99 / 100)
-            score |= (1 << 29);
+        __u32 upscaling = (ext_fb_xres >= xres * 99 / 100 && ext_fb_yres >= yres * 99 / 100);
+        score = (score << 1) | upscaling;
+
+        /* prefer the same mode as we use for mirroring to avoid mode change */
+        score = (score << 1) | (i == ~ext->mirror_mode && ext->avoid_mode_change);
 
         /* pick closest screen size */
         if (ext_fb_xres * ext_fb_yres > area)
-            score |= (1 << 24) * (16 * area / ext_fb_xres / ext_fb_yres);
+            score = (score << 5) | (16 * area / ext_fb_xres / ext_fb_yres);
         else
-            score |= (1 << 24) * (16 * ext_fb_xres * ext_fb_yres / area);
+            score = (score << 5) | (16 * ext_fb_xres * ext_fb_yres / area);
 
         /* pick smallest leftover area */
-        score |= (1 << 19) * ((16 * ext_fb_xres * ext_fb_yres + (mode_area >> 1)) / mode_area);
+        score = (score << 5) | ((16 * ext_fb_xres * ext_fb_yres + (mode_area >> 1)) / mode_area);
 
         /* pick highest frame rate */
-        score |= (1 << 11) * d.modedb[i].refresh;
+        score = (score << 8) | d.modedb[i].refresh;
 
         LOGD("#%d: %dx%d %dHz", i, d.modedb[i].xres, d.modedb[i].yres, d.modedb[i].refresh);
         if (debug)
@@ -1411,6 +1416,8 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
         ext->dock.enabled = atoi(value) > 0;
         property_get("persist.hwc.mirroring.enabled", value, "1");
         ext->mirror.enabled = atoi(value) > 0;
+        property_get("persist.hwc.avoid_mode_change", value, "1");
+        ext->avoid_mode_change = atoi(value) > 0;
 
         /* get cloning transformation */
         property_get("persist.hwc.docking.transform", value, "0");
@@ -1428,10 +1435,12 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
             __u32 yres = HEIGHT(ext->mirror_region);
             if (ext->mirror.rotation & 1)
                swap(xres, yres);
+	    ext->mirror_mode = 0;
             int res = omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1.);
-            if (!res)
+            if (!res) {
+                ext->mirror_mode = ext->last_mode;
                 ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
-            else
+            } else
                 ext->mirror.enabled = 0;
         }
     } else {
