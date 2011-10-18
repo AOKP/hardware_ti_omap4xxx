@@ -69,6 +69,7 @@ const CapResolution OMXCameraAdapter::mImageCapRes [] = {
 const CapResolution OMXCameraAdapter::mPreviewRes [] = {
     { 1920, 1080, "1920x1080" },
     { 1280, 720, "1280x720" },
+    { 960, 720, "960x720" },
     { 800, 480, "800x480" },
     { 720, 576, "720x576" },
     { 720, 480, "720x480" },
