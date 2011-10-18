@@ -1116,7 +1116,7 @@ status_t OMXCameraAdapter::switchToExecuting()
 
   LOG_FUNCTION_NAME;
 
-  mSwitchToExecLock.lock();
+  mStateSwitchLock.lock();
   msg.command = CommandHandler::CAMERA_SWITCH_TO_EXECUTING;
   msg.arg1 = mErrorNotifier;
   ret = mCommandHandler->put(&msg);
@@ -1134,7 +1134,7 @@ status_t OMXCameraAdapter::doSwitchToExecuting()
 
   if ( (mComponentState == OMX_StateExecuting) || (mComponentState == OMX_StateInvalid) ){
     CAMHAL_LOGDA("Already in OMX_Executing state or OMX_StateInvalid state");
-    mSwitchToExecLock.unlock();
+    mStateSwitchLock.unlock();
     return NO_ERROR;
   }
 
@@ -1213,7 +1213,7 @@ status_t OMXCameraAdapter::doSwitchToExecuting()
   mComponentState = OMX_StateExecuting;
   CAMHAL_LOGVB("OMX_SendCommand(OMX_StateExecuting) 0x%x", eError);
 
-  mSwitchToExecLock.unlock();
+  mStateSwitchLock.unlock();
 
   LOG_FUNCTION_NAME_EXIT;
   return ret;
@@ -1221,7 +1221,7 @@ status_t OMXCameraAdapter::doSwitchToExecuting()
  EXIT:
   CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
   performCleanupAfterError();
-  mSwitchToExecLock.unlock();
+  mStateSwitchLock.unlock();
   LOG_FUNCTION_NAME_EXIT;
   return (ret | ErrorUtils::omxToAndroidError(eError));
 }
@@ -1232,6 +1232,8 @@ status_t OMXCameraAdapter::switchToLoaded()
     OMX_ERRORTYPE eError = OMX_ErrorNone;
 
     LOG_FUNCTION_NAME;
+
+    Mutex::Autolock lock(mStateSwitchLock);
 
     if ( mComponentState == OMX_StateLoaded  || mComponentState == OMX_StateInvalid)
         {
@@ -1454,7 +1456,7 @@ status_t OMXCameraAdapter::UseBuffersPreview(void* bufArr, int num)
         return BAD_VALUE;
         }
 
-    mSwitchToExecLock.lock();
+    mStateSwitchLock.lock();
 
     if ( mComponentState == OMX_StateLoaded )
         {
@@ -1788,7 +1790,7 @@ status_t OMXCameraAdapter::startPreview()
 
         }
 
-    mSwitchToExecLock.unlock();
+    mStateSwitchLock.unlock();
 
     //Queue all the buffers on preview port
     for(int index=0;index< mPreviewData->mMaxQueueable;index++)
@@ -1847,7 +1849,7 @@ status_t OMXCameraAdapter::startPreview()
 
     CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
     performCleanupAfterError();
-    mSwitchToExecLock.unlock();
+    mStateSwitchLock.unlock();
     LOG_FUNCTION_NAME_EXIT;
 
     return (ret | ErrorUtils::omxToAndroidError(eError));

@@ -873,7 +873,7 @@ private:
     Semaphore mSwitchToLoadedSem;
     Semaphore mSwitchToExecSem;
 
-    mutable Mutex mSwitchToExecLock;
+    mutable Mutex mStateSwitchLock;
 
     Vector<struct TIUTILS::Message *> mEventSignalQ;
     Mutex mEventLock;
