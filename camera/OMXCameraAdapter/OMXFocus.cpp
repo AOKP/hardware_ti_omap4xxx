@@ -304,6 +304,9 @@ status_t OMXCameraAdapter::cancelAutoFocus()
                                     OMX_ALL,
                                     OMX_IndexConfigCommonFocusStatus,
                                     NULL );
+    } else if (focusMode.eFocusControl == OMX_IMAGE_FocusControlAuto) {
+       // re-apply CAF after unlocking and canceling
+       mPending3Asettings |= SetFocus;
     }
 
     // If the apps call #cancelAutoFocus()}, the face callbacks will also resume.
