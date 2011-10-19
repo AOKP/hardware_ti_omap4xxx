@@ -264,6 +264,13 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
 
     CAMHAL_LOGDB("Thumbnail Quality set %d", mThumbQuality);
 
+    if (mPendingCaptureSettings) {
+        disableImagePort();
+        if ( NULL != mReleaseImageBuffersCallback ) {
+            mReleaseImageBuffersCallback(mReleaseData);
+        }
+    }
+
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
@@ -282,7 +289,13 @@ status_t OMXCameraAdapter::getPictureBufferSize(size_t &length, size_t bufferCou
         imgCaptureData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex];
 
         imgCaptureData->mNumBufs = bufferCount;
-        ret = setFormat(OMX_CAMERA_PORT_IMAGE_OUT_IMAGE, *imgCaptureData);
+
+        // check if image port is already configured...
+        // if it already configured then we don't have to query again
+        if (!mCaptureConfigured) {
+            ret = setFormat(OMX_CAMERA_PORT_IMAGE_OUT_IMAGE, *imgCaptureData);
+        }
+
         if ( ret == NO_ERROR )
             {
             length = imgCaptureData->mBufSize;
@@ -874,20 +887,23 @@ status_t OMXCameraAdapter::stopImageCapture()
     mWaitingForSnapshot = false;
     mSnapshotCount = 0;
 
-    //Disable the callback first
-    ret = setShutterCallback(false);
+    // OMX shutter callback events are only available in hq mode
+    if ((HIGH_QUALITY == mCapMode) || (HIGH_QUALITY_ZSL== mCapMode)) {
+        //Disable the callback first
+        ret = setShutterCallback(false);
 
-    // if anybody is waiting on the shutter callback
-    // signal them and then recreate the semaphore
-    if ( 0 != mStartCaptureSem.Count() ) {
-        for (int i = mStopCaptureSem.Count(); i > 0; i--) {
-            ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
-                               (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
-                               OMX_ALL,
-                               OMX_TI_IndexConfigShutterCallback,
-                               NULL );
+        // if anybody is waiting on the shutter callback
+        // signal them and then recreate the semaphore
+        if ( 0 != mStartCaptureSem.Count() ) {
+            for (int i = mStopCaptureSem.Count(); i > 0; i--) {
+                ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+                                   (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
+                                   OMX_ALL,
+                                   OMX_TI_IndexConfigShutterCallback,
+                                   NULL );
+            }
+            mStartCaptureSem.Create(0);
         }
-        mStartCaptureSem.Create(0);
     }
 
     // After capture, face detection should be disabled
@@ -914,24 +930,49 @@ status_t OMXCameraAdapter::stopImageCapture()
         goto EXIT;
     }
 
-    //Disable image capture
-    OMX_INIT_STRUCT_PTR (&bOMX, OMX_CONFIG_BOOLEANTYPE);
-    bOMX.bEnabled = OMX_FALSE;
-    imgCaptureData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex];
-    eError = OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
-                           OMX_IndexConfigCapturing,
-                           &bOMX);
-    if ( OMX_ErrorNone != eError ) {
-        CAMHAL_LOGDB("Error during SetConfig- 0x%x", eError);
-        ret = -1;
-        goto EXIT;
+    // Disable image capture
+    // Capturing command is not needed when capturing in video mode
+    if (mCapMode != VIDEO_MODE) {
+        OMX_INIT_STRUCT_PTR (&bOMX, OMX_CONFIG_BOOLEANTYPE);
+        bOMX.bEnabled = OMX_FALSE;
+        imgCaptureData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex];
+        eError = OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
+                               OMX_IndexConfigCapturing,
+                               &bOMX);
+        if ( OMX_ErrorNone != eError ) {
+            CAMHAL_LOGDB("Error during SetConfig- 0x%x", eError);
+            ret = -1;
+            goto EXIT;
+        }
     }
-
     CAMHAL_LOGDB("Capture set - 0x%x", eError);
 
     mCaptureSignalled = true; //set this to true if we exited because of timeout
 
+    return (ret | ErrorUtils::omxToAndroidError(eError));
+
+EXIT:
+    CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
+    //Release image buffers
+    if ( NULL != mReleaseImageBuffersCallback ) {
+        mReleaseImageBuffersCallback(mReleaseData);
+    }
+    performCleanupAfterError();
+    LOG_FUNCTION_NAME_EXIT;
+    return (ret | ErrorUtils::omxToAndroidError(eError));
+}
+
+status_t OMXCameraAdapter::disableImagePort(){
+    status_t ret = NO_ERROR;
+    OMX_ERRORTYPE eError = OMX_ErrorNone;
+    OMXCameraPortParameters *imgCaptureData = NULL;
+
+    if (!mCaptureConfigured) {
+        return NO_ERROR;
+    }
+
     mCaptureConfigured = false;
+    imgCaptureData = &mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex];
 
     ///Register for Image port Disable event
     ret = RegisterForEvent(mCameraAdapterParameters.mHandleComp,
@@ -981,16 +1022,7 @@ status_t OMXCameraAdapter::stopImageCapture()
         goto EXIT;
     }
 
-    return (ret | ErrorUtils::omxToAndroidError(eError));
-
-EXIT:
-    CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
-    //Release image buffers
-    if ( NULL != mReleaseImageBuffersCallback ) {
-        mReleaseImageBuffersCallback(mReleaseData);
-    }
-    performCleanupAfterError();
-    LOG_FUNCTION_NAME_EXIT;
+ EXIT:
     return (ret | ErrorUtils::omxToAndroidError(eError));
 }
 
@@ -1012,6 +1044,12 @@ status_t OMXCameraAdapter::UseBuffersCapture(void* bufArr, int num)
         CAMHAL_LOGEB("Error mUseCaptureSem semaphore count %d", mUseCaptureSem.Count());
         return BAD_VALUE;
         }
+
+    // capture is already configured...we can skip this step
+    if (mCaptureConfigured) {
+        mCapturedFrames = mBurstFrames;
+        return NO_ERROR;
+    }
 
     imgCaptureData->mNumBufs = num;
 
