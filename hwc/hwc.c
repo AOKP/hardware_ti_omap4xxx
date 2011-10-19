@@ -222,6 +222,13 @@ static int scaled(hwc_layer_t *layer)
     return WIDTH(layer->displayFrame) != w || HEIGHT(layer->displayFrame) != h;
 }
 
+static int isprotected(hwc_layer_t *layer)
+{
+    IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
+
+    return (handle->usage & GRALLOC_USAGE_PROTECTED);
+}
+
 static int sync_id = 0;
 
 #define is_BLENDED(blending) ((blending) != HWC_BLENDING_NONE)
@@ -944,6 +951,12 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                 num.dockable++;
 
             num.mem += mem1d(handle);
+
+           /* Check if any of the layers are protected.
+           * if so, disable the SGX force usage
+           */
+            if (hwc_dev->force_sgx && isprotected(layer))
+                hwc_dev->force_sgx = 0;
         }
     }
 
