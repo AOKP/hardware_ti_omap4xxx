@@ -49,6 +49,8 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
 
     LOG_FUNCTION_NAME;
 
+    Mutex::Autolock lock(m3ASettingsUpdateLock);
+
     str = params.get(CameraParameters::KEY_SCENE_MODE);
     mode = getLUTvalue_HALtoOMX( str, SceneLUT);
     if ( mFirstTimeInit || ((str != NULL) && ( mParameters3A.SceneMode != mode )) ) {
@@ -1512,6 +1514,10 @@ status_t OMXCameraAdapter::apply3Asettings( Gen3A_settings& Gen3A )
     unsigned int currSett; // 32 bit
     int portIndex;
 
+    LOG_FUNCTION_NAME;
+
+    Mutex::Autolock lock(m3ASettingsUpdateLock);
+
     /*
      * Scenes have a priority during the process
      * of applying 3A related parameters.
@@ -1637,6 +1643,9 @@ status_t OMXCameraAdapter::apply3Asettings( Gen3A_settings& Gen3A )
                 mPending3Asettings &= ~currSett;
             }
         }
+
+        LOG_FUNCTION_NAME_EXIT;
+
         return ret;
 }
 
