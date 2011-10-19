@@ -444,6 +444,25 @@ int CameraHal::setParameters(const CameraParameters& params)
             params.getPreviewSize(&mVideoWidth, &mVideoHeight);
             }
 
+        if ((valstr = params.get(CameraParameters::KEY_FOCUS_MODE)) != NULL) {
+            if (isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_FOCUS_MODES))) {
+                CAMHAL_LOGDB("Focus mode set %s", params.get(CameraParameters::KEY_FOCUS_MODE));
+
+                // we need to take a decision on the capture mode based on whether CAF picture or
+                // video is chosen so the behavior of each is consistent to the application
+                if(strcmp(valstr, CameraParameters::FOCUS_MODE_CONTINUOUS_PICTURE) == 0){
+                    restartPreviewRequired |= resetVideoModeParameters();
+                } else if (strcmp(valstr, CameraParameters::FOCUS_MODE_CONTINUOUS_VIDEO) == 0){
+                    restartPreviewRequired |= setVideoModeParameters(params);
+                }
+
+                mParameters.set(CameraParameters::KEY_FOCUS_MODE, valstr);
+             } else {
+                CAMHAL_LOGEB("ERROR: Invalid FOCUS mode = %s", valstr);
+                ret = -EINVAL;
+             }
+        }
+
         ///Below parameters can be changed when the preview is running
         if ( (valstr = params.getPictureFormat()) != NULL ) {
             if (isParameterValid(params.getPictureFormat(),mCameraProperties->get(CameraProperties::SUPPORTED_PICTURE_FORMATS))) {
@@ -670,16 +689,6 @@ int CameraHal::setParameters(const CameraParameters& params)
                 CAMHAL_LOGEB("ERROR: Invalid ISO = %s", valstr);
                 ret = -EINVAL;
             }
-        }
-
-        if ((valstr = params.get(CameraParameters::KEY_FOCUS_MODE)) != NULL) {
-            if (isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_FOCUS_MODES))) {
-                CAMHAL_LOGDB("Focus mode set %s", params.get(CameraParameters::KEY_FOCUS_MODE));
-                mParameters.set(CameraParameters::KEY_FOCUS_MODE, valstr);
-             } else {
-                CAMHAL_LOGEB("ERROR: Invalid FOCUS mode = %s", valstr);
-                ret = -EINVAL;
-             }
         }
 
         if( (valstr = params.get(CameraParameters::KEY_FOCUS_AREAS)) != NULL )
@@ -1815,17 +1824,27 @@ status_t CameraHal::startRecording( )
         return NO_INIT;
         }
 
-    valstr = mParameters.get(CameraParameters::KEY_RECORDING_HINT);
-    if ( (valstr == NULL) ||
-         ( (valstr != NULL) && (strcmp(valstr, CameraParameters::TRUE) != 0) ) )
-        {
-        restartPreviewRequired = setVideoModeParameters(mParameters);
+    // set internal recording hint in case camera adapter needs to make some
+    // decisions....(will only be sent to camera adapter if camera restart is required)
+    mParameters.set(TICameraParameters::KEY_RECORDING_HINT, CameraParameters::TRUE);
 
-        if(restartPreviewRequired)
-            {
-            ret = restartPreview();
-            }
-        }
+    // if application starts recording in continuous focus picture mode...
+    // then we need to force default capture mode (as opposed to video mode)
+    if ( ((valstr = mParameters.get(CameraParameters::KEY_FOCUS_MODE)) != NULL) &&
+         (strcmp(valstr, CameraParameters::FOCUS_MODE_CONTINUOUS_PICTURE) == 0) ){
+        restartPreviewRequired = resetVideoModeParameters();
+    }
+
+    // only need to check recording hint if preview restart is not already needed
+    valstr = mParameters.get(CameraParameters::KEY_RECORDING_HINT);
+    if ( !restartPreviewRequired &&
+         (!valstr || (valstr && (strcmp(valstr, CameraParameters::TRUE) != 0))) ) {
+        restartPreviewRequired = setVideoModeParameters(mParameters);
+    }
+
+    if (restartPreviewRequired) {
+        ret = restartPreview();
+    }
 
     if ( NO_ERROR == ret )
       {
@@ -1839,6 +1858,7 @@ status_t CameraHal::startRecording( )
             if ( NO_ERROR != ret )
               {
                 CAMHAL_LOGEB("allocImageBufs returned error 0x%x", ret);
+                mParameters.remove(TICameraParameters::KEY_RECORDING_HINT);
                 return ret;
               }
 
@@ -2076,6 +2096,10 @@ void CameraHal::stopRecording()
       }
       mVideoBufs = NULL;
     }
+
+    // reset internal recording hint in case camera adapter needs to make some
+    // decisions....(will only be sent to camera adapter if camera restart is required)
+    mParameters.remove(TICameraParameters::KEY_RECORDING_HINT);
 
     LOG_FUNCTION_NAME_EXIT;
 }
@@ -2609,6 +2633,9 @@ char* CameraHal::getParameters()
             resetPreviewRes(&mParams, mVideoWidth, mVideoHeight);
           }
       }
+
+    // do not send internal parameters to upper layers
+    mParams.remove(TICameraParameters::KEY_RECORDING_HINT);
 
     params_str8 = mParams.flatten();
 
