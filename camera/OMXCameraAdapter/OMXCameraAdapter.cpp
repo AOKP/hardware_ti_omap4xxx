@@ -634,7 +634,12 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
        if (valstr && valstr_supported && strstr(valstr_supported, valstr))
            params.set(CameraParameters::KEY_FLASH_MODE, valstr);
 
-       valstr = getLUTvalue_OMXtoHAL(mParameters3A.Focus, FocusLUT);
+       if ((mParameters3A.Focus == OMX_IMAGE_FocusControlAuto) &&
+           (mCapMode != OMXCameraAdapter::VIDEO_MODE)) {
+           valstr = CameraParameters::FOCUS_MODE_CONTINUOUS_PICTURE;
+       } else {
+           valstr = getLUTvalue_OMXtoHAL(mParameters3A.Focus, FocusLUT);
+       }
        valstr_supported = mParams.get(CameraParameters::KEY_SUPPORTED_FOCUS_MODES);
        if (valstr && valstr_supported && strstr(valstr_supported, valstr))
            params.set(CameraParameters::KEY_FOCUS_MODE, valstr);
