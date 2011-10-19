@@ -287,14 +287,14 @@ void BaseCameraAdapter::returnFrame(void* frameBuf, CameraFrame::FrameType frame
             setFrameRefCount(frameBuf, frameType, refCount);
 
 
-            if ( ( mRecording ) && (  CameraFrame::VIDEO_FRAME_SYNC == frameType ) )
-                {
+            if ( mRecording && (CameraFrame::VIDEO_FRAME_SYNC == frameType) ) {
                 refCount += getFrameRefCount(frameBuf, CameraFrame::PREVIEW_FRAME_SYNC);
-                }
-            else if ( ( mRecording ) && (  CameraFrame::PREVIEW_FRAME_SYNC == frameType ) )
-                {
+            } else if ( mRecording && (CameraFrame::PREVIEW_FRAME_SYNC == frameType) ) {
                 refCount += getFrameRefCount(frameBuf, CameraFrame::VIDEO_FRAME_SYNC);
-                }
+            } else if ( mRecording && (CameraFrame::SNAPSHOT_FRAME == frameType) ) {
+                refCount += getFrameRefCount(frameBuf, CameraFrame::VIDEO_FRAME_SYNC);
+            }
+
 
             }
         else
