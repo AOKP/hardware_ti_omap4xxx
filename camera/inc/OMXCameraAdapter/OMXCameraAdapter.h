@@ -834,6 +834,7 @@ private:
     OMX_VERSIONTYPE mLocalVersionParam;
 
     unsigned int mPending3Asettings;
+    Mutex m3ASettingsUpdateLock;
     Gen3A_settings mParameters3A;
 
     OMX_TI_CONFIG_3A_FACE_PRIORITY mFacePriority;
