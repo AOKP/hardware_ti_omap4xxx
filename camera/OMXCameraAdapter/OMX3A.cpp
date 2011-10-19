@@ -369,13 +369,13 @@ status_t OMXCameraAdapter::apply3ADefaults(Gen3A_settings &Gen3A)
     Gen3A.Brightness = atoi(OMXCameraAdapter::DEFAULT_BRIGHTNESS);
     ret |= setBrightness(Gen3A);
 
-    Gen3A.Saturation = atoi(OMXCameraAdapter::DEFAULT_SATURATION);
+    Gen3A.Saturation = atoi(OMXCameraAdapter::DEFAULT_SATURATION) - SATURATION_OFFSET;
     ret |= setSaturation(Gen3A);
 
-    Gen3A.Sharpness = atoi(OMXCameraAdapter::DEFAULT_SHARPNESS);
+    Gen3A.Sharpness = atoi(OMXCameraAdapter::DEFAULT_SHARPNESS) - SHARPNESS_OFFSET;
     ret |= setSharpness(Gen3A);
 
-    Gen3A.Contrast = atoi(OMXCameraAdapter::DEFAULT_CONTRAST);
+    Gen3A.Contrast = atoi(OMXCameraAdapter::DEFAULT_CONTRAST) - CONTRAST_OFFSET;
     ret |= setContrast(Gen3A);
 
     Gen3A.WhiteBallance = getLUTvalue_HALtoOMX(OMXCameraAdapter::DEFAULT_WB, WBalLUT);
