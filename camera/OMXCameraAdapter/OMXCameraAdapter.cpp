@@ -2835,10 +2835,12 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             {
               typeOfFrame = CameraFrame::PREVIEW_FRAME_SYNC;
               mask = (unsigned int)CameraFrame::PREVIEW_FRAME_SYNC;
-              if (mRecording)
-                {
-                  mask |= (unsigned int)CameraFrame::VIDEO_FRAME_SYNC;
-                }
+            }
+
+        if (mRecording)
+            {
+            mask |= (unsigned int)CameraFrame::VIDEO_FRAME_SYNC;
+            mFramesWithEncoder++;
             }
 
         //LOGV("FBD pBuffer = 0x%x", pBuffHeader->pBuffer);
@@ -2853,11 +2855,6 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
                 notifyShutterSubscribers();
               }
           }
-
-        if ( mRecording )
-            {
-            mFramesWithEncoder++;
-            }
 
         stat = sendCallBacks(cameraFrame, pBuffHeader, mask, pPortParam);
         mFramesWithDisplay++;
