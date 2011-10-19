@@ -606,6 +606,7 @@ private:
 
     // Image Capture Service
     status_t startImageCapture();
+    status_t disableImagePort();
 
     //Shutter callback notifications
     status_t setShutterCallback(bool enabled);
