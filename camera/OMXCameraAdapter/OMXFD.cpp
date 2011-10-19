@@ -62,11 +62,16 @@ status_t OMXCameraAdapter::startFaceDetection()
         goto out;
     }
 
-    // Set 3A modes to face priority
-    ret = setExposureMode(mParameters3A);
-    if (ret != NO_ERROR) {
-        goto out;
-    }
+    if ( mFaceDetectionRunning )
+        {
+        //Disable region priority and enable face priority for AF
+        setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, false);
+        setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO , true);
+
+        //Disable Region priority and enable Face priority
+        setAlgoPriority(REGION_PRIORITY, EXPOSURE_ALGO, false);
+        setAlgoPriority(FACE_PRIORITY, EXPOSURE_ALGO, true);
+        }
 
     // Note: White balance will not be face prioritized, since
     // the algorithm needs full frame statistics, and not face
@@ -197,15 +202,6 @@ status_t OMXCameraAdapter::setFaceDetection(bool enable, OMX_U32 orientation)
         {
         mFaceDetectionRunning = enable;
         mFaceDetectionPaused = !enable;
-        }
-
-    if ( enable )
-        {
-        //Disable region priority first
-        setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, false);
-
-        //Enable face algorithm priority for focus
-        setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO , true);
         }
 
     LOG_FUNCTION_NAME_EXIT;

@@ -415,20 +415,6 @@ status_t OMXCameraAdapter::setExposureMode(Gen3A_settings& Gen3A)
     exp.nPortIndex = OMX_ALL;
     exp.eExposureControl = (OMX_EXPOSURECONTROLTYPE)Gen3A.Exposure;
 
-    if ( mFaceDetectionRunning )
-        {
-        //Disable Region priority and enable Face priority
-        setAlgoPriority(REGION_PRIORITY, EXPOSURE_ALGO, false);
-        setAlgoPriority(FACE_PRIORITY, EXPOSURE_ALGO, true);
-        }
-    else
-
-        {
-        //Disable Region priority and Face priority
-        setAlgoPriority(REGION_PRIORITY, EXPOSURE_ALGO, false);
-        setAlgoPriority(FACE_PRIORITY, EXPOSURE_ALGO, false);
-        }
-
     eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
                             OMX_IndexConfigCommonExposure,
                             &exp);
