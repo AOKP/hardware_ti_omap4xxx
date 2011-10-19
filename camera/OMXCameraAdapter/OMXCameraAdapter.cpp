@@ -622,14 +622,22 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
     LOG_FUNCTION_NAME;
 
     if( mParameters3A.SceneMode != OMX_Manual ) {
+       const char *valstr_supported = NULL;
+
        valstr = getLUTvalue_OMXtoHAL(mParameters3A.WhiteBallance, WBalLUT);
-       if (valstr) params.set(CameraParameters::KEY_WHITE_BALANCE , valstr);
+       valstr_supported = mParams.get(CameraParameters::KEY_SUPPORTED_WHITE_BALANCE);
+       if (valstr && valstr_supported && strstr(valstr_supported, valstr))
+           params.set(CameraParameters::KEY_WHITE_BALANCE , valstr);
 
        valstr = getLUTvalue_OMXtoHAL(mParameters3A.FlashMode, FlashLUT);
-       if (valstr) params.set(CameraParameters::KEY_FLASH_MODE, valstr);
+       valstr_supported = mParams.get(CameraParameters::KEY_SUPPORTED_FLASH_MODES);
+       if (valstr && valstr_supported && strstr(valstr_supported, valstr))
+           params.set(CameraParameters::KEY_FLASH_MODE, valstr);
 
        valstr = getLUTvalue_OMXtoHAL(mParameters3A.Focus, FocusLUT);
-       if (valstr) params.set(CameraParameters::KEY_FOCUS_MODE, valstr);
+       valstr_supported = mParams.get(CameraParameters::KEY_SUPPORTED_FOCUS_MODES);
+       if (valstr && valstr_supported && strstr(valstr_supported, valstr))
+           params.set(CameraParameters::KEY_FOCUS_MODE, valstr);
     }
 
     //Query focus distances only during CAF, Infinity
