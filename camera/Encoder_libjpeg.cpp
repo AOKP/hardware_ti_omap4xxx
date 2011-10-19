@@ -44,6 +44,7 @@ extern "C" {
 }
 
 #define ARRAY_SIZE(array) (sizeof((array)) / sizeof((array)[0]))
+#define MIN(x,y) ((x < y) ? x : y)
 
 namespace android {
 struct string_pair {
@@ -305,7 +306,7 @@ ExifElementsTable::~ExifElementsTable() {
 }
 
 status_t ExifElementsTable::insertElement(const char* tag, const char* value) {
-    int value_length = 0;
+    unsigned int value_length = 0;
     status_t ret = NO_ERROR;
 
     if (!value || !tag) {
@@ -331,6 +332,13 @@ status_t ExifElementsTable::insertElement(const char* tag, const char* value) {
         table[position].GpsTag = FALSE;
         table[position].Tag = TagNameToValue(tag);
         exif_tag_count++;
+
+        // jhead isn't taking datetime tag...this is a WA
+        if (strcmp(tag, TAG_DATETIME) == 0) {
+            ImageInfo.numDateTimeTags = 1;
+            memcpy(ImageInfo.DateTime, value,
+                   MIN(ARRAY_SIZE(ImageInfo.DateTime), value_length + 1));
+        }
     }
 
     table[position].DataLength = 0;

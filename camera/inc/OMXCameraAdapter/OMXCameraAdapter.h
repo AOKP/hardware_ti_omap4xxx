@@ -446,7 +446,8 @@ private:
                                BaseCameraAdapter::AdapterState state);
     status_t convertGPSCoord(double coord, int &deg, int &min, int &sec, int &secDivisor);
     status_t setupEXIF();
-    status_t setupEXIF_libjpeg(ExifElementsTable*);
+    status_t setupEXIF_libjpeg(ExifElementsTable*, OMX_TI_ANCILLARYDATATYPE*,
+                               OMX_TI_WHITEBALANCERESULTTYPE*);
 
     //Focus functionality
     status_t doAutoFocus();
@@ -640,6 +641,7 @@ private:
     status_t setAutoConvergence(OMX_TI_AUTOCONVERGENCEMODETYPE pACMode, OMX_S32 pManualConverence);
     status_t getAutoConvergence(OMX_TI_AUTOCONVERGENCEMODETYPE *pACMode, OMX_S32 *pManualConverence);
 
+    status_t setExtraData(bool enable, OMX_U32, OMX_EXT_EXTRADATATYPE);
     OMX_OTHER_EXTRADATATYPE *getExtradata(OMX_OTHER_EXTRADATATYPE *extraData, OMX_EXTRADATATYPE type);
 
     class CommandHandler : public Thread {
@@ -873,6 +875,8 @@ private:
     int mSnapshotCount;
     bool mCaptureConfigured;
     unsigned int mPendingCaptureSettings;
+    OMX_TI_ANCILLARYDATATYPE* mCaptureAncillaryData;
+    OMX_TI_WHITEBALANCERESULTTYPE* mWhiteBalanceData;
 
     //Temporal bracketing management data
     mutable Mutex mBracketingLock;

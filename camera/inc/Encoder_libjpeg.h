@@ -43,6 +43,7 @@ typedef void (*encoder_libjpeg_callback_t) (void* main_jpeg,
                                             void* cookie2,
                                             void* cookie3);
 
+// these have to match strings defined in external/jhead/exif.c
 static const char TAG_MODEL[] = "Model";
 static const char TAG_MAKE[] = "Make";
 static const char TAG_FOCALLENGTH[] = "FocalLength";
@@ -61,6 +62,21 @@ static const char TAG_GPS_VERSION_ID[] = "GPSVersionID";
 static const char TAG_GPS_TIMESTAMP[] = "GPSTimeStamp";
 static const char TAG_GPS_DATESTAMP[] = "GPSDateStamp";
 static const char TAG_ORIENTATION[] = "Orientation";
+static const char TAG_FLASH[] = "Flash";
+static const char TAG_DIGITALZOOMRATIO[] = "DigitalZoomRatio";
+static const char TAG_EXPOSURETIME[] = "ExposureTime";
+static const char TAG_APERTURE[] = "ApertureValue";
+static const char TAG_ISO_EQUIVALENT[] = "ISOSpeedRatings";
+static const char TAG_WHITEBALANCE[] = "WhiteBalance";
+static const char TAG_LIGHT_SOURCE[] = "LightSource";
+static const char TAG_METERING_MODE[] = "MeteringMode";
+static const char TAG_EXPOSURE_PROGRAM[] = "ExposureProgram";
+static const char TAG_COLOR_SPACE[] = "ColorSpace";
+static const char TAG_CPRS_BITS_PER_PIXEL[] = "CompressedBitsPerPixel";
+static const char TAG_FNUMBER[] = "FNumber";
+static const char TAG_SHUTTERSPEED[] = "ShutterSpeedValue";
+static const char TAG_SENSING_METHOD[] = "SensingMethod";
+static const char TAG_CUSTOM_RENDERED[] = "CustomRendered";
 
 class ExifElementsTable {
     public:

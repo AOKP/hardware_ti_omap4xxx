@@ -125,7 +125,6 @@ status_t OMXCameraAdapter::setFaceDetection(bool enable, OMX_U32 orientation)
 {
     status_t ret = NO_ERROR;
     OMX_ERRORTYPE eError = OMX_ErrorNone;
-    OMX_CONFIG_EXTRADATATYPE extraDataControl;
     OMX_CONFIG_OBJDETECTIONTYPE objDetection;
 
     LOG_FUNCTION_NAME;
@@ -170,27 +169,11 @@ status_t OMXCameraAdapter::setFaceDetection(bool enable, OMX_U32 orientation)
 
     if ( NO_ERROR == ret )
         {
-        OMX_INIT_STRUCT_PTR (&extraDataControl, OMX_CONFIG_EXTRADATATYPE);
-        extraDataControl.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
-        extraDataControl.eExtraDataType = OMX_FaceDetection;
-        extraDataControl.eCameraView = OMX_2D;
-        if  ( enable )
-            {
-            extraDataControl.bEnable = OMX_TRUE;
-            }
-        else
-            {
-            extraDataControl.bEnable = OMX_FALSE;
-            }
+        ret = setExtraData(enable, mCameraAdapterParameters.mPrevPortIndex, OMX_FaceDetection);
 
-        eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
-                                ( OMX_INDEXTYPE ) OMX_IndexConfigOtherExtraDataControl,
-                                &extraDataControl);
-        if ( OMX_ErrorNone != eError )
+        if ( NO_ERROR != ret )
             {
-            CAMHAL_LOGEB("Error while configuring face detection extra data 0x%x",
-                         eError);
-            ret = -1;
+            CAMHAL_LOGEA("Error while configuring face detection extra data");
             }
         else
             {
