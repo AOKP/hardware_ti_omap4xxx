@@ -1060,7 +1060,11 @@ status_t OMXCameraAdapter::insertDefaults(CameraProperties::Properties* params, 
     params->set(CameraProperties::MAX_FD_SW_FACES, DEFAULT_MAX_FD_SW_FACES);
     params->set(CameraProperties::AUTO_EXPOSURE_LOCK, DEFAULT_AE_LOCK);
     params->set(CameraProperties::AUTO_WHITEBALANCE_LOCK, DEFAULT_AWB_LOCK);
-    params->set(CameraProperties::FOCAL_LENGTH, DEFAULT_FOCAL_LENGTH);
+    if(caps.tSenMounting.nSenId == 305) {
+        params->set(CameraProperties::FOCAL_LENGTH, DEFAULT_FOCAL_LENGTH_PRIMARY);
+    } else {
+        params->set(CameraProperties::FOCAL_LENGTH, DEFAULT_FOCAL_LENGTH_SECONDARY);
+    }
     params->set(CameraProperties::HOR_ANGLE, DEFAULT_HOR_ANGLE);
     params->set(CameraProperties::VER_ANGLE, DEFAULT_VER_ANGLE);
     params->set(CameraProperties::VIDEO_SNAPSHOT_SUPPORTED, DEFAULT_VIDEO_SNAPSHOT_SUPPORTED);
