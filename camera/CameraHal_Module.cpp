@@ -451,17 +451,18 @@ int camera_device_close(hw_device_t* device)
 
     ti_dev = (ti_camera_device_t*) device;
 
-    if (gCameraHals[ti_dev->cameraid]) {
-        delete gCameraHals[ti_dev->cameraid];
-        gCameraHals[ti_dev->cameraid] = NULL;
-        gCamerasOpen--;
-    }
+    if (ti_dev) {
+        if (gCameraHals[ti_dev->cameraid]) {
+            delete gCameraHals[ti_dev->cameraid];
+            gCameraHals[ti_dev->cameraid] = NULL;
+            gCamerasOpen--;
+        }
 
-    if (ti_dev->base.ops) {
-        free(ti_dev->base.ops);
+        if (ti_dev->base.ops) {
+            free(ti_dev->base.ops);
+        }
+        free(ti_dev);
     }
-    free(ti_dev);
-
 done:
 #ifdef HEAPTRACKER
     heaptracker_free_leaked_memory();
@@ -599,13 +600,19 @@ int camera_device_open(const hw_module_t* module, const char* name,
     return rv;
 
 fail:
-    if(camera_device)
+    if(camera_device) {
         free(camera_device);
-    if(camera_ops)
+        camera_device = NULL;
+    }
+    if(camera_ops) {
         free(camera_ops);
-    if(camera)
+        camera_ops = NULL;
+    }
+    if(camera) {
         delete camera;
-
+        camera = NULL;
+    }
+    *device = NULL;
     return rv;
 }
 
