@@ -551,7 +551,7 @@ OMX_ERRORTYPE LOCAL_PROXY_H264E_EmptyThisBuffer(OMX_HANDLETYPE hComponent,
 	OMX_ERRORTYPE eError = OMX_ErrorNone;
 	PROXY_COMPONENT_PRIVATE *pCompPrv;
 	OMX_COMPONENTTYPE *hComp = (OMX_COMPONENTTYPE *) hComponent;
-	OMX_PTR pBufferOrig = NULL;
+	OMX_PTR pBufferOrig = pBufferHdr->pBuffer;
 	OMX_U32 nStride = 0, nNumLines = 0;
 	OMX_PARAM_PORTDEFINITIONTYPE tParamStruct;
 	OMX_U32 nFilledLen, nAllocLen;
