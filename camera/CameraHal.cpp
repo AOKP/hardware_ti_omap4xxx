@@ -339,10 +339,6 @@ int CameraHal::setParameters(const CameraParameters& params)
 
             }
 
-        //CTS requirement, we should be able to change the preview resolution
-        //while in paused display state
-        if ( !previewEnabled() || mDisplayPaused )
-            {
             params.getPreviewSize(&w, &h);
             if (w == -1 && h == -1) {
                 CAMHAL_LOGEA("Unable to get preview size");
@@ -393,7 +389,6 @@ int CameraHal::setParameters(const CameraParameters& params)
                 }
 
             CAMHAL_LOGDB("PreviewResolution by App %d x %d", w, h);
-            }
 
         // Handle RECORDING_HINT to Set/Reset Video Mode Parameters
         valstr = params.get(CameraParameters::KEY_RECORDING_HINT);
@@ -1738,7 +1733,7 @@ void CameraHal::stopPreview()
 {
     LOG_FUNCTION_NAME;
 
-    if(!previewEnabled() && !mDisplayPaused)
+    if( (!previewEnabled() && !mDisplayPaused) || mRecordingEnabled)
         {
         LOG_FUNCTION_NAME_EXIT;
         return;
