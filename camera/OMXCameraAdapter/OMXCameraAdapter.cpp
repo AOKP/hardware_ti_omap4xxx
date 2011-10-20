@@ -624,6 +624,19 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
     if( mParameters3A.SceneMode != OMX_Manual ) {
        const char *valstr_supported = NULL;
 
+       // if preview is not started...we still need to feedback the proper params
+       // look up the settings in the LUT
+       if (((state & PREVIEW_ACTIVE) == 0) && mCapabilities) {
+           const SceneModesEntry* entry = NULL;
+           entry = getSceneModeEntry(mCapabilities->get(CameraProperties::CAMERA_NAME),
+                                    (OMX_SCENEMODETYPE) mParameters3A.SceneMode);
+           if(entry) {
+               mParameters3A.Focus = entry->focus;
+               mParameters3A.FlashMode = entry->flash;
+               mParameters3A.WhiteBallance = entry->wb;
+           }
+       }
+
        valstr = getLUTvalue_OMXtoHAL(mParameters3A.WhiteBallance, WBalLUT);
        valstr_supported = mParams.get(CameraParameters::KEY_SUPPORTED_WHITE_BALANCE);
        if (valstr && valstr_supported && strstr(valstr_supported, valstr))

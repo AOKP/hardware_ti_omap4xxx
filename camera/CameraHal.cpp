@@ -721,6 +721,9 @@ int CameraHal::setParameters(const CameraParameters& params)
         if ((valstr = params.get(CameraParameters::KEY_SCENE_MODE)) != NULL) {
             if (isParameterValid(valstr, mCameraProperties->get(CameraProperties::SUPPORTED_SCENE_MODES))) {
                 CAMHAL_LOGDB("Scene mode set %s", valstr);
+                doesSetParameterNeedUpdate(valstr,
+                                           mParameters.get(CameraParameters::KEY_SCENE_MODE),
+                                           updateRequired);
                 mParameters.set(CameraParameters::KEY_SCENE_MODE, valstr);
             } else {
                 CAMHAL_LOGEB("ERROR: Invalid Scene mode = %s", valstr);
