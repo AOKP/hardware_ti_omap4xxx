@@ -1899,6 +1899,23 @@ status_t OMXCameraAdapter::stopPreview()
         // Error, but we probably still want to continue to stop preview
     }
 
+    OMX_CONFIG_FOCUSASSISTTYPE focusAssist;
+    OMX_INIT_STRUCT_PTR (&focusAssist, OMX_CONFIG_FOCUSASSISTTYPE);
+    focusAssist.nPortIndex = OMX_ALL;
+    focusAssist.bFocusAssist = OMX_FALSE;
+    CAMHAL_LOGDB("Configuring AF Assist mode 0x%x", focusAssist.bFocusAssist);
+    eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
+                            (OMX_INDEXTYPE) OMX_IndexConfigFocusAssist,
+                            &focusAssist);
+    if ( OMX_ErrorNone != eError )
+        {
+        CAMHAL_LOGEB("Error while configuring AF Assist mode 0x%x", eError);
+        }
+    else
+        {
+        CAMHAL_LOGDA("Camera AF Assist  mode configured successfully");
+        }
+
     if ( 0 != mStopPreviewSem.Count() )
         {
         CAMHAL_LOGEB("Error mStopPreviewSem semaphore count %d", mStopPreviewSem.Count());
