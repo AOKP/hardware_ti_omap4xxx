@@ -751,7 +751,8 @@ private:
     static const char DEFAULT_MAX_NUM_METERING_AREAS[];
     static const char DEFAULT_LOCK_SUPPORTED[];
     static const char DEFAULT_LOCK_UNSUPPORTED[];
-    static const char DEFAULT_FOCAL_LENGTH[];
+    static const char DEFAULT_FOCAL_LENGTH_PRIMARY[];
+    static const char DEFAULT_FOCAL_LENGTH_SECONDARY[];
     static const char DEFAULT_HOR_ANGLE[];
     static const char DEFAULT_VER_ANGLE[];
     static const char DEFAULT_VIDEO_SNAPSHOT_SUPPORTED[];
