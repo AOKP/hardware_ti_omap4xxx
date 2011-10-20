@@ -31,7 +31,7 @@ VT_resizeFrame_Video_opt2_lp
  mmUint16 dummy                         /* Transparent pixel value              */
  )
 {
-  LOGV("VT_resizeFrame_Video_opt2_lp+");
+  ALOGV("VT_resizeFrame_Video_opt2_lp+");
 
   mmUint16 row,col;
   mmUint32 resizeFactorX;
@@ -55,11 +55,11 @@ VT_resizeFrame_Video_opt2_lp
 	{
 		if(i_img_ptr->uHeight == o_img_ptr->uHeight)
 			{
-				LOGV("************************f(i_img_ptr->uHeight == o_img_ptr->uHeight) are same *********************\n");
-				LOGV("************************(i_img_ptr->width == %d" , i_img_ptr->uWidth );
-				LOGV("************************(i_img_ptr->uHeight == %d" , i_img_ptr->uHeight );
-				LOGV("************************(o_img_ptr->width == %d" ,o_img_ptr->uWidth );
-				LOGV("************************(o_img_ptr->uHeight == %d" , o_img_ptr->uHeight );
+				ALOGV("************************f(i_img_ptr->uHeight == o_img_ptr->uHeight) are same *********************\n");
+				ALOGV("************************(i_img_ptr->width == %d" , i_img_ptr->uWidth );
+				ALOGV("************************(i_img_ptr->uHeight == %d" , i_img_ptr->uHeight );
+				ALOGV("************************(o_img_ptr->width == %d" ,o_img_ptr->uWidth );
+				ALOGV("************************(o_img_ptr->uHeight == %d" , o_img_ptr->uHeight );
 			}
 	}
 
@@ -67,7 +67,7 @@ VT_resizeFrame_Video_opt2_lp
     !o_img_ptr || !o_img_ptr->imgPtr)
   {
 	LOGE("Image Point NULL");
-	LOGV("VT_resizeFrame_Video_opt2_lp-");
+	ALOGV("VT_resizeFrame_Video_opt2_lp-");
 	return FALSE;
   }
 
@@ -96,7 +96,7 @@ VT_resizeFrame_Video_opt2_lp
   if (idx < 1 || idy < 1 || i_img_ptr->uStride < 1)
 	{
 	LOGE("idx or idy less then 1 idx = %d idy = %d stride = %d", idx, idy, i_img_ptr->uStride);
-	LOGV("VT_resizeFrame_Video_opt2_lp-");
+	ALOGV("VT_resizeFrame_Video_opt2_lp-");
 	return FALSE;
 	}
 
@@ -298,10 +298,10 @@ VT_resizeFrame_Video_opt2_lp
   else
   {
 	LOGE("eFormat not supported");
-	LOGV("VT_resizeFrame_Video_opt2_lp-");
+	ALOGV("VT_resizeFrame_Video_opt2_lp-");
 	return FALSE;
   }
-  LOGV("success");
-  LOGV("VT_resizeFrame_Video_opt2_lp-");
+  ALOGV("success");
+  ALOGV("VT_resizeFrame_Video_opt2_lp-");
   return TRUE;
 }

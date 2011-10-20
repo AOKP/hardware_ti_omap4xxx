@@ -2890,7 +2890,7 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             mFramesWithEncoder++;
             }
 
-        //LOGV("FBD pBuffer = 0x%x", pBuffHeader->pBuffer);
+        //ALOGV("FBD pBuffer = 0x%x", pBuffHeader->pBuffer);
 
         if( mWaitingForSnapshot )
           {

@@ -114,7 +114,7 @@ status_t CameraProperties::loadProperties()
         }
     }
 
-    LOGV("mCamerasSupported = %d", mCamerasSupported);
+    ALOGV("mCamerasSupported = %d", mCamerasSupported);
     LOG_FUNCTION_NAME_EXIT;
     return ret;
 }
