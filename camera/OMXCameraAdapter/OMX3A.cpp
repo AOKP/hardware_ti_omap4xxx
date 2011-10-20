@@ -1566,7 +1566,8 @@ status_t OMXCameraAdapter::apply3Asettings( Gen3A_settings& Gen3A )
         return ret;
     } else if (OMX_Manual != Gen3A.SceneMode) {
         // only certain settings are allowed when scene mode is set
-        mPending3Asettings &= (SetEVCompensation | SetFocus);
+        mPending3Asettings &= (SetEVCompensation | SetFocus | SetWBLock |
+                               SetExpLock | SetWhiteBallance | SetFlash);
         if ( mPending3Asettings == 0 ) return NO_ERROR;
     }
 
