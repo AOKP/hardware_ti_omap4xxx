@@ -37,6 +37,35 @@
 #define METERING_AREAS_RANGE 0xFF
 
 namespace android {
+const SceneModesEntry* OMXCameraAdapter::getSceneModeEntry(const char* name,
+                                                                  OMX_SCENEMODETYPE scene) {
+    const SceneModesEntry* cameraLUT = NULL;
+    const SceneModesEntry* entry = NULL;
+    unsigned int numEntries = 0;
+
+    // 1. Find camera's scene mode LUT
+    for (unsigned int i = 0; i < ARRAY_SIZE(CameraToSensorModesLUT); i++) {
+        if (strcmp(CameraToSensorModesLUT[i].name, name) == 0) {
+            cameraLUT = CameraToSensorModesLUT[i].Table;
+            numEntries = CameraToSensorModesLUT[i].size;
+            break;
+        }
+    }
+
+    // 2. Find scene mode entry in table
+    if (!cameraLUT) {
+        goto EXIT;
+    }
+
+    for (unsigned int i = 0; i < numEntries; i++) {
+        if(cameraLUT[i].scene == scene) {
+            entry = cameraLUT + i;
+            break;
+        }
+    }
+ EXIT:
+    return entry;
+}
 
 status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
                                            BaseCameraAdapter::AdapterState state)
