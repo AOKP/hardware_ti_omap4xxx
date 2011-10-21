@@ -69,6 +69,7 @@ const char TICameraParameters::KEY_SENSOR_ORIENTATION_VALUES[] = "sensor-orienta
 const char TICameraParameters::KEY_MINFRAMERATE[] = "min-framerate";
 const char TICameraParameters::KEY_MAXFRAMERATE[] = "max-framerate";
 const char TICameraParameters::KEY_RECORDING_HINT[] = "internal-recording-hint";
+const char TICameraParameters::KEY_AUTO_FOCUS_LOCK[] = "auto-focus-lock";
 
 //TI extensions for enabling/disabling GLBCE
 const char TICameraParameters::GLBCE_ENABLE[] = "enable";

@@ -664,11 +664,8 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
            params.set(CameraParameters::KEY_FOCUS_MODE, valstr);
     }
 
-    //Query focus distances only during CAF, Infinity
-    //or when focus is running
+    //Query focus distances only when focus is running
     if ( ( AF_ACTIVE & state ) ||
-         ( mParameters3A.Focus == OMX_IMAGE_FocusControlAuto )  ||
-         ( mParameters3A.Focus == OMX_IMAGE_FocusControlAutoInfinity ) ||
          ( NULL == mParameters.get(CameraParameters::KEY_FOCUS_DISTANCES) ) )
         {
         updateFocusDistances(params);
@@ -1863,14 +1860,17 @@ status_t OMXCameraAdapter::startPreview()
     if ( mPending3Asettings )
         apply3Asettings(mParameters3A);
 
-    //Query current focus distance after
-    //starting the preview
-    updateFocusDistances(mParameters);
-
     //reset frame rate estimates
     mFPS = 0.0f;
     mLastFPS = 0.0f;
-    mFrameCount = 0;
+    // start frame count from 0. i.e first frame after
+    // startPreview will be the 0th reference frame
+    // this way we will wait for second frame until
+    // takePicture/autoFocus is allowed to run. we
+    // are seeing SetConfig/GetConfig fail after
+    // calling after the first frame and not failing
+    // after the second frame
+    mFrameCount = -1;
     mLastFrameCount = 0;
     mIter = 1;
     mLastFPSTime = systemTime();
@@ -1910,6 +1910,12 @@ status_t OMXCameraAdapter::stopPreview()
         LOG_FUNCTION_NAME_EXIT;
         return NO_INIT;
         }
+
+    {
+        Mutex::Autolock lock(mFrameCountMutex);
+        mFrameCount = 0;
+        mFirstFrameCondition.broadcast();
+    }
 
     ret = cancelAutoFocus();
     if(ret!=NO_ERROR)
@@ -2208,9 +2214,24 @@ status_t OMXCameraAdapter::autoFocus()
 
     LOG_FUNCTION_NAME;
 
+    {
+        Mutex::Autolock lock(mFrameCountMutex);
+        if (mFrameCount < 1) {
+            // first frame may time some time to come...so wait for an adequate amount of time
+            // which 2 * OMX_CAPTURE_TIMEOUT * 1000 will cover.
+            ret = mFirstFrameCondition.waitRelative(mFrameCountMutex,
+                                                    (nsecs_t) 2 * OMX_CAPTURE_TIMEOUT * 1000);
+            if ((NO_ERROR != ret) || (mFrameCount == 0)) {
+                goto EXIT;
+            }
+        }
+    }
+
     msg.command = CommandHandler::CAMERA_PERFORM_AUTOFOCUS;
     msg.arg1 = mErrorNotifier;
     ret = mCommandHandler->put(&msg);
+
+ EXIT:
 
     LOG_FUNCTION_NAME;
 
@@ -2224,10 +2245,24 @@ status_t OMXCameraAdapter::takePicture()
 
     LOG_FUNCTION_NAME;
 
+    {
+        Mutex::Autolock lock(mFrameCountMutex);
+        if (mFrameCount < 1) {
+            // first frame may time some time to come...so wait for an adequate amount of time
+            // which 2 * OMX_CAPTURE_TIMEOUT * 1000 will cover.
+            ret = mFirstFrameCondition.waitRelative(mFrameCountMutex,
+                                                   (nsecs_t) 2 * OMX_CAPTURE_TIMEOUT * 1000);
+            if ((NO_ERROR != ret) || (mFrameCount == 0)) {
+                goto EXIT;
+            }
+        }
+    }
+
     msg.command = CommandHandler::CAMERA_START_IMAGE_CAPTURE;
     msg.arg1 = mErrorNotifier;
     ret = mCommandHandler->put(&msg);
 
+ EXIT:
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
@@ -2929,7 +2964,6 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             {
             apply3Asettings(mParameters3A);
             }
-
         }
     else if( pBuffHeader->nOutputPortIndex == OMX_CAMERA_PORT_VIDEO_OUT_MEASUREMENT )
         {
@@ -3041,7 +3075,13 @@ status_t OMXCameraAdapter::recalculateFPS()
 {
     float currentFPS;
 
-    mFrameCount++;
+    {
+        Mutex::Autolock lock(mFrameCountMutex);
+        mFrameCount++;
+        if (mFrameCount == 1) {
+            mFirstFrameCondition.broadcast();
+        }
+    }
 
     if ( ( mFrameCount % FPS_PERIOD ) == 0 )
         {

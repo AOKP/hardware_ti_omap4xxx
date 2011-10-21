@@ -236,9 +236,6 @@ status_t OMXCameraAdapter::stopAutoFocus()
             }
         }
 
-    //Query current focus distance after AF is complete
-    updateFocusDistances(mParameters);
-
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
@@ -278,13 +275,6 @@ status_t OMXCameraAdapter::cancelAutoFocus()
     OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focusMode;
 
     LOG_FUNCTION_NAME;
-    // Unlock 3A locks since they were locked by AF conditionally
-    if( set3ALock(mUserSetExpLock, mUserSetWbLock, OMX_FALSE) != NO_ERROR) {
-      CAMHAL_LOGEA("Error Unlocking 3A locks");
-    }
-    else{
-      CAMHAL_LOGDA("AE/AWB unlocked successfully");
-    }
 
     ret = getFocusMode(focusMode);
     if ( NO_ERROR != ret ) {
@@ -436,7 +426,9 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
 
             stopAutoFocus();
             }
-        }
+        //Query current focus distance after AF is complete
+        updateFocusDistances(mParameters);
+       }
 
     ret =  BaseCameraAdapter::setState(CAMERA_CANCEL_AUTOFOCUS);
     if ( NO_ERROR == ret )
