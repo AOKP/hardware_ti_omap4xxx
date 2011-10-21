@@ -32,6 +32,7 @@
 #include "OMX_TI_Common.h"
 #include "OMX_TI_Image.h"
 #include "General3A_Settings.h"
+#include "OMXSceneModeTables.h"
 
 #include "BaseCameraAdapter.h"
 #include "Encoder_libjpeg.h"
@@ -478,7 +479,12 @@ private:
     //3A related parameters
     status_t setParameters3A(const CameraParameters &params,
                              BaseCameraAdapter::AdapterState state);
+
+    // scene modes
     status_t setScene(Gen3A_settings& Gen3A);
+    // returns pointer to SceneModesEntry from the LUT for camera given 'name' and 'scene'
+    static const SceneModesEntry* getSceneModeEntry(const char* name, OMX_SCENEMODETYPE scene);
+
 
     //Flash modes
     status_t setFlashMode(Gen3A_settings& Gen3A);
