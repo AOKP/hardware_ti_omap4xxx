@@ -264,6 +264,10 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
 
     CAMHAL_LOGDB("Thumbnail Quality set %d", mThumbQuality);
 
+    if (mFirstTimeInit) {
+        mPendingCaptureSettings = ECapturesettingsAll;
+    }
+
     if (mPendingCaptureSettings) {
         disableImagePort();
         if ( NULL != mReleaseImageBuffersCallback ) {
