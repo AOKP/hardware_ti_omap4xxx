@@ -31,4 +31,7 @@ PRODUCT_PACKAGES := \
 	libion \
 	camera.omap4 \
 	libomxcameraadapter \
-	hwcomposer.omap4
+	hwcomposer.omap4 \
+	smc_pa_ctrl \
+	tf_daemon
+
