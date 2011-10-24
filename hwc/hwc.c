@@ -1088,6 +1088,9 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 
     /* mirror layers */
     hwc_dev->post2_layers = dsscomp->num_ovls;
+    if (hwc_dev->ext.current.docking && (ix_docking == -1))
+        ix_docking = dsscomp->ovls[0].cfg.ix;
+
     if (hwc_dev->ext.current.enabled && hwc_dev->ext_ovls) {
         int ix_back, ix_front, ix;
         if (hwc_dev->ext.current.docking) {
