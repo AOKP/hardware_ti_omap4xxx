@@ -210,12 +210,7 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
     mode = getLUTvalue_HALtoOMX(str, FocusLUT);
     if ( (mFirstTimeInit || ((str != NULL) && (mParameters3A.Focus != mode))))
         {
-        //Apply focus mode immediatly only if  CAF  or Inifinity are selected
-        if ( ( mode == OMX_IMAGE_FocusControlAuto ) ||
-             ( mode == OMX_IMAGE_FocusControlAutoInfinity ) )
-            {
-            mPending3Asettings |= SetFocus;
-            }
+        mPending3Asettings |= SetFocus;
 
         mParameters3A.Focus = mode;
 
@@ -582,6 +577,7 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focus;
     size_t top, left, width, height, weight;
+    OMX_CONFIG_BOOLEANTYPE bOMX;
 
     LOG_FUNCTION_NAME;
 
@@ -635,6 +631,34 @@ status_t OMXCameraAdapter::setFocusMode(Gen3A_settings& Gen3A)
 
     if ( NO_ERROR == ret && ((state & AF_ACTIVE) == 0) )
         {
+        OMX_INIT_STRUCT_PTR (&bOMX, OMX_CONFIG_BOOLEANTYPE);
+
+        if ( Gen3A.Focus == OMX_IMAGE_FocusControlAutoInfinity)
+            {
+            // Don't lock at infinity, otherwise the AF cannot drive
+            // the lens at infinity position
+            if( set3ALock(mUserSetExpLock, mUserSetWbLock, OMX_FALSE) != NO_ERROR)
+                {
+                CAMHAL_LOGEA("Error Applying 3A locks");
+                } else {
+                CAMHAL_LOGDA("Focus locked. Applied focus locks successfully");
+                }
+            }
+        if ( Gen3A.Focus == OMX_IMAGE_FocusControlAuto ||
+             Gen3A.Focus == OMX_IMAGE_FocusControlAutoInfinity)
+            {
+            // Run focus scanning if switching to continuous infinity focus mode
+            bOMX.bEnabled = OMX_TRUE;
+            }
+        else
+            {
+            bOMX.bEnabled = OMX_FALSE;
+            }
+
+        eError = OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
+                               (OMX_INDEXTYPE)OMX_TI_IndexConfigAutofocusEnable,
+                               &bOMX);
+
         OMX_INIT_STRUCT_PTR (&focus, OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE);
         focus.nPortIndex = mCameraAdapterParameters.mPrevPortIndex;
         focus.eFocusControl = (OMX_IMAGE_FOCUSCONTROLTYPE)Gen3A.Focus;
