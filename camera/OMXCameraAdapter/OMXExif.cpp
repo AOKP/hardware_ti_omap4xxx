@@ -297,8 +297,8 @@ status_t OMXCameraAdapter::setupEXIF()
                     EXIF_MODEL_SIZE - 1);
 
             exifTags->pModelBuff = ( OMX_S8 * ) ( sharedPtr - sharedBuffer.pSharedBuff );
+            exifTags->ulModelBuffSizeBytes = strlen((char*)sharedPtr) + 1;
             sharedPtr += EXIF_MODEL_SIZE;
-            exifTags->ulModelBuffSizeBytes = EXIF_MODEL_SIZE;
             exifTags->eStatusModel = OMX_TI_TagUpdated;
             }
 
@@ -310,8 +310,8 @@ status_t OMXCameraAdapter::setupEXIF()
                           EXIF_MAKE_SIZE - 1);
 
              exifTags->pMakeBuff = ( OMX_S8 * ) ( sharedPtr - sharedBuffer.pSharedBuff );
+             exifTags->ulMakeBuffSizeBytes = strlen((char*)sharedPtr) + 1;
              sharedPtr += EXIF_MAKE_SIZE;
-             exifTags->ulMakeBuffSizeBytes = EXIF_MAKE_SIZE;
              exifTags->eStatusMake = OMX_TI_TagUpdated;
              }
 
