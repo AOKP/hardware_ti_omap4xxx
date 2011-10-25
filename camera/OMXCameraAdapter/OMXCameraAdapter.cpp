@@ -92,6 +92,12 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
     //currently not supported use preview port instead
     mCameraAdapterParameters.mVideoPortIndex = OMX_CAMERA_PORT_VIDEO_OUT_PREVIEW;
 
+    eError = OMX_Init();
+    if (eError != OMX_ErrorNone) {
+      CAMHAL_LOGEB("Error OMX_Init -0x%x", eError);
+      return eError;
+    }
+
     ///Get the handle to the OMX Component
     eError = OMXCameraAdapter::OMXCameraGetHandle(&mCameraAdapterParameters.mHandleComp, (OMX_PTR)this);
     if(eError != OMX_ErrorNone) {
@@ -3397,38 +3403,27 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraGetHandle(OMX_HANDLETYPE *handle, OMX_P
 
     int retries = 5;
     while(eError!=OMX_ErrorNone && --retries>=0) {
-        // OMX_Init
-        eError = OMX_Init();
-        if (eError != OMX_ErrorNone) {
-            CAMHAL_LOGEB("OMX_Init -0x%x", eError);
-        } else {
-            // Setup key parameters to send to Ducati during init
-            OMX_CALLBACKTYPE oCallbacks;
 
-            // Initialize the callback handles
-            oCallbacks.EventHandler    = android::OMXCameraAdapterEventHandler;
-            oCallbacks.EmptyBufferDone = android::OMXCameraAdapterEmptyBufferDone;
-            oCallbacks.FillBufferDone  = android::OMXCameraAdapterFillBufferDone;
+      // Setup key parameters to send to Ducati during init
+      OMX_CALLBACKTYPE oCallbacks;
 
-            // Get Handle
-            eError = OMX_GetHandle(handle, (OMX_STRING)"OMX.TI.DUCATI1.VIDEO.CAMERA", pAppData, &oCallbacks);
-            if (eError != OMX_ErrorNone) {
-                CAMHAL_LOGEB("OMX_GetHandle -0x%x", eError);
-                //Deinit here as we will init again above
-                //Note that we need to deinit because an erro recovery
-                //might have rendered the currently open rpmsg-omx device
-                //useless. so we might need to re-open it again
-                OMX_Deinit();
-            } else {
-                break;
-            }
-        }
+      // Initialize the callback handles
+      oCallbacks.EventHandler    = android::OMXCameraAdapterEventHandler;
+      oCallbacks.EmptyBufferDone = android::OMXCameraAdapterEmptyBufferDone;
+      oCallbacks.FillBufferDone  = android::OMXCameraAdapterFillBufferDone;
+
+      // Get Handle
+      eError = OMX_GetHandle(handle, (OMX_STRING)"OMX.TI.DUCATI1.VIDEO.CAMERA", pAppData, &oCallbacks);
+      if (eError != OMX_ErrorNone) {
+        CAMHAL_LOGEB("OMX_GetHandle -0x%x", eError);
         //Sleep for 100 mS
         usleep(100000);
+      } else {
+        break;
+      }
     }
 
     return eError;
-
 }
 
 extern "C" int CameraAdapter_Capabilities(CameraProperties::Properties* properties_array,
@@ -3448,6 +3443,12 @@ extern "C" int CameraAdapter_Capabilities(CameraProperties::Properties* properti
         CAMHAL_LOGEB("invalid param: properties = 0x%p", properties_array);
         LOG_FUNCTION_NAME_EXIT;
         return -EINVAL;
+    }
+
+    eError = OMX_Init();
+    if (eError != OMX_ErrorNone) {
+      CAMHAL_LOGEB("Error OMX_Init -0x%x", eError);
+      return eError;
     }
 
     eError = OMXCameraAdapter::OMXCameraGetHandle(&handle);
