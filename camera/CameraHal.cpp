@@ -398,7 +398,6 @@ int CameraHal::setParameters(const CameraParameters& params)
                 {
                 CAMHAL_LOGDB("Recording Hint is set to %s", valstr);
                 mParameters.set(CameraParameters::KEY_RECORDING_HINT, valstr);
-                restartPreviewRequired |= setVideoModeParameters(params);
                 videoMode = true;
                 int w, h;
 
@@ -412,7 +411,13 @@ int CameraHal::setParameters(const CameraParameters& params)
                 setPreferredPreviewRes(w, h);
                 mParameters.getPreviewSize(&w, &h);
                 CAMHAL_LOGVB("%s Preview Width=%d Height=%d\n", __FUNCTION__, w, h);
+                //Avoid restarting preview for MMS HACK
+                if ((w != mVideoWidth) && (h != mVideoHeight))
+                    {
+                    restartPreviewRequired = false;
+                    }
 
+                restartPreviewRequired |= setVideoModeParameters(params);
                 }
             else if(strcmp(valstr, CameraParameters::FALSE) == 0)
                 {
@@ -1009,10 +1014,11 @@ int CameraHal::setParameters(const CameraParameters& params)
 
     // Restart Preview if needed by KEY_RECODING_HINT only if preview is already running.
     // If preview is not started yet, Video Mode parameters will take effect on next startPreview()
-    if (restartPreviewRequired && previewEnabled()) {
+    if (restartPreviewRequired && previewEnabled() && !mRecordingEnabled) {
         CAMHAL_LOGDA("Restarting Preview");
         ret = restartPreview();
-    } else if (restartPreviewRequired && !previewEnabled() && mDisplayPaused) {
+    } else if (restartPreviewRequired && !previewEnabled() &&
+                mDisplayPaused && !mRecordingEnabled) {
         CAMHAL_LOGDA("Stopping Preview");
         forceStopPreview();
     }
