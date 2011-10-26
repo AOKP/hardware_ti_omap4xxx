@@ -105,6 +105,11 @@ status_t OMXCameraAdapter::doAutoFocus()
         return NO_INIT;
         }
 
+    if( ((AF_ACTIVE & getState()) != AF_ACTIVE) && ((AF_ACTIVE & getNextState()) != AF_ACTIVE) ) {
+       CAMHAL_LOGDA("Auto focus got canceled before doAutoFocus could be called");
+       return NO_ERROR;
+    }
+
     // If the app calls autoFocus, the camera will stop sending face callbacks.
     pauseFaceDetection(true);
 
