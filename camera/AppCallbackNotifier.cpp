@@ -1263,6 +1263,10 @@ void AppCallbackNotifier::releaseSharedVideoBuffers()
 
         mVideoMetadataBufferMemoryMap.clear();
         mVideoMetadataBufferReverseMap.clear();
+        if (mUseVideoBuffers)
+            {
+            mVideoMap.clear();
+            }
     }
 
     LOG_FUNCTION_NAME_EXIT;
