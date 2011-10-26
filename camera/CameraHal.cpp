@@ -2213,15 +2213,17 @@ status_t CameraHal::cancelAutoFocus()
 {
     LOG_FUNCTION_NAME;
 
-    {
     Mutex::Autolock lock(mLock);
+    CameraParameters adapterParams = mParameters;
     mMsgEnabled &= ~CAMERA_MSG_FOCUS;
-    }
 
     if( NULL != mCameraAdapter )
     {
+        adapterParams.set(TICameraParameters::KEY_AUTO_FOCUS_LOCK, CameraParameters::FALSE);
+        mCameraAdapter->setParameters(adapterParams);
         mCameraAdapter->sendCommand(CameraAdapter::CAMERA_CANCEL_AUTOFOCUS);
     }
+
     LOG_FUNCTION_NAME_EXIT;
     return NO_ERROR;
 }
@@ -2630,6 +2632,7 @@ char* CameraHal::getParameters()
 
     // do not send internal parameters to upper layers
     mParams.remove(TICameraParameters::KEY_RECORDING_HINT);
+    mParams.remove(TICameraParameters::KEY_AUTO_FOCUS_LOCK);
 
     params_str8 = mParams.flatten();
 

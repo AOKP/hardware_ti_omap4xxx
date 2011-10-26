@@ -218,6 +218,12 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
             }
 
         mParameters3A.Focus = mode;
+
+        // if focus mode is set to infinity...update focus distance immediately
+        if (mode == OMX_IMAGE_FocusControlAutoInfinity) {
+            updateFocusDistances(mParameters);
+        }
+
         CAMHAL_LOGDB("Focus %x", mParameters3A.Focus);
         }
 
@@ -312,6 +318,17 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
             mPending3Asettings |= SetWBLock;
           }
       }
+
+    str = params.get(TICameraParameters::KEY_AUTO_FOCUS_LOCK);
+    if (str && (strcmp(str, TRUE) == 0) && (mParameters3A.FocusLock != OMX_TRUE)) {
+        CAMHAL_LOGVA("Locking Focus");
+        mParameters3A.FocusLock = OMX_TRUE;
+        setFocusLock(mParameters3A);
+    } else if (str && (strcmp(str, FALSE) == 0) && (mParameters3A.FocusLock != OMX_FALSE)) {
+        CAMHAL_LOGVA("UnLocking Focus");
+        mParameters3A.FocusLock = OMX_FALSE;
+        setFocusLock(mParameters3A);
+    }
 
     str = params.get(CameraParameters::KEY_METERING_AREAS);
     if ( (str != NULL) ) {

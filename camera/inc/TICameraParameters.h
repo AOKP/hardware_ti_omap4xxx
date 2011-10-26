@@ -68,7 +68,7 @@ static const char  KEY_MAXFRAMERATE[];
 
 // TI recording hint to notify camera adapters of possible recording
 static const char  KEY_RECORDING_HINT[];
-
+static const char  KEY_AUTO_FOCUS_LOCK[];
 static const char  KEY_CURRENT_ISO[];
 
 static const char KEY_SENSOR_ORIENTATION[];

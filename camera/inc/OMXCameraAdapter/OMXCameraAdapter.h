@@ -905,6 +905,8 @@ private:
     int mLastFrameCount;
     unsigned int mIter;
     nsecs_t mLastFPSTime;
+    Mutex mFrameCountMutex;
+    Condition mFirstFrameCondition;
 
     size_t mSensorIndex;
     CodingMode mCodingMode;

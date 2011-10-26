@@ -953,6 +953,12 @@ status_t OMXCameraAdapter::stopImageCapture()
 
     mCaptureSignalled = true; //set this to true if we exited because of timeout
 
+    {
+        Mutex::Autolock lock(mFrameCountMutex);
+        mFrameCount = 0;
+        mFirstFrameCondition.broadcast();
+    }
+
     return (ret | ErrorUtils::omxToAndroidError(eError));
 
 EXIT:
@@ -961,6 +967,13 @@ EXIT:
     if ( NULL != mReleaseImageBuffersCallback ) {
         mReleaseImageBuffersCallback(mReleaseData);
     }
+
+    {
+        Mutex::Autolock lock(mFrameCountMutex);
+        mFrameCount = 0;
+        mFirstFrameCondition.broadcast();
+    }
+
     performCleanupAfterError();
     LOG_FUNCTION_NAME_EXIT;
     return (ret | ErrorUtils::omxToAndroidError(eError));
