@@ -832,6 +832,9 @@ public:
 
     // Receive orientation events from CameraHal
     virtual void onOrientationEvent(uint32_t orientation, uint32_t tilt) = 0;
+
+    // Rolls the state machine back to INTIALIZED_STATE from the current state
+    virtual status_t rollbackToInitializedState() = 0;
 protected:
     //The first two methods will try to switch the adapter state.
     //Every call to setState() should be followed by a corresponding
