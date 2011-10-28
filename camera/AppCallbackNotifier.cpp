@@ -38,11 +38,23 @@ void AppCallbackNotifierEncoderCallback(void* main_jpeg,
                                         CameraFrame::FrameType type,
                                         void* cookie1,
                                         void* cookie2,
-                                        void* cookie3)
+                                        void* cookie3,
+                                        bool canceled)
 {
-    if (cookie1) {
+    if (cookie1 && !canceled) {
         AppCallbackNotifier* cb = (AppCallbackNotifier*) cookie1;
         cb->EncoderDoneCb(main_jpeg, thumb_jpeg, type, cookie2, cookie3);
+    }
+
+    if (main_jpeg) {
+        free(main_jpeg);
+    }
+
+    if (thumb_jpeg) {
+       if (((Encoder_libjpeg::params *) thumb_jpeg)->dst) {
+           free(((Encoder_libjpeg::params *) thumb_jpeg)->dst);
+       }
+       free(thumb_jpeg);
     }
 }
 
@@ -129,30 +141,17 @@ void AppCallbackNotifier::EncoderDoneCb(void* main_jpeg, void* thumb_jpeg, Camer
 
  exit:
 
-    if (main_jpeg) {
-        free(main_jpeg);
-    }
-
-    if (thumb_jpeg) {
-       if (((Encoder_libjpeg::params *) thumb_jpeg)->dst) {
-           free(((Encoder_libjpeg::params *) thumb_jpeg)->dst);
-       }
-       free(thumb_jpeg);
-    }
-
-    if (encoded_mem) {
-        encoded_mem->release(encoded_mem);
-    }
-
     if (picture) {
         picture->release(picture);
     }
 
-    if (cookie2) {
-        delete (ExifElementsTable*) cookie2;
-    }
-
     if (mNotifierState == AppCallbackNotifier::NOTIFIER_STARTED) {
+        if (encoded_mem) {
+            encoded_mem->release(encoded_mem);
+        }
+        if (cookie2) {
+            delete (ExifElementsTable*) cookie2;
+        }
         encoder = gEncoderQueue.valueFor(src);
         if (encoder.get()) {
             gEncoderQueue.removeItem(src);
@@ -1733,9 +1732,20 @@ status_t AppCallbackNotifier::stop()
 
     while(!gEncoderQueue.isEmpty()) {
         sp<Encoder_libjpeg> encoder = gEncoderQueue.valueAt(0);
+        camera_memory_t* encoded_mem = NULL;
+        ExifElementsTable* exif = NULL;
+
         if(encoder.get()) {
             encoder->cancel();
-            encoder->join();
+
+            encoder->getCookies(NULL, (void**) &encoded_mem, (void**) &exif);
+            if (encoded_mem) {
+                encoded_mem->release(encoded_mem);
+            }
+            if (exif) {
+                delete exif;
+            }
+
             encoder.clear();
         }
         gEncoderQueue.removeItemsAt(0);

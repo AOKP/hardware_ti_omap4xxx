@@ -30,6 +30,9 @@
 extern "C" {
 #include "jhead.h"
 }
+
+#define CANCEL_TIMEOUT 3000000 // 3 seconds
+
 namespace android {
 /**
  * libjpeg encoder class - uses libjpeg to encode yuv
@@ -41,7 +44,8 @@ typedef void (*encoder_libjpeg_callback_t) (void* main_jpeg,
                                             CameraFrame::FrameType type,
                                             void* cookie1,
                                             void* cookie2,
-                                            void* cookie3);
+                                            void* cookie3,
+                                            bool canceled);
 
 // these have to match strings defined in external/jhead/exif.c
 static const char TAG_MODEL[] = "Model";
@@ -131,6 +135,7 @@ class Encoder_libjpeg : public Thread {
               mCancelEncoding(false), mCookie1(cookie1), mCookie2(cookie2), mCookie3(cookie3),
               mType(type), mThumb(NULL) {
             this->incStrong(this);
+            mCancelSem.Create(0);
         }
 
         ~Encoder_libjpeg() {
@@ -149,6 +154,9 @@ class Encoder_libjpeg : public Thread {
             // encode our main image
             size = encode(mMainInput);
 
+            // signal cancel semaphore incase somebody is waiting
+            mCancelSem.Signal();
+
             // check if it is main jpeg thread
             if(mThumb.get()) {
                 // wait until tn jpeg thread exits.
@@ -158,7 +166,7 @@ class Encoder_libjpeg : public Thread {
             }
 
             if(mCb) {
-                mCb(mMainInput, mThumbnailInput, mType, mCookie1, mCookie2, mCookie3);
+                mCb(mMainInput, mThumbnailInput, mType, mCookie1, mCookie2, mCookie3, mCancelEncoding);
             }
 
             // encoder thread runs, self-destructs, and then exits
@@ -167,10 +175,17 @@ class Encoder_libjpeg : public Thread {
         }
 
         void cancel() {
+           mCancelEncoding = true;
            if (mThumb.get()) {
                mThumb->cancel();
+               mCancelSem.WaitTimeout(CANCEL_TIMEOUT);
            }
-           mCancelEncoding = true;
+        }
+
+        void getCookies(void **cookie1, void **cookie2, void **cookie3) {
+            if (cookie1) *cookie1 = mCookie1;
+            if (cookie2) *cookie2 = mCookie2;
+            if (cookie3) *cookie3 = mCookie3;
         }
 
     private:
@@ -183,6 +198,7 @@ class Encoder_libjpeg : public Thread {
         void* mCookie3;
         CameraFrame::FrameType mType;
         sp<Encoder_libjpeg> mThumb;
+        Semaphore mCancelSem;
 
         size_t encode(params*);
 };
