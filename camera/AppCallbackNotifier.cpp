@@ -1664,7 +1664,7 @@ status_t AppCallbackNotifier::enableMsgType(int32_t msgType)
 
 status_t AppCallbackNotifier::disableMsgType(int32_t msgType)
 {
-    if(!mCameraHal->msgTypeEnabled(CAMERA_MSG_PREVIEW_FRAME | CAMERA_MSG_POSTVIEW_FRAME)) {
+    if( msgType & (CAMERA_MSG_PREVIEW_FRAME | CAMERA_MSG_POSTVIEW_FRAME) ) {
         mFrameProvider->disableFrameNotification(CameraFrame::PREVIEW_FRAME_SYNC);
     }
 
