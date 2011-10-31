@@ -196,7 +196,10 @@ const CapU32Pair OMXCameraAdapter::mVarFramerates [] = {
     { 15, 15, "(15000,15000)"},
     { 30, 15, "(15000,30000)" },
     { 30, 24, "(24000,30000)" },
+// TODO(XXX): Removing 30,30 range to limit 1080p at 24fps. Will put back soon.
+#if 0
     { 30, 30, "(30000,30000)" },
+#endif
 };
 /************************************
  * static helper functions
@@ -803,9 +806,6 @@ status_t OMXCameraAdapter::insertWBModes(CameraProperties::Properties* params, O
         }
     }
 
-    //These modes are not supported by the capability feature
-    strncat(supported, TICameraParameters::WHITE_BALANCE_FACE, MAX_PROP_NAME_LENGTH);
-
     params->set(CameraProperties::SUPPORTED_WHITE_BALANCE, supported);
 
     LOG_FUNCTION_NAME;
@@ -853,9 +853,6 @@ status_t OMXCameraAdapter::insertExpModes(CameraProperties::Properties* params, 
             strncat(supported, PARAM_SEP, 1);
         }
     }
-
-    //These modes are not supported by the capability feature
-    strncat(supported, TICameraParameters::EXPOSURE_MODE_FACE, MAX_PROP_NAME_LENGTH);
 
     params->set(CameraProperties::SUPPORTED_EXPOSURE_MODES, supported);
 
@@ -940,8 +937,6 @@ status_t OMXCameraAdapter::insertFocusModes(CameraProperties::Properties* params
     } else {
         // Focus is supported but these modes are not supported by the
         // capability feature. Apply manually
-        strncat(supported, TICameraParameters::FOCUS_MODE_FACE, MAX_PROP_NAME_LENGTH);
-        strncat(supported, PARAM_SEP, 1);
         strncat(supported, CameraParameters::FOCUS_MODE_CONTINUOUS_PICTURE, MAX_PROP_NAME_LENGTH);
     }
 

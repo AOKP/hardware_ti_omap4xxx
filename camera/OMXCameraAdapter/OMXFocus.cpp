@@ -85,11 +85,18 @@ status_t OMXCameraAdapter::doAutoFocus()
 
     LOG_FUNCTION_NAME;
 
+    if ( OMX_StateInvalid == mComponentState )
+      {
+        CAMHAL_LOGEA("OMX component in Invalid state");
+        returnFocusStatus(false);
+        return -EINVAL;
+      }
+
     if ( OMX_StateExecuting != mComponentState )
         {
         CAMHAL_LOGEA("OMX component not in executing state");
         returnFocusStatus(false);
-        return NO_INIT;
+        return NO_ERROR;
         }
 
     if ( 0 != mDoAFSem.Count() )
@@ -97,6 +104,11 @@ status_t OMXCameraAdapter::doAutoFocus()
         CAMHAL_LOGEB("Error mDoAFSem semaphore count %d", mDoAFSem.Count());
         return NO_INIT;
         }
+
+    if( ((AF_ACTIVE & getState()) != AF_ACTIVE) && ((AF_ACTIVE & getNextState()) != AF_ACTIVE) ) {
+       CAMHAL_LOGDA("Auto focus got canceled before doAutoFocus could be called");
+       return NO_ERROR;
+    }
 
     // If the app calls autoFocus, the camera will stop sending face callbacks.
     pauseFaceDetection(true);
@@ -204,10 +216,17 @@ status_t OMXCameraAdapter::stopAutoFocus()
 
     LOG_FUNCTION_NAME;
 
+    if ( OMX_StateInvalid == mComponentState )
+      {
+        CAMHAL_LOGEA("OMX component in Invalid state");
+        returnFocusStatus(false);
+        return -EINVAL;
+      }
+
     if ( OMX_StateExecuting != mComponentState )
         {
-        CAMHAL_LOGEA("OMX component not in executing state");
-        return NO_INIT;
+          CAMHAL_LOGEA("OMX component not in executing state");
+        return NO_ERROR;
         }
 
     if ( mParameters3A.Focus == OMX_IMAGE_FocusControlAutoInfinity ) {
@@ -316,10 +335,16 @@ status_t OMXCameraAdapter::setFocusCallback(bool enabled)
 
     LOG_FUNCTION_NAME;
 
+    if ( OMX_StateInvalid == mComponentState )
+      {
+        CAMHAL_LOGEA("OMX component in Invalid state");
+        ret = -EINVAL;
+      }
+
     if ( OMX_StateExecuting != mComponentState )
         {
-        CAMHAL_LOGEA("OMX component not in executing state");
-        ret = -1;
+          CAMHAL_LOGEA("OMX component not in executing state");
+        ret = NO_ERROR;
         }
 
     if ( NO_ERROR == ret )
@@ -466,10 +491,16 @@ status_t OMXCameraAdapter::checkFocus(OMX_PARAM_FOCUSSTATUSTYPE *eFocusStatus)
         ret = -EINVAL;
         }
 
+    if ( OMX_StateInvalid == mComponentState )
+      {
+        CAMHAL_LOGEA("OMX component in Invalid state");
+        ret = -EINVAL;
+      }
+
     if ( OMX_StateExecuting != mComponentState )
         {
         CAMHAL_LOGEA("OMX component not in executing state");
-        ret = -EINVAL;
+        ret = NO_ERROR;
         }
 
     if ( NO_ERROR == ret )
