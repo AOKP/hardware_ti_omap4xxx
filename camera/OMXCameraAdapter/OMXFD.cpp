@@ -262,7 +262,9 @@ status_t OMXCameraAdapter::detectFaces(OMX_BUFFERHEADERTYPE* pBuffHeader,
         return -EINVAL;
     }
 
-    extraData = (OMX_OTHER_EXTRADATATYPE *) (platformPrivate->pMetaDataBuffer);
+    extraData = getExtradata((OMX_OTHER_EXTRADATATYPE *) (platformPrivate->pMetaDataBuffer),
+            (OMX_EXTRADATATYPE)OMX_FaceDetection);
+
     if ( NULL != extraData ) {
         CAMHAL_LOGVB("Size = %d, sizeof = %d, eType = 0x%x, nDataSize= %d, nPortIndex = 0x%x, nVersion = 0x%x",
                      extraData->nSize,
