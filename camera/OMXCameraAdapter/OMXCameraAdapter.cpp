@@ -78,12 +78,6 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
         return NO_INIT;
         }
 
-    if (mComponentState != OMX_StateLoaded && mComponentState != OMX_StateInvalid) {
-       CAMHAL_LOGEB("Error mComponentState %d is invalid!", mComponentState);
-       LOG_FUNCTION_NAME_EXIT;
-       return NO_INIT;
-    }
-
     ///Update the preview and image capture port indexes
     mCameraAdapterParameters.mPrevPortIndex = OMX_CAMERA_PORT_VIDEO_OUT_PREVIEW;
     // temp changed in order to build OMX_CAMERA_PORT_VIDEO_OUT_IMAGE;
@@ -94,9 +88,10 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
 
     eError = OMX_Init();
     if (eError != OMX_ErrorNone) {
-      CAMHAL_LOGEB("Error OMX_Init -0x%x", eError);
-      return eError;
+        CAMHAL_LOGEB("OMX_Init() failed, error: 0x%x", eError);
+        return ErrorUtils::omxToAndroidError(eError);
     }
+    mOmxInitialized = true;
 
     ///Get the handle to the OMX Component
     eError = OMXCameraAdapter::OMXCameraGetHandle(&mCameraAdapterParameters.mHandleComp, (OMX_PTR)this);
@@ -104,6 +99,8 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
         CAMHAL_LOGEB("OMX_GetHandle -0x%x", eError);
     }
     GOTO_EXIT_IF((eError != OMX_ErrorNone), eError);
+
+    mComponentState = OMX_StateLoaded;
 
     CAMHAL_LOGVB("OMX_GetHandle -0x%x sensor_index = %lu", eError, mSensorIndex);
     eError = OMX_SendCommand(mCameraAdapterParameters.mHandleComp,
@@ -176,7 +173,6 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
     mRecording = false;
     mWaitingForSnapshot = false;
     mSnapshotCount = 0;
-    mComponentState = OMX_StateLoaded;
 
     mCapMode = HIGH_QUALITY;
     mIPP = IPP_NULL;
@@ -3432,10 +3428,12 @@ OMX_OTHER_EXTRADATATYPE *OMXCameraAdapter::getExtradata(OMX_OTHER_EXTRADATATYPE 
   return NULL;
 }
 
-OMXCameraAdapter::OMXCameraAdapter(size_t sensor_index): mComponentState (OMX_StateLoaded)
+OMXCameraAdapter::OMXCameraAdapter(size_t sensor_index)
 {
     LOG_FUNCTION_NAME;
 
+    mOmxInitialized = false;
+    mComponentState = OMX_StateInvalid;
     mSensorIndex = sensor_index;
     mPictureRotation = 0;
     // Initial values
@@ -3475,22 +3473,22 @@ OMXCameraAdapter::~OMXCameraAdapter()
 
     Mutex::Autolock lock(gAdapterLock);
 
-    //Return to OMX Loaded state
-    switchToLoaded();
+    if ( mOmxInitialized ) {
+        // return to OMX Loaded state
+        switchToLoaded();
 
-    ///De-init the OMX
-    if( (mComponentState==OMX_StateLoaded) || (mComponentState==OMX_StateInvalid))
-        {
-        ///Free the handle for the Camera component
-        if(mCameraAdapterParameters.mHandleComp)
-            {
-            OMX_FreeHandle(mCameraAdapterParameters.mHandleComp);
-             mCameraAdapterParameters.mHandleComp = NULL;
+        // deinit the OMX
+        if ( mComponentState == OMX_StateLoaded || mComponentState == OMX_StateInvalid ) {
+            // free the handle for the Camera component
+            if ( mCameraAdapterParameters.mHandleComp ) {
+                OMX_FreeHandle(mCameraAdapterParameters.mHandleComp);
+                mCameraAdapterParameters.mHandleComp = NULL;
             }
-
-        OMX_Deinit();
         }
 
+        OMX_Deinit();
+        mOmxInitialized = false;
+    }
 
     //Remove any unhandled events
     if ( !mEventSignalQ.isEmpty() )
@@ -3560,28 +3558,30 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraGetHandle(OMX_HANDLETYPE *handle, OMX_P
 {
     OMX_ERRORTYPE eError = OMX_ErrorUndefined;
 
-    int retries = 5;
-    while(eError!=OMX_ErrorNone && --retries>=0) {
+    for ( int i = 0; i < 5; ++i ) {
+        if ( i > 0 ) {
+            // sleep for 100 ms before next attempt
+            usleep(100000);
+        }
 
-      // Setup key parameters to send to Ducati during init
-      OMX_CALLBACKTYPE oCallbacks;
+        // setup key parameters to send to Ducati during init
+        OMX_CALLBACKTYPE oCallbacks;
 
-      // Initialize the callback handles
-      oCallbacks.EventHandler    = android::OMXCameraAdapterEventHandler;
-      oCallbacks.EmptyBufferDone = android::OMXCameraAdapterEmptyBufferDone;
-      oCallbacks.FillBufferDone  = android::OMXCameraAdapterFillBufferDone;
+        // initialize the callback handles
+        oCallbacks.EventHandler    = android::OMXCameraAdapterEventHandler;
+        oCallbacks.EmptyBufferDone = android::OMXCameraAdapterEmptyBufferDone;
+        oCallbacks.FillBufferDone  = android::OMXCameraAdapterFillBufferDone;
 
-      // Get Handle
-      eError = OMX_GetHandle(handle, (OMX_STRING)"OMX.TI.DUCATI1.VIDEO.CAMERA", pAppData, &oCallbacks);
-      if (eError != OMX_ErrorNone) {
-        CAMHAL_LOGEB("OMX_GetHandle -0x%x", eError);
-        //Sleep for 100 mS
-        usleep(100000);
-      } else {
-        break;
-      }
+        // get handle
+        eError = OMX_GetHandle(handle, (OMX_STRING)"OMX.TI.DUCATI1.VIDEO.CAMERA", pAppData, &oCallbacks);
+        if ( eError == OMX_ErrorNone ) {
+            return OMX_ErrorNone;
+        }
+
+        CAMHAL_LOGEB("OMX_GetHandle() failed, error: 0x%x", eError);
     }
 
+    *handle = 0;
     return eError;
 }
 

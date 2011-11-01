@@ -887,6 +887,7 @@ private:
     int mBracketingRange;
 
     CameraParameters mParameters;
+    bool mOmxInitialized;
     OMXCameraAdapterComponentContext mCameraAdapterParameters;
     bool mFirstTimeInit;
 
