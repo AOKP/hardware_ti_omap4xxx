@@ -1757,7 +1757,6 @@ status_t OMXCameraAdapter::startPreview()
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMXCameraPortParameters *mPreviewData = NULL;
     OMXCameraPortParameters *measurementData = NULL;
-    OMX_CONFIG_EXTRADATATYPE extraDataControl;
 
     LOG_FUNCTION_NAME;
 
@@ -1863,22 +1862,6 @@ status_t OMXCameraAdapter::startPreview()
             }
 
         }
-
-    // Enable Ancillary data. The nDCCStatus field is used to signify
-    // whether the preview frame is a snapshot
-    if ( OMX_ErrorNone == eError)
-        {
-        OMX_INIT_STRUCT_PTR (&extraDataControl, OMX_CONFIG_EXTRADATATYPE);
-        extraDataControl.nPortIndex = OMX_ALL;
-        extraDataControl.eExtraDataType = OMX_AncillaryData;
-        extraDataControl.bEnable = OMX_TRUE;
-
-        eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
-                               ( OMX_INDEXTYPE ) OMX_IndexConfigOtherExtraDataControl,
-                               &extraDataControl);
-        GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
-        }
-
 
     if ( mPending3Asettings )
         apply3Asettings(mParameters3A);
@@ -2901,10 +2884,6 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
     sp<CameraFDResult> fdResult = NULL;
     unsigned int mask = 0xFFFF;
     CameraFrame cameraFrame;
-    OMX_TI_PLATFORMPRIVATE *platformPrivate;
-    OMX_OTHER_EXTRADATATYPE *extraData;
-    OMX_TI_ANCILLARYDATATYPE *ancillaryData;
-    bool snapshotFrame = false;
 
     res1 = res2 = NO_ERROR;
     pPortParam = &(mCameraAdapterParameters.mCameraPortParams[pBuffHeader->nOutputPortIndex]);
@@ -2920,19 +2899,6 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
         if ( ( PREVIEW_ACTIVE & state ) != PREVIEW_ACTIVE )
             {
             return OMX_ErrorNone;
-            }
-
-        if ( mWaitingForSnapshot )
-            {
-            platformPrivate = (OMX_TI_PLATFORMPRIVATE*) pBuffHeader->pPlatformPrivate;
-            extraData = getExtradata((OMX_OTHER_EXTRADATATYPE*) platformPrivate->pMetaDataBuffer,
-                    (OMX_EXTRADATATYPE) OMX_AncillaryData);
-
-            if ( NULL != extraData )
-                {
-                ancillaryData = (OMX_TI_ANCILLARYDATATYPE*) extraData->data;
-                snapshotFrame = ancillaryData->nDCCStatus;
-                }
             }
 
         recalculateFPS();
@@ -2954,15 +2920,15 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             }
 
         ///Prepare the frames to be sent - initialize CameraFrame object and reference count
-        if( mWaitingForSnapshot &&  (mCapturedFrames > 0) && snapshotFrame )
+        if( mWaitingForSnapshot &&  (mCapturedFrames > 0) )
             {
             typeOfFrame = CameraFrame::SNAPSHOT_FRAME;
             mask = (unsigned int)CameraFrame::SNAPSHOT_FRAME;
             }
         else
             {
-            typeOfFrame = CameraFrame::PREVIEW_FRAME_SYNC;
-            mask = (unsigned int)CameraFrame::PREVIEW_FRAME_SYNC;
+              typeOfFrame = CameraFrame::PREVIEW_FRAME_SYNC;
+              mask = (unsigned int)CameraFrame::PREVIEW_FRAME_SYNC;
             }
 
         if (mRecording)
@@ -3360,23 +3326,6 @@ bool OMXCameraAdapter::OMXCallbackHandler::Handler()
 
     LOG_FUNCTION_NAME_EXIT;
     return false;
-}
-
-OMX_OTHER_EXTRADATATYPE *OMXCameraAdapter::getExtradata(OMX_OTHER_EXTRADATATYPE *extraData, OMX_EXTRADATATYPE type)
-{
-  if ( NULL != extraData )
-      {
-      while ( extraData->nDataSize != 0 )
-          {
-          if ( type == extraData->eType )
-              {
-              return extraData;
-              }
-          extraData = (OMX_OTHER_EXTRADATATYPE*) ((char*)extraData + extraData->nSize);
-          }
-      }
-  // Required extradata type wasn't found
-  return NULL;
 }
 
 OMXCameraAdapter::OMXCameraAdapter(size_t sensor_index): mComponentState (OMX_StateLoaded)
