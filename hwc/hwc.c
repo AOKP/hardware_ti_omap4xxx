@@ -874,7 +874,7 @@ static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts 
 
     num->max_scaling_overlays = num->max_hw_overlays - nonscaling_ovls;
 
-    int on_tv = hwc_dev->ext.on_tv;
+    int on_tv = hwc_dev->ext.on_tv && hwc_dev->ext.current.enabled;
     int tform = hwc_dev->ext.current.enabled && (hwc_dev->ext.current.rotation || hwc_dev->ext.current.hflip);
 
     return  !hwc_dev->force_sgx &&
@@ -897,7 +897,7 @@ static inline int can_dss_render_layer(omap4_hwc_device_t *hwc_dev,
 {
     IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
 
-    int on_tv = hwc_dev->ext.on_tv;
+    int on_tv = hwc_dev->ext.on_tv && hwc_dev->ext.current.enabled;
     int tform = hwc_dev->ext.current.enabled && (hwc_dev->ext.current.rotation || hwc_dev->ext.current.hflip);
 
     return omap4_hwc_is_valid_layer(hwc_dev, layer, handle) &&
