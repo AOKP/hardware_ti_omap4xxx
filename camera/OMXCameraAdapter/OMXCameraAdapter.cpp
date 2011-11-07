@@ -1942,6 +1942,20 @@ status_t OMXCameraAdapter::stopPreview()
 
     {
         Mutex::Autolock lock(mFrameCountMutex);
+        // we should wait for the first frame to come before trying to stopPreview...if not
+        // we might put OMXCamera in a bad state (IDLE->LOADED timeout). Seeing this a lot
+        // after a capture
+        if (mFrameCount < 1) {
+            // I want to wait for at least two frames....
+            mFrameCount = -1;
+
+            // first frame may time some time to come...so wait for an adequate amount of time
+            // which 2 * OMX_CAPTURE_TIMEOUT * 1000 will cover.
+            ret = mFirstFrameCondition.waitRelative(mFrameCountMutex,
+                                                    (nsecs_t) 2 * OMX_CAPTURE_TIMEOUT * 1000);
+        }
+        // even if we timeout waiting for the first frame...go ahead with trying to stop preview
+        // signal anybody that might be waiting
         mFrameCount = 0;
         mFirstFrameCondition.broadcast();
     }
