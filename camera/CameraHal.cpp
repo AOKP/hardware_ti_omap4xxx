@@ -3373,36 +3373,17 @@ void CameraHal::forceStopPreview()
     }
 
     if ( NULL != mCameraAdapter ) {
-        CameraAdapter::AdapterState currentState;
-        CameraAdapter::AdapterState nextState;
-
-        currentState = mCameraAdapter->getState();
-        nextState = mCameraAdapter->getNextState();
-
-        // since prerequisite for capturing is for camera system
-        // to be previewing...cancel all captures before stopping
-        // preview
-        if ( (currentState == CameraAdapter::CAPTURE_STATE) &&
-             (nextState != CameraAdapter::PREVIEW_STATE)) {
-            mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_IMAGE_CAPTURE);
-        }
-
         // only need to send these control commands to state machine if we are
         // passed the LOADED_PREVIEW_STATE
-        if (currentState > CameraAdapter::LOADED_PREVIEW_STATE) {
+        if (mCameraAdapter->getState() > CameraAdapter::LOADED_PREVIEW_STATE) {
            // according to javadoc...FD should be stopped in stopPreview
            // and application needs to call startFaceDection again
            // to restart FD
            mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_FD);
-           mCameraAdapter->sendCommand(CameraAdapter::CAMERA_CANCEL_AUTOFOCUS);
         }
 
-        // only need to send these control commands to state machine if we are
-        // passed the INITIALIZED_STATE
-        if (currentState > CameraAdapter::INTIALIZED_STATE) {
-           //Stop the source of frames
-           mCameraAdapter->sendCommand(CameraAdapter::CAMERA_STOP_PREVIEW);
-        }
+        mCameraAdapter->rollbackToInitializedState();
+
     }
 
     freePreviewBufs();

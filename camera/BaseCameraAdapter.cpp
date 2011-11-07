@@ -2123,6 +2123,87 @@ status_t BaseCameraAdapter::setState(CameraCommands operation)
     return ret;
 }
 
+status_t BaseCameraAdapter::rollbackToInitializedState()
+{
+    status_t ret = NO_ERROR;
+
+    LOG_FUNCTION_NAME;
+
+    while ((getState() != INTIALIZED_STATE) && (ret == NO_ERROR)) {
+        ret = rollbackToPreviousState();
+    }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return ret;
+}
+
+status_t BaseCameraAdapter::rollbackToPreviousState()
+{
+    status_t ret = NO_ERROR;
+
+    LOG_FUNCTION_NAME;
+
+    CameraAdapter::AdapterState currentState = getState();
+
+    switch (currentState) {
+        case INTIALIZED_STATE:
+            return NO_ERROR;
+
+        case PREVIEW_STATE:
+            ret = sendCommand(CAMERA_STOP_PREVIEW);
+            break;
+
+        case CAPTURE_STATE:
+            ret = sendCommand(CAMERA_STOP_IMAGE_CAPTURE);
+            break;
+
+        case BRACKETING_STATE:
+            ret = sendCommand(CAMERA_STOP_BRACKET_CAPTURE);
+            break;
+
+        case AF_STATE:
+            ret = sendCommand(CAMERA_CANCEL_AUTOFOCUS);
+            break;
+
+        case ZOOM_STATE:
+            ret = sendCommand(CAMERA_STOP_SMOOTH_ZOOM);
+            break;
+
+        case VIDEO_STATE:
+            ret = sendCommand(CAMERA_STOP_VIDEO);
+            break;
+
+        case VIDEO_AF_STATE:
+            ret = sendCommand(CAMERA_CANCEL_AUTOFOCUS);
+            break;
+
+        case VIDEO_CAPTURE_STATE:
+            ret = sendCommand(CAMERA_STOP_IMAGE_CAPTURE);
+            break;
+
+        case AF_ZOOM_STATE:
+            ret = sendCommand(CAMERA_STOP_SMOOTH_ZOOM);
+            break;
+
+        case VIDEO_ZOOM_STATE:
+            ret = sendCommand(CAMERA_STOP_SMOOTH_ZOOM);
+            break;
+
+        case BRACKETING_ZOOM_STATE:
+            ret = sendCommand(CAMERA_STOP_SMOOTH_ZOOM);
+            break;
+
+        default:
+            CAMHAL_LOGEA("Invalid Adapter state!");
+            ret = INVALID_OPERATION;
+    }
+
+    LOG_FUNCTION_NAME_EXIT;
+
+    return ret;
+}
+
 //State transition finished successfully.
 //Commit the state and unlock the adapter state.
 status_t BaseCameraAdapter::commitState()

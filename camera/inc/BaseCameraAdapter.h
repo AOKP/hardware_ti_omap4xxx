@@ -59,6 +59,9 @@ public:
     //Retrieves the next Adapter state
     virtual AdapterState getNextState();
 
+    // Rolls the state machine back to INTIALIZED_STATE from the current state
+    virtual status_t rollbackToInitializedState();
+
 protected:
     //The first two methods will try to switch the adapter state.
     //Every call to setState() should be followed by a corresponding
@@ -163,6 +166,7 @@ private:
     status_t __sendFrameToSubscribers(CameraFrame* frame,
                                       KeyedVector<int, frame_callback> *subscribers,
                                       CameraFrame::FrameType frameType);
+    status_t rollbackToPreviousState();
 
 // protected data types and variables
 protected:
