@@ -915,7 +915,7 @@ status_t OMXCameraAdapter::stopImageCapture()
     stopFaceDetection();
 
     //Wait here for the capture to be done, in worst case timeout and proceed with cleanup
-    ret = mCaptureSem.WaitTimeout(OMX_CAPTURE_TIMEOUT);
+    mCaptureSem.WaitTimeout(OMX_CAPTURE_TIMEOUT);
 
     //If somethiing bad happened while we wait
     if (mComponentState == OMX_StateInvalid)
@@ -923,16 +923,6 @@ status_t OMXCameraAdapter::stopImageCapture()
         CAMHAL_LOGEA("Invalid State Image Capture Stop Exitting!!!");
         goto EXIT;
       }
-
-    if ( NO_ERROR != ret ) {
-        ret |= RemoveEvent(mCameraAdapterParameters.mHandleComp,
-                           (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
-                           OMX_ALL,
-                           OMX_TI_IndexConfigShutterCallback,
-                           NULL);
-        CAMHAL_LOGEA("Timeout expired on capture sem");
-        goto EXIT;
-    }
 
     // Disable image capture
     // Capturing command is not needed when capturing in video mode
