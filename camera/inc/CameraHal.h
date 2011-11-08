@@ -566,8 +566,6 @@ public:
     //Set Burst mode
     void setBurst(bool burst);
 
-    int setParameters(const CameraParameters& params);
-
     //Notifications from CameraHal for video recording case
     status_t startRecording();
     status_t stopRecording();
@@ -582,6 +580,8 @@ public:
 
     bool getUesVideoBuffers();
     void setVideoRes(int width, int height);
+
+    void flushEventQueue();
 
     //Internal class definitions
     class NotificationThread : public Thread {
@@ -661,8 +661,6 @@ private:
 
     bool mUseMetaDataBufferMode;
     bool mRawAvailable;
-
-    CameraParameters mParameters;
 
     bool mUseVideoBuffers;
 

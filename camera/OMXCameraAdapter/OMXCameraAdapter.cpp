@@ -3331,14 +3331,6 @@ bool OMXCameraAdapter::CommandHandler::Handler()
             }
         }
 
-        if ( NO_ERROR != stat )
-            {
-            errorNotify = ( ErrorNotifier * ) msg.arg1;
-            if ( NULL != errorNotify )
-                {
-                errorNotify->errorNotify(CAMERA_ERROR_HARD);
-                }
-            }
         }
 
     LOG_FUNCTION_NAME_EXIT;
