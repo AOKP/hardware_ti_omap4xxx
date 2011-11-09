@@ -269,6 +269,10 @@ int ANativeWindowDisplayAdapter::setPreviewWindow(preview_stream_ops_t* window)
         return BAD_VALUE;
     }
 
+    if ( window == mANativeWindow ) {
+        return ALREADY_EXISTS;
+    }
+
     ///Destroy the existing window object, if it exists
     destroy();
 
