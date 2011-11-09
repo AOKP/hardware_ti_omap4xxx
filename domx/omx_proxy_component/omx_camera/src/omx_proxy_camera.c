@@ -644,6 +644,7 @@ void DCC_DeInit()
 		munmap(DCC_Buff_ptr, dccbuf_size);
 		close(mmap_fd);
 		ion_free(ion_fd, DCC_Buff);
+		ion_close(ion_fd);
 		DCC_Buff = NULL;
 #else
 		MemMgr_Free(DCC_Buff);
