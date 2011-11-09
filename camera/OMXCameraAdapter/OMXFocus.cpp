@@ -82,6 +82,7 @@ status_t OMXCameraAdapter::doAutoFocus()
     OMX_ERRORTYPE eError = OMX_ErrorNone;
     OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focusControl;
     OMX_PARAM_FOCUSSTATUSTYPE focusStatus;
+    OMX_CONFIG_BOOLEANTYPE bOMX;
 
     LOG_FUNCTION_NAME;
 
@@ -153,6 +154,13 @@ status_t OMXCameraAdapter::doAutoFocus()
             && focusStatus.eFocusStatus == OMX_FocusStatusRequest) ||
             (mParameters3A.Focus !=  (OMX_IMAGE_FOCUSCONTROLTYPE)OMX_IMAGE_FocusControlAuto) )
         {
+        OMX_INIT_STRUCT_PTR (&bOMX, OMX_CONFIG_BOOLEANTYPE);
+        bOMX.bEnabled = OMX_TRUE;
+
+        //Enable focus scanning
+        eError = OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
+                               (OMX_INDEXTYPE)OMX_TI_IndexConfigAutofocusEnable,
+                               &bOMX);
 
         ret = RegisterForEvent(mCameraAdapterParameters.mHandleComp,
                                     (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
