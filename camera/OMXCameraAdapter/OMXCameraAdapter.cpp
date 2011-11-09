@@ -1830,6 +1830,7 @@ status_t OMXCameraAdapter::startPreview()
 
     mStateSwitchLock.unlock();
 
+    apply3Asettings(mParameters3A);
     //Queue all the buffers on preview port
     for(int index=0;index< mPreviewData->mMaxQueueable;index++)
         {
