@@ -135,6 +135,7 @@ struct omap4_hwc_device {
     int flags_rgb_order;
     int flags_nv12_only;
     int idle;
+    int ovls_blending;
 
     int force_sgx;
 };
@@ -1066,6 +1067,19 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         }
     }
 
+    /* see if any of the (non-backmost) overlays are doing blending */
+    hwc_dev->ovls_blending = 0;
+    for (i = 1; list && i < list->numHwLayers; i++) {
+        hwc_layer_t *layer = &list->hwLayers[i];
+        IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
+        if (layer->compositionType == HWC_FRAMEBUFFER)
+            continue;
+        if ((layer->flags & HWC_SKIP_LAYER) || !layer->handle)
+            continue;
+        if (is_BLENDED(layer->blending))
+            hwc_dev->ovls_blending = 1;
+    }
+
     /* if scaling GFX (e.g. only 1 scaled surface) use a VID pipe */
     if (scaled_gfx)
         dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls;
@@ -1500,7 +1514,7 @@ static void *omap4_hwc_hdmi_thread(void *data)
     omap4_hwc_device_t *hwc_dev = data;
     static char uevent_desc[4096];
     struct pollfd fds[2];
-    int prev_force_sgx = 0;
+    int invalidate = 0;
     int timeout;
     int err;
 
@@ -1520,14 +1534,18 @@ static void *omap4_hwc_hdmi_thread(void *data)
 
         if (err == 0) {
             if (hwc_dev->idle) {
-                pthread_mutex_lock(&hwc_dev->lock);
-                prev_force_sgx = hwc_dev->force_sgx;
-                hwc_dev->force_sgx = 2;
-                pthread_mutex_unlock(&hwc_dev->lock);
+                if (hwc_dev->procs && hwc_dev->procs->invalidate) {
+                    pthread_mutex_lock(&hwc_dev->lock);
+                    invalidate = !hwc_dev->force_sgx && hwc_dev->ovls_blending;
+                    if (invalidate) {
+                        hwc_dev->force_sgx = 2;
+                    }
+                    pthread_mutex_unlock(&hwc_dev->lock);
 
-                if (!prev_force_sgx && hwc_dev->procs && hwc_dev->procs->invalidate) {
-                    hwc_dev->procs->invalidate(hwc_dev->procs);
-                    timeout = -1;
+                    if (invalidate) {
+                        hwc_dev->procs->invalidate(hwc_dev->procs);
+                        timeout = -1;
+                    }
                 }
 
                 continue;
