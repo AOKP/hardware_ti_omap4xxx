@@ -1008,10 +1008,6 @@ int CameraHal::setParameters(const CameraParameters& params)
         mParameters.unflatten(oldParams.flatten());
     }
 
-    if ( NULL != mAppCallbackNotifier.get() ) {
-        mAppCallbackNotifier->setParameters(mParameters);
-    }
-
     // Restart Preview if needed by KEY_RECODING_HINT only if preview is already running.
     // If preview is not started yet, Video Mode parameters will take effect on next startPreview()
     if (restartPreviewRequired && previewEnabled() && !mRecordingEnabled) {
@@ -2222,6 +2218,7 @@ status_t CameraHal::cancelAutoFocus()
         adapterParams.set(TICameraParameters::KEY_AUTO_FOCUS_LOCK, CameraParameters::FALSE);
         mCameraAdapter->setParameters(adapterParams);
         mCameraAdapter->sendCommand(CameraAdapter::CAMERA_CANCEL_AUTOFOCUS);
+        mAppCallbackNotifier->flushEventQueue();
     }
 
     LOG_FUNCTION_NAME_EXIT;
