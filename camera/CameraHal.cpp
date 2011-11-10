@@ -1715,10 +1715,11 @@ status_t CameraHal::setPreviewWindow(struct preview_stream_ops *window)
         }
     }else
     {
-        /* If mDisplayAdpater is already created. No need to do anything.
-         * We get a surface handle directly now, so we can reconfigure surface
-         * itself in DisplayAdapter if dimensions have changed
-         */
+        // Update the display adapter with the new window that is passed from CameraService
+        ret  = mDisplayAdapter->setPreviewWindow(window);
+        if (previewEnabled()) {
+            restartPreview();
+        }
     }
     LOG_FUNCTION_NAME_EXIT;
 
