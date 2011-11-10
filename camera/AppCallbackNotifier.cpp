@@ -1168,9 +1168,7 @@ void AppCallbackNotifier::flushEventQueue()
 
     {
     Mutex::Autolock lock(mLock);
-    TIUTILS::Message msg;
-    while(!mEventQ.isEmpty())
-        mEventQ.get(&msg);
+    mEventQ.clear();
     }
 }
 
