@@ -276,6 +276,24 @@ bool MessageQueue::isEmpty()
     return !mHasMsg;
 }
 
+void MessageQueue::clear()
+{
+    if(!this->fd_read)
+        {
+        MSGQ_LOGEA("read descriptor not initialized for message queue");
+        LOG_FUNCTION_NAME_EXIT;
+        return;
+        }
+
+    Message msg;
+    while(!isEmpty())
+        {
+        get(&msg);
+        }
+
+}
+
+
 /**
    @brief Force whether the message queue has message or not
 

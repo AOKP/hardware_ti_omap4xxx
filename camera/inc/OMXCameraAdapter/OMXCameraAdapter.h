@@ -654,8 +654,15 @@ private:
             }
 
             status_t put(TIUTILS::Message* msg){
+                Mutex::Autolock lock(mLock);
                 return mCommandMsgQ.put(msg);
             }
+
+            void clearCommandQ()
+                {
+                Mutex::Autolock lock(mLock);
+                mCommandMsgQ.clear();
+                }
 
             enum {
                 COMMAND_EXIT = -1,
@@ -668,6 +675,7 @@ private:
             bool Handler();
             TIUTILS::MessageQueue mCommandMsgQ;
             OMXCameraAdapter* mCameraAdapter;
+            Mutex mLock;
     };
     sp<CommandHandler> mCommandHandler;
 
@@ -685,8 +693,15 @@ public:
         }
 
         status_t put(TIUTILS::Message* msg){
+            Mutex::Autolock lock(mLock);
             return mCommandMsgQ.put(msg);
         }
+
+        void clearCommandQ()
+            {
+            Mutex::Autolock lock(mLock);
+            mCommandMsgQ.clear();
+            }
 
         enum {
             COMMAND_EXIT = -1,
@@ -697,6 +712,7 @@ public:
         bool Handler();
         TIUTILS::MessageQueue mCommandMsgQ;
         OMXCameraAdapter* mCameraAdapter;
+        Mutex mLock;
     };
 
     sp<OMXCallbackHandler> mOMXCallbackHandler;
