@@ -261,11 +261,11 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
         for (unsigned int i = 0 ;i < mEventSignalQ.size(); i++ ) {
             TIUTILS::Message *msg = mEventSignalQ.itemAt(i);
             //remove from queue and free msg
-            mEventSignalQ.removeAt(i);
             if ( NULL != msg ) {
                 free(msg);
             }
         }
+        mEventSignalQ.clear();
     }
 
     OMX_INIT_STRUCT_PTR (&mRegionPriority, OMX_TI_CONFIG_3A_REGION_PRIORITY);
@@ -2646,7 +2646,6 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterEventHandler(OMX_IN OMX_HANDLETY
                         if ( NULL != msg )
                           {
                             Semaphore *sem  = (Semaphore*) msg->arg3;
-                            mEventSignalQ.removeAt(i);
                             if ( sem )
                               {
                                 sem->Signal();
@@ -2654,6 +2653,7 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterEventHandler(OMX_IN OMX_HANDLETY
                             free(msg);
                           }
                       }
+                    mEventSignalQ.clear();
                   }
                 ///Report Error to App
                 mErrorNotifier->errorNotify(CAMERA_ERROR_FATAL);
@@ -3305,7 +3305,10 @@ bool OMXCameraAdapter::CommandHandler::Handler()
         stat = NO_ERROR;
         CAMHAL_LOGDA("Handler: waiting for messsage...");
         TIUTILS::MessageQueue::waitForMsg(&mCommandMsgQ, NULL, NULL, -1);
+        {
+        Mutex::Autolock lock(mLock);
         mCommandMsgQ.get(&msg);
+        }
         CAMHAL_LOGDB("msg.command = %d", msg.command);
         switch ( msg.command ) {
             case CommandHandler::CAMERA_START_IMAGE_CAPTURE:
@@ -3348,7 +3351,11 @@ bool OMXCameraAdapter::OMXCallbackHandler::Handler()
 
     while(forever){
         TIUTILS::MessageQueue::waitForMsg(&mCommandMsgQ, NULL, NULL, -1);
+        {
+        Mutex::Autolock lock(mLock);
         mCommandMsgQ.get(&msg);
+        }
+
         switch ( msg.command ) {
             case OMXCallbackHandler::CAMERA_FILL_BUFFER_DONE:
             {
@@ -3456,12 +3463,12 @@ OMXCameraAdapter::~OMXCameraAdapter()
             if ( NULL != msg )
               {
                 Semaphore *sem  = (Semaphore*) msg->arg3;
-                mEventSignalQ.removeAt(i);
                 sem->Signal();
                 free(msg);
 
               }
           }
+       mEventSignalQ.clear();
       }
 
     //Exit and free ref to command handling thread
@@ -3470,6 +3477,7 @@ OMXCameraAdapter::~OMXCameraAdapter()
         TIUTILS::Message msg;
         msg.command = CommandHandler::COMMAND_EXIT;
         msg.arg1 = mErrorNotifier;
+        mCommandHandler->clearCommandQ();
         mCommandHandler->put(&msg);
         mCommandHandler->requestExitAndWait();
         mCommandHandler.clear();
@@ -3480,6 +3488,8 @@ OMXCameraAdapter::~OMXCameraAdapter()
     {
         TIUTILS::Message msg;
         msg.command = OMXCallbackHandler::COMMAND_EXIT;
+        //Clear all messages pending first
+        mOMXCallbackHandler->clearCommandQ();
         mOMXCallbackHandler->put(&msg);
         mOMXCallbackHandler->requestExitAndWait();
         mOMXCallbackHandler.clear();

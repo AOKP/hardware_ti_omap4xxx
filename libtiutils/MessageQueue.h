@@ -83,6 +83,8 @@ public:
     ///Returns if the message queue is empty or not
     bool isEmpty();
 
+    void clear();
+
     ///Force whether the message queue has message or not
     void setMsg(bool hasMsg=false);
 
