@@ -2969,7 +2969,11 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
             }
 
         ///Prepare the frames to be sent - initialize CameraFrame object and reference count
-        if( mWaitingForSnapshot &&  (mCapturedFrames > 0) && snapshotFrame )
+        // TODO(XXX): ancillary data for snapshot frame is not being sent for video snapshot
+        //            if we are waiting for a snapshot and in video mode...go ahead and send
+        //            this frame as a snapshot
+        if( mWaitingForSnapshot &&  (mCapturedFrames > 0) &&
+            (snapshotFrame || (mCapMode == VIDEO_MODE)))
             {
             typeOfFrame = CameraFrame::SNAPSHOT_FRAME;
             mask = (unsigned int)CameraFrame::SNAPSHOT_FRAME;
