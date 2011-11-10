@@ -741,6 +741,11 @@ status_t OMXCameraAdapter::startImageCapture()
         return NO_INIT;
         }
 
+    if ((getNextState() & (CAPTURE_ACTIVE|BRACKETING_ACTIVE)) == 0) {
+        CAMHAL_LOGDA("trying starting capture when already canceled");
+        return NO_ERROR;
+    }
+
     // Camera framework doesn't expect face callbacks once capture is triggered
     pauseFaceDetection(true);
 
@@ -899,12 +904,13 @@ status_t OMXCameraAdapter::stopImageCapture()
         // if anybody is waiting on the shutter callback
         // signal them and then recreate the semaphore
         if ( 0 != mStartCaptureSem.Count() ) {
-            for (int i = mStopCaptureSem.Count(); i > 0; i--) {
-                ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
-                                   (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
-                                   OMX_ALL,
-                                   OMX_TI_IndexConfigShutterCallback,
-                                   NULL );
+
+            for (int i = mStartCaptureSem.Count(); i < 0; i++) {
+            ret |= SignalEvent(mCameraAdapterParameters.mHandleComp,
+                               (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
+                               OMX_ALL,
+                               OMX_TI_IndexConfigShutterCallback,
+                               NULL );
             }
             mStartCaptureSem.Create(0);
         }
