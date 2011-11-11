@@ -104,7 +104,7 @@ static void nv21_to_yuv(uint8_t* dst, uint8_t* y, uint8_t* uv, int width) {
         return;
     }
 
-    while ((width--) >= 0) {
+    while ((width--) > 0) {
         uint8_t y0 = y[0];
         uint8_t v0 = uv[0];
         uint8_t u0 = *(uv+1);
@@ -452,6 +452,7 @@ size_t Encoder_libjpeg::encode(params* input) {
     jpeg_destroy_compress(&cinfo);
 
     if (resize_src) free(resize_src);
+    if (row_tmp) free(row_tmp);
 
  exit:
     input->jpeg_size = dest_mgr.jpegsize;

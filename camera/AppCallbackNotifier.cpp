@@ -824,7 +824,8 @@ void AppCallbackNotifier::notifyFrame()
                     }
 
                     CameraParameters parameters;
-                    const String8 strParams(mCameraHal->getParameters());
+                    char *params = mCameraHal->getParameters();
+                    const String8 strParams(params);
                     parameters.unflatten(strParams);
 
                     encode_quality = parameters.getInt(CameraParameters::KEY_JPEG_QUALITY);
@@ -894,6 +895,10 @@ void AppCallbackNotifier::notifyFrame()
                     encoder->run();
                     gEncoderQueue.add(frame->mBuffer, encoder);
                     encoder.clear();
+                    if (params != NULL)
+                      {
+                        mCameraHal->putParameters(params);
+                      }
                     }
                 else if ( ( CameraFrame::IMAGE_FRAME == frame->mFrameType ) &&
                              ( NULL != mCameraHal ) &&
