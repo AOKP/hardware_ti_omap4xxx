@@ -31,7 +31,8 @@
 #include "ErrorUtils.h"
 
 #define TOUCH_FOCUS_RANGE 0xFF
-#define AF_CALLBACK_TIMEOUT 5000000 //5 seconds timeout
+#define AF_IMAGE_CALLBACK_TIMEOUT 5000000 //5 seconds timeout
+#define AF_VIDEO_CALLBACK_TIMEOUT 2800000 //2.8 seconds timeout
 
 namespace android {
 
@@ -83,6 +84,7 @@ status_t OMXCameraAdapter::doAutoFocus()
     OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE focusControl;
     OMX_PARAM_FOCUSSTATUSTYPE focusStatus;
     OMX_CONFIG_BOOLEANTYPE bOMX;
+    int timeout = 0;
 
     LOG_FUNCTION_NAME;
 
@@ -182,7 +184,10 @@ status_t OMXCameraAdapter::doAutoFocus()
             CAMHAL_LOGDA("Autofocus started successfully");
         }
 
-       if(mDoAFSem.WaitTimeout(AF_CALLBACK_TIMEOUT) != NO_ERROR) {
+       // configure focus timeout based on capture mode
+       timeout = (mCapMode == VIDEO_MODE) ? AF_VIDEO_CALLBACK_TIMEOUT : AF_IMAGE_CALLBACK_TIMEOUT;
+
+       if(mDoAFSem.WaitTimeout(timeout) != NO_ERROR) {
             //If somethiing bad happened while we wait
             if (mComponentState == OMX_StateInvalid) {
                 CAMHAL_LOGEA("Invalid State after Auto Focus Exitting!!!");
@@ -196,7 +201,6 @@ status_t OMXCameraAdapter::doAutoFocus()
                                         NULL );
             returnFocusStatus(true);
         } else {
-
             ret = returnFocusStatus(false);
         }
     } else { // Focus mode in continuous
