@@ -29,6 +29,8 @@
 #include "OMXCameraAdapter.h"
 #include "ErrorUtils.h"
 
+#include <cutils/properties.h>
+
 #undef TRUE
 #undef FALSE
 #define TRUE "true"
@@ -475,6 +477,22 @@ status_t OMXCameraAdapter::setExposureMode(Gen3A_settings& Gen3A)
     return ErrorUtils::omxToAndroidError(eError);
 }
 
+static bool isFlashDisabled() {
+#if (PROPERTY_VALUE_MAX < 5)
+#error "PROPERTY_VALUE_MAX must be at least 5"
+#endif
+
+    char value[PROPERTY_VALUE_MAX];
+    if (property_get("camera.flash_off", value, NULL) &&
+        (!strcasecmp(value, "true") || !strcasecmp(value, "1"))) {
+        LOGW("flash is turned off");
+        return true;
+    }
+
+    LOGI("flash is turned on");
+    return false;
+}
+
 status_t OMXCameraAdapter::setFlashMode(Gen3A_settings& Gen3A)
 {
     status_t ret = NO_ERROR;
@@ -492,7 +510,12 @@ status_t OMXCameraAdapter::setFlashMode(Gen3A_settings& Gen3A)
 
     OMX_INIT_STRUCT_PTR (&flash, OMX_IMAGE_PARAM_FLASHCONTROLTYPE);
     flash.nPortIndex = OMX_ALL;
-    flash.eFlashControl = ( OMX_IMAGE_FLASHCONTROLTYPE ) Gen3A.FlashMode;
+
+    if (isFlashDisabled()) {
+        flash.eFlashControl = ( OMX_IMAGE_FLASHCONTROLTYPE ) OMX_IMAGE_FlashControlOff;
+    } else {
+        flash.eFlashControl = ( OMX_IMAGE_FLASHCONTROLTYPE ) Gen3A.FlashMode;
+    }
 
     CAMHAL_LOGDB("Configuring flash mode 0x%x", flash.eFlashControl);
     eError =  OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
