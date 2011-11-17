@@ -1723,6 +1723,12 @@ status_t BaseCameraAdapter::setState(CameraCommands operation)
                     mNextState = PREVIEW_STATE;
                     break;
 
+                case CAMERA_STOP_PREVIEW:
+                    CAMHAL_LOGDB("Adapter state switch LOADED_PREVIEW_STATE->INTIALIZED_STATE event = 0x%x",
+                                 operation);
+                    mNextState = INTIALIZED_STATE;
+                    break;
+
                 //These events don't change the current state
                 case CAMERA_QUERY_BUFFER_SIZE_IMAGE_CAPTURE:
                 case CAMERA_QUERY_BUFFER_SIZE_PREVIEW_DATA:
