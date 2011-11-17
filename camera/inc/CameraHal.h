@@ -833,6 +833,12 @@ public:
 
     // Rolls the state machine back to INTIALIZED_STATE from the current state
     virtual status_t rollbackToInitializedState() = 0;
+
+    // Retrieves the current Adapter state - for internal use (not locked)
+    virtual status_t getState(AdapterState &state) = 0;
+    // Retrieves the next Adapter state - for internal use (not locked)
+    virtual status_t getNextState(AdapterState &state) = 0;
+
 protected:
     //The first two methods will try to switch the adapter state.
     //Every call to setState() should be followed by a corresponding
@@ -841,11 +847,6 @@ protected:
     virtual status_t setState(CameraCommands operation) = 0;
     virtual status_t commitState() = 0;
     virtual status_t rollbackState() = 0;
-
-    // Retrieves the current Adapter state - for internal use (not locked)
-    virtual status_t getState(AdapterState &state) = 0;
-    // Retrieves the next Adapter state - for internal use (not locked)
-    virtual status_t getNextState(AdapterState &state) = 0;
 };
 
 class DisplayAdapter : public BufferProvider, public virtual RefBase
