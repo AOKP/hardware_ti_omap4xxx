@@ -2158,17 +2158,30 @@ status_t CameraHal::autoFocus()
 
 #endif
 
-
     LOG_FUNCTION_NAME;
 
-    {
     Mutex::Autolock lock(mLock);
+
     mMsgEnabled |= CAMERA_MSG_FOCUS;
-    }
 
-
-    if ( NULL != mCameraAdapter )
+    if ( NULL == mCameraAdapter )
         {
+            ret = -1;
+            goto EXIT;
+        }
+
+    CameraAdapter::AdapterState state;
+    ret = mCameraAdapter->getState(state);
+    if (ret != NO_ERROR)
+        {
+            goto EXIT;
+        }
+
+    if (state == CameraAdapter::AF_STATE)
+        {
+            CAMHAL_LOGDA("Ignoring start-AF (already in progress)");
+            goto EXIT;
+        }
 
 #if PPM_INSTRUMENTATION || PPM_INSTRUMENTATION_ABS
 
@@ -2181,12 +2194,7 @@ status_t CameraHal::autoFocus()
 
 #endif
 
-        }
-    else
-        {
-            ret = -1;
-        }
-
+EXIT:
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
