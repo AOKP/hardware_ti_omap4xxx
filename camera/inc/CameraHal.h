@@ -77,6 +77,8 @@
 #define LOCK_BUFFER_TRIES 5
 #define HAL_PIXEL_FORMAT_NV12 0x100
 
+#define CAMHAL_LOGI LOGI
+
 //Uncomment to enable more verbose/debug logs
 //#define DEBUG_LOG
 
