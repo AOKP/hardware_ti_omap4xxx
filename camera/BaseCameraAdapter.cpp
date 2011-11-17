@@ -299,7 +299,7 @@ void BaseCameraAdapter::returnFrame(void* frameBuf, CameraFrame::FrameType frame
             }
         else
             {
-            CAMHAL_LOGEA("Frame returned when ref count is already zero!!");
+            CAMHAL_LOGDA("Frame returned when ref count is already zero!!");
             return;
             }
         }
@@ -1220,7 +1220,7 @@ status_t BaseCameraAdapter::__sendFrameToSubscribers(CameraFrame* frame,
           frame->mYuv[1] = lframe->mYuv[1];
         }
         else{
-          CAMHAL_LOGEA("Empty Frame Queue");
+          CAMHAL_LOGDA("Empty Frame Queue");
           return -EINVAL;
         }
       }

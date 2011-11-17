@@ -297,7 +297,7 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
 
     EXIT:
 
-    CAMHAL_LOGEB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
+    CAMHAL_LOGDB("Exiting function %s because of ret %d eError=%x", __FUNCTION__, ret, eError);
     performCleanupAfterError();
     LOG_FUNCTION_NAME_EXIT;
     return ErrorUtils::omxToAndroidError(eError);
@@ -2736,7 +2736,7 @@ OMX_ERRORTYPE OMXCameraAdapter::SignalEvent(OMX_IN OMX_HANDLETYPE hComponent,
         }
     else
         {
-        CAMHAL_LOGEA("Event queue empty!!!");
+        CAMHAL_LOGDA("Event queue empty!!!");
         }
 
     LOG_FUNCTION_NAME_EXIT;
@@ -3327,7 +3327,7 @@ bool OMXCameraAdapter::CommandHandler::Handler()
             }
             case CommandHandler::COMMAND_EXIT:
             {
-                CAMHAL_LOGEA("Exiting command handler");
+                CAMHAL_LOGDA("Exiting command handler");
                 forever = 0;
                 break;
             }
@@ -3369,7 +3369,7 @@ bool OMXCameraAdapter::OMXCallbackHandler::Handler()
             }
             case CommandHandler::COMMAND_EXIT:
             {
-                CAMHAL_LOGEA("Exiting OMX callback handler");
+                CAMHAL_LOGDA("Exiting OMX callback handler");
                 forever = 0;
                 break;
             }

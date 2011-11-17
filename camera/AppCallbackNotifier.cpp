@@ -1194,7 +1194,7 @@ bool AppCallbackNotifier::processMessage()
       {
         case NotificationThread::NOTIFIER_EXIT:
           {
-            CAMHAL_LOGEA("Received NOTIFIER_EXIT command from Camera HAL");
+            CAMHAL_LOGI("Received NOTIFIER_EXIT command from Camera HAL");
             mNotifierState = AppCallbackNotifier::NOTIFIER_EXITED;
             ret = false;
             break;
