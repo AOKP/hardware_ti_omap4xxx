@@ -693,7 +693,7 @@ int CameraHal::setParameters(const CameraParameters& params)
 
         if( (valstr = params.get(CameraParameters::KEY_FOCUS_AREAS)) != NULL )
             {
-            CAMHAL_LOGEB("Focus areas position set %s", params.get(CameraParameters::KEY_FOCUS_AREAS));
+            CAMHAL_LOGI("Focus areas position set %s", params.get(CameraParameters::KEY_FOCUS_AREAS));
             mParameters.set(CameraParameters::KEY_FOCUS_AREAS, valstr);
             }
 
@@ -910,7 +910,7 @@ int CameraHal::setParameters(const CameraParameters& params)
           }
         if( (valstr = params.get(CameraParameters::KEY_METERING_AREAS)) != NULL )
             {
-            CAMHAL_LOGEB("Metering areas position set %s", params.get(CameraParameters::KEY_METERING_AREAS));
+            CAMHAL_LOGI("Metering areas position set %s", params.get(CameraParameters::KEY_METERING_AREAS));
             mParameters.set(CameraParameters::KEY_METERING_AREAS, valstr);
             }
 
@@ -1431,7 +1431,7 @@ status_t CameraHal::startPreview()
 
     ///If we don't have the preview callback enabled and display adapter,
     if(!mSetPreviewWindowCalled || (mDisplayAdapter.get() == NULL)){
-      CAMHAL_LOGEA("Preview not started. Preview in progress flag set");
+      CAMHAL_LOGI("Preview not started. Preview in progress flag set");
       mPreviewStartInProgress = true;
       ret = mCameraAdapter->sendCommand(CameraAdapter::CAMERA_SWITCH_TO_EXECUTING);
       if ( NO_ERROR != ret ){
@@ -1660,13 +1660,13 @@ status_t CameraHal::setPreviewWindow(struct preview_stream_ops *window)
         if(mDisplayAdapter.get() != NULL)
         {
             ///NULL window passed, destroy the display adapter if present
-            CAMHAL_LOGEA("NULL window passed, destroying display adapter");
+            CAMHAL_LOGI("NULL window passed, destroying display adapter");
             mDisplayAdapter.clear();
             ///@remarks If there was a window previously existing, we usually expect another valid window to be passed by the client
             ///@remarks so, we will wait until it passes a valid window to begin the preview again
             mSetPreviewWindowCalled = false;
         }
-        CAMHAL_LOGEA("NULL ANativeWindow passed to setPreviewWindow");
+        CAMHAL_LOGI("NULL ANativeWindow passed to setPreviewWindow");
         return NO_ERROR;
     }else if(mDisplayAdapter.get() == NULL)
     {
@@ -2179,7 +2179,7 @@ status_t CameraHal::autoFocus()
 
     if (state == CameraAdapter::AF_STATE)
         {
-            CAMHAL_LOGDA("Ignoring start-AF (already in progress)");
+            CAMHAL_LOGI("Ignoring start-AF (already in progress)");
             goto EXIT;
         }
 
