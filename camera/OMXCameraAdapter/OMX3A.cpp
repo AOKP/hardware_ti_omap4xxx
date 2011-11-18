@@ -482,14 +482,20 @@ static bool isFlashDisabled() {
 #error "PROPERTY_VALUE_MAX must be at least 5"
 #endif
 
+    // Ignore flash_off system property for user build.
+    char buildType[PROPERTY_VALUE_MAX];
+    if (property_get("ro.build.type", buildType, NULL) &&
+        !strcasecmp(buildType, "user")) {
+        return false;
+    }
+
     char value[PROPERTY_VALUE_MAX];
     if (property_get("camera.flash_off", value, NULL) &&
         (!strcasecmp(value, "true") || !strcasecmp(value, "1"))) {
-        LOGW("flash is turned off");
+        LOGW("flash is disabled for testing purpose");
         return true;
     }
 
-    LOGI("flash is turned on");
     return false;
 }
 
