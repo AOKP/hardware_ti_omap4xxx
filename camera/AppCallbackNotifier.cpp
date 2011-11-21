@@ -360,16 +360,16 @@ void AppCallbackNotifier::notifyEvent()
                           ( NULL != mNotifyCb ) &&
                           ( mCameraHal->msgTypeEnabled(CAMERA_MSG_FOCUS) ) )
                         {
-                         mNotifyCb(CAMERA_MSG_FOCUS, true, 0, mCallbackCookie);
                          mCameraHal->disableMsgType(CAMERA_MSG_FOCUS);
+                         mNotifyCb(CAMERA_MSG_FOCUS, true, 0, mCallbackCookie);
                         }
                     else if ( focusEvtData->focusError &&
                                 ( NULL != mCameraHal ) &&
                                 ( NULL != mNotifyCb ) &&
                                 ( mCameraHal->msgTypeEnabled(CAMERA_MSG_FOCUS) ) )
                         {
-                         mNotifyCb(CAMERA_MSG_FOCUS, false, 0, mCallbackCookie);
                          mCameraHal->disableMsgType(CAMERA_MSG_FOCUS);
+                         mNotifyCb(CAMERA_MSG_FOCUS, false, 0, mCallbackCookie);
                         }
 
                     break;
