@@ -285,7 +285,8 @@ bool AppCallbackNotifier::notificationThread()
         CAMHAL_LOGDA("Notification Thread received message from Camera HAL");
         shouldLive = processMessage();
         if(!shouldLive) {
-                CAMHAL_LOGDA("Notification Thread exiting.");
+          CAMHAL_LOGDA("Notification Thread exiting.");
+          return shouldLive;
         }
     }
 
