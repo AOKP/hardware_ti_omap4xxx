@@ -173,7 +173,7 @@ status_t OMXCameraAdapter::doAutoFocus()
 
         // force AF, Ducati will take care of whether CAF
         // or AF will be performed, depending on light conditions
-        if ( focusControl.eFocusControl == OMX_IMAGE_FocusControlAuto 
+        if ( focusControl.eFocusControl == OMX_IMAGE_FocusControlAuto
 		&& focusStatus.eFocusStatus == OMX_FocusStatusUnableToReach )
 			{
 			focusControl.eFocusControl = OMX_IMAGE_FocusControlAutoLock;
@@ -193,16 +193,20 @@ status_t OMXCameraAdapter::doAutoFocus()
             CAMHAL_LOGDA("Autofocus started successfully");
         }
 
-       // configure focus timeout based on capture mode
-       timeout = (mCapMode == VIDEO_MODE) ? AF_VIDEO_CALLBACK_TIMEOUT : AF_IMAGE_CALLBACK_TIMEOUT;
+        // configure focus timeout based on capture mode
+        timeout = (mCapMode == VIDEO_MODE) ? AF_VIDEO_CALLBACK_TIMEOUT : AF_IMAGE_CALLBACK_TIMEOUT;
 
-       if(mDoAFSem.WaitTimeout(timeout) != NO_ERROR) {
-            //If somethiing bad happened while we wait
-            if (mComponentState == OMX_StateInvalid) {
-                CAMHAL_LOGEA("Invalid State after Auto Focus Exitting!!!");
-                return EINVAL;
-            }
+        ret = mDoAFSem.WaitTimeout(timeout);
+        //If somethiing bad happened while we wait
+        if (mComponentState == OMX_StateInvalid) {
+          CAMHAL_LOGEA("Invalid State after Auto Focus Exitting!!!");
+          return EINVAL;
+        }
 
+        if( ret != NO_ERROR) {
+            //Disable auto focus callback from Ducati
+            setFocusCallback(false);
+            CAMHAL_LOGEA("Autofocus callback timeout expired");
             RemoveEvent(mCameraAdapterParameters.mHandleComp,
                                         (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
                                         OMX_ALL,

@@ -837,8 +837,8 @@ status_t OMXCameraAdapter::startImageCapture()
             ret = mStartCaptureSem.WaitTimeout(OMX_CAPTURE_TIMEOUT);
             }
 
-        //If somethiing bad happened while we wait
-        if (mComponentState == OMX_StateInvalid)
+        //If something bad happened while we wait
+        if (mComponentState != OMX_StateExecuting)
           {
             CAMHAL_LOGEA("Invalid State after Image Capture Exitting!!!");
             goto EXIT;
