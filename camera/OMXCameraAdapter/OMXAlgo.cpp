@@ -83,7 +83,8 @@ status_t OMXCameraAdapter::setParametersAlgo(const CameraParameters &params,
 
     /// Configure IPP, LDCNSF, GBCE and GLBCE only in HQ mode
     IPPMode ipp;
-    if((mCapMode == OMXCameraAdapter::HIGH_QUALITY) || (mCapMode == OMXCameraAdapter::HIGH_QUALITY_ZSL))
+    if((mCapMode == OMXCameraAdapter::HIGH_QUALITY) || (mCapMode == OMXCameraAdapter::HIGH_QUALITY_ZSL)
+            || (mCapMode == OMXCameraAdapter::VIDEO_MODE) )
         {
           if ( (valstr = params.get(TICameraParameters::KEY_IPP)) != NULL )
             {

@@ -97,6 +97,8 @@ class Encoder_libjpeg : public Thread {
             int in_height;
             int out_width;
             int out_height;
+            int right_crop;
+            int start_offset;
             const char* format;
             size_t jpeg_size;
          };

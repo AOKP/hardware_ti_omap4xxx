@@ -864,6 +864,7 @@ status_t OMXCameraAdapter::setFormat(OMX_U32 port, OMXCameraPortParameters &port
     GOTO_EXIT_IF((eError!=OMX_ErrorNone), eError);
 
     portParams.mBufSize = portCheck.nBufferSize;
+    portParams.mStride = portCheck.format.image.nStride;
 
     if ( OMX_CAMERA_PORT_IMAGE_OUT_IMAGE == port )
         {
