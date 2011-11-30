@@ -57,7 +57,7 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
     cap->mWidth = w;
     cap->mHeight = h;
     //TODO: Support more pixelformats
-    cap->mStride = 2;
+    //cap->mStride = 2;
 
     CAMHAL_LOGVB("Image: cap.mWidth = %d", (int)cap->mWidth);
     CAMHAL_LOGVB("Image: cap.mHeight = %d", (int)cap->mHeight);
