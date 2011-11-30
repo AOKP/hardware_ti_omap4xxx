@@ -365,6 +365,7 @@ size_t Encoder_libjpeg::encode(params* input) {
     int out_width = 0, in_width = 0;
     int out_height = 0, in_height = 0;
     int bpp = 2; // for uyvy
+    int right_crop = 0, start_offset = 0;
 
     if (!input) {
         return 0;
@@ -374,6 +375,8 @@ size_t Encoder_libjpeg::encode(params* input) {
     in_width = input->in_width;
     out_height = input->out_height;
     in_height = input->in_height;
+    right_crop = input->right_crop;
+    start_offset = input->start_offset;
     src = input->src;
     input->jpeg_size = 0;
 
@@ -416,7 +419,7 @@ size_t Encoder_libjpeg::encode(params* input) {
                  input->dst_size, src);
 
     cinfo.dest = &dest_mgr;
-    cinfo.image_width = out_width;
+    cinfo.image_width = out_width - right_crop;
     cinfo.image_height = out_height;
     cinfo.input_components = 3;
     cinfo.in_color_space = JCS_YCbCr;
@@ -429,7 +432,7 @@ size_t Encoder_libjpeg::encode(params* input) {
     jpeg_start_compress(&cinfo, TRUE);
 
     row_tmp = (uint8_t*)malloc(out_width * 3);
-    row_src = src;
+    row_src = src + start_offset;
     row_uv = src + out_width * out_height * bpp;
 
     while ((cinfo.next_scanline < cinfo.image_height) && !mCancelEncoding) {
@@ -437,9 +440,9 @@ size_t Encoder_libjpeg::encode(params* input) {
 
         // convert input yuv format to yuv444
         if (strcmp(input->format, CameraParameters::PIXEL_FORMAT_YUV420SP) == 0) {
-            nv21_to_yuv(row_tmp, row_src, row_uv, out_width);
+            nv21_to_yuv(row_tmp, row_src, row_uv, out_width - right_crop);
         } else {
-            uyvy_to_yuv(row_tmp, (uint32_t*)row_src, out_width);
+            uyvy_to_yuv(row_tmp, (uint32_t*)row_src, out_width - right_crop);
         }
 
         row[0] = row_tmp;

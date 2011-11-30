@@ -153,7 +153,8 @@ status_t OMXCameraAdapter::doAutoFocus()
     }
 
     if ( (focusControl.eFocusControl == OMX_IMAGE_FocusControlAuto
-            && focusStatus.eFocusStatus == OMX_FocusStatusRequest) ||
+            && (focusStatus.eFocusStatus == OMX_FocusStatusRequest
+             || focusStatus.eFocusStatus == OMX_FocusStatusUnableToReach) ) ||
             (mParameters3A.Focus !=  (OMX_IMAGE_FOCUSCONTROLTYPE)OMX_IMAGE_FocusControlAuto) )
         {
         OMX_INIT_STRUCT_PTR (&bOMX, OMX_CONFIG_BOOLEANTYPE);
@@ -169,6 +170,14 @@ status_t OMXCameraAdapter::doAutoFocus()
                                     OMX_ALL,
                                     OMX_IndexConfigCommonFocusStatus,
                                     mDoAFSem);
+
+        // force AF, Ducati will take care of whether CAF
+        // or AF will be performed, depending on light conditions
+        if ( focusControl.eFocusControl == OMX_IMAGE_FocusControlAuto 
+		&& focusStatus.eFocusStatus == OMX_FocusStatusUnableToReach )
+			{
+			focusControl.eFocusControl = OMX_IMAGE_FocusControlAutoLock;
+			}
 
         if ( focusControl.eFocusControl != OMX_IMAGE_FocusControlAuto )
             {
