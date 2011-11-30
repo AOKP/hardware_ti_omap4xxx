@@ -108,6 +108,8 @@ status_t OMXCameraAdapter::doAutoFocus()
        return NO_ERROR;
     }
 
+    OMX_INIT_STRUCT_PTR (&focusStatus, OMX_PARAM_FOCUSSTATUSTYPE);
+
     // If the app calls autoFocus, the camera will stop sending face callbacks.
     pauseFaceDetection(true);
 
