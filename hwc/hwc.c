@@ -768,6 +768,44 @@ static int omap4_hwc_is_valid_layer(omap4_hwc_device_t *hwc_dev,
     return omap4_hwc_can_scale_layer(hwc_dev, layer, handle);
 }
 
+static __u32 add_scaling_score(__u32 score,
+                               __u32 xres, __u32 yres, __u32 refresh,
+                               __u32 ext_xres, __u32 ext_yres,
+                               __u32 mode_xres, __u32 mode_yres, __u32 mode_refresh)
+{
+    __u32 area = xres * yres;
+    __u32 ext_area = ext_xres * ext_yres;
+    __u32 mode_area = mode_xres * mode_yres;
+
+    /* prefer to upscale (1% tolerance) [0..1] (insert after 1st bit) */
+    int upscale = (ext_xres >= xres * 99 / 100 && ext_yres >= yres * 99 / 100);
+    score = (((score & ~1) | upscale) << 1) | (score & 1);
+
+    /* pick minimum scaling [0..16] */
+    if (ext_area > area)
+        score = (score << 5) | (16 * area / ext_area);
+    else
+        score = (score << 5) | (16 * ext_area / area);
+
+    /* pick smallest leftover area [0..16] */
+    score = (score << 5) | ((16 * ext_area + (mode_area >> 1)) / mode_area);
+
+    /* adjust mode refresh rate */
+    mode_refresh += mode_refresh % 6 == 5;
+
+    /* prefer same or higher frame rate */
+    upscale = (mode_refresh >= refresh);
+    score = (score << 1) | upscale;
+
+    /* pick closest frame rate */
+    if (mode_refresh > refresh)
+        score = (score << 8) | (240 * refresh / mode_refresh);
+    else
+        score = (score << 8) | (240 * mode_refresh / refresh);
+
+    return score;
+}
+
 static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres, __u32 yres,
                                         float xpy)
 {
@@ -801,8 +839,8 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
     __u32 ext_fb_xres, ext_fb_yres;
     for (i = 0; i < d.dis.modedb_len; i++) {
         __u32 score = 0;
-        __u32 area = xres * yres;
-        __u32 mode_area = d.modedb[i].xres * d.modedb[i].yres;
+        __u32 mode_xres = d.modedb[i].xres;
+        __u32 mode_yres = d.modedb[i].yres;
         __u32 ext_width = d.dis.width_in_mm;
         __u32 ext_height = d.dis.height_in_mm;
 
@@ -814,10 +852,10 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
             ext_height = 9;
         }
 
-        if (mode_area == 0)
+        if (!mode_xres || !mode_yres)
             continue;
 
-        get_max_dimensions(xres, yres, xpy, d.modedb[i].xres, d.modedb[i].yres,
+        get_max_dimensions(xres, yres, xpy, mode_xres, mode_yres,
                            ext_width, ext_height, &ext_fb_xres, &ext_fb_yres);
 
         /* we need to ensure that even TILER2D buffers can be scaled */
@@ -832,33 +870,20 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         if (d.modedb[i].flag & (FB_FLAG_RATIO_4_3 | FB_FLAG_RATIO_16_9))
             score = 1;
 
-        /* prefer to upscale (1% tolerance) */
-        __u32 upscaling = (ext_fb_xres >= xres * 99 / 100 && ext_fb_yres >= yres * 99 / 100);
-        score = (score << 1) | upscaling;
-
         /* prefer the same mode as we use for mirroring to avoid mode change */
-        score = (score << 1) | (i == ~ext->mirror_mode && ext->avoid_mode_change);
+       score = (score << 1) | (i == ~ext->mirror_mode && ext->avoid_mode_change);
 
-        /* pick closest screen size */
-        if (ext_fb_xres * ext_fb_yres > area)
-            score = (score << 5) | (16 * area / ext_fb_xres / ext_fb_yres);
-        else
-            score = (score << 5) | (16 * ext_fb_xres * ext_fb_yres / area);
+        score = add_scaling_score(score, xres, yres, 60, ext_fb_xres, ext_fb_yres,
+                                  mode_xres, mode_yres, d.modedb[i].refresh ? : 1);
 
-        /* pick smallest leftover area */
-        score = (score << 5) | ((16 * ext_fb_xres * ext_fb_yres + (mode_area >> 1)) / mode_area);
-
-        /* pick highest frame rate */
-        score = (score << 8) | d.modedb[i].refresh;
-
-        LOGD("#%d: %dx%d %dHz", i, d.modedb[i].xres, d.modedb[i].yres, d.modedb[i].refresh);
+        LOGD("#%d: %dx%d %dHz", i, mode_xres, mode_yres, d.modedb[i].refresh);
         if (debug)
-            LOGD("  score=%u adj.res=%dx%d", score, ext_fb_xres, ext_fb_yres);
+            LOGD("  score=0x%x adj.res=%dx%d", score, ext_fb_xres, ext_fb_yres);
         if (best_score < score) {
             ext->width = ext_width;
             ext->height = ext_height;
-            ext->xres = d.modedb[i].xres;
-            ext->yres = d.modedb[i].yres;
+            ext->xres = mode_xres;
+            ext->yres = mode_yres;
             best = i;
             best_score = score;
         }
