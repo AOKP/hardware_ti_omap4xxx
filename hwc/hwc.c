@@ -104,36 +104,37 @@ struct omap4_hwc_module {
 typedef struct omap4_hwc_module omap4_hwc_module_t;
 
 struct omap4_hwc_device {
+    /* static data */
     hwc_composer_device_t base;
     hwc_procs_t *procs;
     pthread_t hdmi_thread;
     pthread_mutex_t lock;
-    int dsscomp_fd;
-    int fb_fd;
-    int hdmi_fb_fd;
-    int pipe_fds[2];
 
     IMG_framebuffer_device_public_t *fb_dev;
-    struct dsscomp_setup_dispc_data dsscomp_data;
     struct dsscomp_display_info fb_dis;
+    int fb_fd;                  /* file descriptor for /dev/fb0 */
+    int dsscomp_fd;             /* file descriptor for /dev/dsscomp */
+    int hdmi_fb_fd;             /* file descriptor for /dev/fb1 */
+    int pipe_fds[2];            /* pipe to event thread */
 
-    omap4_hwc_ext_t ext;           /* external mirroring data */
+    int flags_rgb_order;
+    int flags_nv12_only;
 
+    int force_sgx;
+    omap4_hwc_ext_t ext;        /* external mirroring data */
+    int idle;
+    int ovls_blending;
+
+    /* composition data */
+    struct dsscomp_setup_dispc_data dsscomp_data;
     buffer_handle_t *buffers;
     int use_sgx;
     int swap_rb;
     unsigned int post2_layers;
-    int last_ext_ovls;
+    int ext_ovls;               /* # of overlays on external display for current composition */
+    int ext_ovls_wanted;        /* # of overlays that should be on external display for current composition */
+    int last_ext_ovls;          /* # of overlays on external/internal display for last composition */
     int last_int_ovls;
-    int ext_ovls;
-    int ext_ovls_wanted;
-
-    int flags_rgb_order;
-    int flags_nv12_only;
-    int idle;
-    int ovls_blending;
-
-    int force_sgx;
 };
 typedef struct omap4_hwc_device omap4_hwc_device_t;
 
@@ -178,7 +179,7 @@ static void dump_dsscomp(struct dsscomp_setup_dispc_data *d)
          d->num_ovls);
 
     for (i = 0; i < d->num_mgrs; i++) {
-        struct dss2_mgr_info *mi = d->mgrs + i;
+        struct dss2_mgr_info *mi = &d->mgrs[i];
         LOGD(" (dis%d alpha=%d col=%08x ilace=%d)\n",
              mi->ix,
              mi->alpha_blending, mi->default_color,
@@ -186,7 +187,7 @@ static void dump_dsscomp(struct dsscomp_setup_dispc_data *d)
     }
 
     for (i = 0; i < d->num_ovls; i++) {
-        struct dss2_ovl_info *oi = d->ovls + i;
+        struct dss2_ovl_info *oi = &d->ovls[i];
         struct dss2_ovl_cfg *c = &oi->cfg;
         if (c->zonly)
             LOGD("ovl%d(%s z%d)\n",
@@ -1147,7 +1148,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             /* remember largest dockable layer */
             if (dockable(layer) &&
                 (ix_docking < 0 ||
-                 display_area(dsscomp->ovls + dsscomp->num_ovls) > display_area(dsscomp->ovls + ix_docking)))
+                 display_area(&dsscomp->ovls[dsscomp->num_ovls]) > display_area(&dsscomp->ovls[ix_docking])))
                 ix_docking = dsscomp->num_ovls;
 
             dsscomp->num_ovls++;
@@ -1207,7 +1208,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         }
 
         for (ix = ix_back; hwc_dev->ext.current.enabled && ix >= 0 && ix <= ix_front; ix++) {
-            struct dss2_ovl_info *o = dsscomp->ovls + dsscomp->num_ovls;
+            struct dss2_ovl_info *o = &dsscomp->ovls[dsscomp->num_ovls];
             memcpy(o, dsscomp->ovls + ix, sizeof(dsscomp->ovls[ix]));
             o->cfg.zorder += hwc_dev->post2_layers;
 
