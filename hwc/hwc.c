@@ -695,7 +695,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
     omap4_hwc_ext_t *ext = &hwc_dev->ext;
 
     d.dis.modedb_len = sizeof(d.modedb) / sizeof(*d.modedb);
-    int ret = ioctl(hwc_dev->dsscomp_fd, DSSCOMP_QUERY_DISPLAY, &d);
+    int ret = ioctl(hwc_dev->dsscomp_fd, DSSCIOC_QUERY_DISPLAY, &d);
     if (ret)
         return ret;
 
@@ -779,7 +779,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         LOGD("picking #%d", best);
         /* only reconfigure on change */
         if (ext->last_mode != ~best)
-            ioctl(hwc_dev->dsscomp_fd, DSSCOMP_SETUP_DISPLAY, &sdis);
+            ioctl(hwc_dev->dsscomp_fd, DSSCIOC_SETUP_DISPLAY, &sdis);
         ext->last_mode = ~best;
     } else {
         __u32 ext_width = d.dis.width_in_mm;
@@ -1205,7 +1205,7 @@ static void omap4_hwc_reset_screen(omap4_hwc_device_t *hwc_dev)
                 .num_mgrs = 1,
         };
         /* remove bootloader image from the screen as blank/unblank does not change the composition */
-        ret = ioctl(hwc_dev->dsscomp_fd, DSSCOMP_SETUP_DISPC, &d);
+        ret = ioctl(hwc_dev->dsscomp_fd, DSSCIOC_SETUP_DISPC, &d);
         if (ret)
             LOGW("failed to remove bootloader image");
 
@@ -1649,7 +1649,7 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
         goto done;
     }
 
-    int ret = ioctl(hwc_dev->dsscomp_fd, DSSCOMP_QUERY_DISPLAY, &hwc_dev->fb_dis);
+    int ret = ioctl(hwc_dev->dsscomp_fd, DSSCIOC_QUERY_DISPLAY, &hwc_dev->fb_dis);
     if (ret) {
         LOGE("failed to get display info (%d): %m", errno);
         err = -errno;
