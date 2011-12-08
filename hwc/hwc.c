@@ -35,7 +35,7 @@
 #define ASPECT_RATIO_TOLERANCE 0.02f
 
 #ifndef FBIO_WAITFORVSYNC
-#define FBIO_WAITFORVSYNC	_IOW('F', 0x20, __u32)
+#define FBIO_WAITFORVSYNC       _IOW('F', 0x20, __u32)
 #endif
 
 #define min(a, b) ( { typeof(a) __a = (a), __b = (b); __a < __b ? __a : __b; } )
@@ -51,14 +51,10 @@
 
 #define MAX_HW_OVERLAYS 4
 #define NUM_NONSCALING_OVERLAYS 1
-#define HAL_PIXEL_FORMAT_BGRX_8888		0x1FF
-#define HAL_PIXEL_FORMAT_TI_NV12 0x100
+#define HAL_PIXEL_FORMAT_BGRX_8888      0x1FF
+#define HAL_PIXEL_FORMAT_TI_NV12        0x100
 #define HAL_PIXEL_FORMAT_TI_NV12_PADDED 0x101
 #define MAX_TILER_SLOT (16 << 20)
-
-#define MIN(a,b)		  ((a)<(b)?(a):(b))
-#define MAX(a,b)		  ((a)>(b)?(a):(b))
-#define CLAMP(x,low,high) (((x)>(high))?(high):(((x)<(low))?(low):(x)))
 
 struct ext_transform_t {
     __u8 rotation : 3;          /* 90-degree clockwise rotations */
@@ -159,15 +155,15 @@ static int debug = 0;
 static void dump_layer(hwc_layer_t const* l)
 {
     LOGD("\ttype=%d, flags=%08x, handle=%p, tr=%02x, blend=%04x, {%d,%d,%d,%d}, {%d,%d,%d,%d}",
-            l->compositionType, l->flags, l->handle, l->transform, l->blending,
-            l->sourceCrop.left,
-            l->sourceCrop.top,
-            l->sourceCrop.right,
-            l->sourceCrop.bottom,
-            l->displayFrame.left,
-            l->displayFrame.top,
-            l->displayFrame.right,
-            l->displayFrame.bottom);
+         l->compositionType, l->flags, l->handle, l->transform, l->blending,
+         l->sourceCrop.left,
+         l->sourceCrop.top,
+         l->sourceCrop.right,
+         l->sourceCrop.bottom,
+         l->displayFrame.left,
+         l->displayFrame.top,
+         l->displayFrame.right,
+         l->displayFrame.bottom);
 }
 
 static void dump_dsscomp(struct dsscomp_setup_dispc_data *d)
@@ -184,27 +180,27 @@ static void dump_dsscomp(struct dsscomp_setup_dispc_data *d)
     for (i = 0; i < d->num_mgrs; i++) {
         struct dss2_mgr_info *mi = d->mgrs + i;
         LOGD(" (dis%d alpha=%d col=%08x ilace=%d)\n",
-            mi->ix,
-            mi->alpha_blending, mi->default_color,
-            mi->interlaced);
+             mi->ix,
+             mi->alpha_blending, mi->default_color,
+             mi->interlaced);
     }
 
     for (i = 0; i < d->num_ovls; i++) {
-            struct dss2_ovl_info *oi = d->ovls + i;
-            struct dss2_ovl_cfg *c = &oi->cfg;
-            if (c->zonly)
-                    LOGD("ovl%d(%s z%d)\n",
-                         c->ix, c->enabled ? "ON" : "off", c->zorder);
-            else
-                    LOGD("ovl%d(%s z%d %s%s *%d%% %d*%d:%d,%d+%d,%d rot%d%s => %d,%d+%d,%d %p/%p|%d)\n",
-                         c->ix, c->enabled ? "ON" : "off", c->zorder, DSS_FMT(c->color_mode),
-                         c->pre_mult_alpha ? " premult" : "",
-                         (c->global_alpha * 100 + 128) / 255,
-                         c->width, c->height, c->crop.x, c->crop.y,
-                         c->crop.w, c->crop.h,
-                         c->rotation, c->mirror ? "+mir" : "",
-                         c->win.x, c->win.y, c->win.w, c->win.h,
-                         (void *) oi->ba, (void *) oi->uv, c->stride);
+        struct dss2_ovl_info *oi = d->ovls + i;
+        struct dss2_ovl_cfg *c = &oi->cfg;
+        if (c->zonly)
+            LOGD("ovl%d(%s z%d)\n",
+                 c->ix, c->enabled ? "ON" : "off", c->zorder);
+        else
+            LOGD("ovl%d(%s z%d %s%s *%d%% %d*%d:%d,%d+%d,%d rot%d%s => %d,%d+%d,%d %p/%p|%d)\n",
+                 c->ix, c->enabled ? "ON" : "off", c->zorder, DSS_FMT(c->color_mode),
+                 c->pre_mult_alpha ? " premult" : "",
+                 (c->global_alpha * 100 + 128) / 255,
+                 c->width, c->height, c->crop.x, c->crop.y,
+                 c->crop.w, c->crop.h,
+                 c->rotation, c->mirror ? "+mir" : "",
+                 c->win.x, c->win.y, c->win.w, c->win.h,
+                 (void *) oi->ba, (void *) oi->uv, c->stride);
     }
 }
 
@@ -328,7 +324,7 @@ static int dockable(hwc_layer_t *layer)
 static unsigned int mem1d(IMG_native_handle_t *handle)
 {
     if (handle == NULL)
-            return 0;
+        return 0;
 
     int bpp = is_NV12(handle->iFormat) ? 0 : (handle->iFormat == HAL_PIXEL_FORMAT_RGB_565 ? 2 : 4);
     int stride = ALIGN(handle->iWidth, HW_ALIGN) * bpp;
@@ -893,7 +889,7 @@ struct counts {
     unsigned int BGR;
     unsigned int NV12;
     unsigned int dockable;
-    unsigned int displays;
+
     unsigned int max_hw_overlays;
     unsigned int max_scaling_overlays;
     unsigned int mem;
@@ -950,7 +946,7 @@ static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts 
     /* if mirroring, we are limited by both internal and external overlays.  However,
        ext_ovls is always <= MAX_HW_OVERLAYS / 2 <= max_hw_overlays */
     if (hwc_dev->ext_ovls && ext->current.enabled && !ext->current.docking)
-         num->max_hw_overlays = hwc_dev->ext_ovls;
+        num->max_hw_overlays = hwc_dev->ext_ovls;
 
     num->max_scaling_overlays = num->max_hw_overlays - nonscaling_ovls;
 
@@ -1166,20 +1162,17 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     if (scaled_gfx)
         dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls;
 
-    /* assign a z-layer for fb */
-    if (hwc_dev->use_sgx && fb_z < 0) {
-        fb_z = z;
-        z++;
-    }
-
     if (hwc_dev->use_sgx) {
+        /* assign a z-layer for fb */
+        if (fb_z < 0)
+            LOGE("**** should have assigned z-layer for fb");
+
         hwc_dev->buffers[0] = NULL;
         omap4_hwc_setup_layer_base(&dsscomp->ovls[0].cfg, fb_z,
                                    hwc_dev->fb_dev->base.format,
                                    hwc_dev->fb_dev->base.width,
                                    hwc_dev->fb_dev->base.height);
         dsscomp->ovls[0].cfg.pre_mult_alpha = 1;
-        dsscomp->ovls[0].uv = (__u32) hwc_dev->buffers[0];
     }
 
     /* mirror layers */
@@ -1282,7 +1275,7 @@ static void omap4_hwc_reset_screen(omap4_hwc_device_t *hwc_dev)
     if (first_set) {
         first_set = 0;
         struct dsscomp_setup_dispc_data d = {
-                .num_mgrs = 1,
+            .num_mgrs = 1,
         };
         /* remove bootloader image from the screen as blank/unblank does not change the composition */
         ret = ioctl(hwc_dev->dsscomp_fd, DSSCIOC_SETUP_DISPC, &d);
@@ -1308,7 +1301,6 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
     omap4_hwc_device_t *hwc_dev = (omap4_hwc_device_t *)dev;
     struct dsscomp_setup_dispc_data *dsscomp = &hwc_dev->dsscomp_data;
     int err = 0;
-    unsigned int i;
     int invalidate;
 
     pthread_mutex_lock(&hwc_dev->lock);
@@ -1430,9 +1422,7 @@ static int omap4_hwc_open_fb_hal(IMG_framebuffer_device_public_t **fb_dev)
     if(err)
         goto err_out;
 
-    if(strcmp(psGrallocModule->base.common.author,
-              "Imagination Technologies"))
-    {
+    if (strcmp(psGrallocModule->base.common.author, "Imagination Technologies")) {
         err = -EINVAL;
         goto err_out;
     }
@@ -1591,9 +1581,9 @@ static void *omap4_hwc_hdmi_thread(void *data)
 static void omap4_hwc_registerProcs(struct hwc_composer_device* dev,
                                     hwc_procs_t const* procs)
 {
-        omap4_hwc_device_t *hwc_dev = (omap4_hwc_device_t *) dev;
+    omap4_hwc_device_t *hwc_dev = (omap4_hwc_device_t *) dev;
 
-        hwc_dev->procs = (typeof(hwc_dev->procs)) procs;
+    hwc_dev->procs = (typeof(hwc_dev->procs)) procs;
 }
 
 static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
@@ -1677,15 +1667,15 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     }
 
     if (pthread_mutex_init(&hwc_dev->lock, NULL)) {
-            LOGE("failed to create mutex (%d): %m", errno);
-            err = -errno;
-            goto done;
+        LOGE("failed to create mutex (%d): %m", errno);
+        err = -errno;
+        goto done;
     }
     if (pthread_create(&hwc_dev->hdmi_thread, NULL, omap4_hwc_hdmi_thread, hwc_dev))
     {
-            LOGE("failed to create HDMI listening thread (%d): %m", errno);
-            err = -errno;
-            goto done;
+        LOGE("failed to create HDMI listening thread (%d): %m", errno);
+        err = -errno;
+        goto done;
     }
 
     /* get debug properties */
