@@ -273,7 +273,7 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
         OMX_BOOL lock = OMX_FALSE;
         mUserSetExpLock = OMX_FALSE;
         str = params.get(CameraParameters::KEY_AUTO_EXPOSURE_LOCK);
-        if ( (strcmp(str, "true")) == 0)
+        if (str && ((strcmp(str, "true")) == 0))
           {
             CAMHAL_LOGVA("Locking Exposure");
             lock = OMX_TRUE;
@@ -298,7 +298,7 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
         OMX_BOOL lock = OMX_FALSE;
         mUserSetWbLock = OMX_FALSE;
         str = params.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK);
-        if ( (strcmp(str, "true")) == 0)
+        if (str && ((strcmp(str, "true")) == 0))
           {
             CAMHAL_LOGVA("Locking WhiteBalance");
             lock = OMX_TRUE;
