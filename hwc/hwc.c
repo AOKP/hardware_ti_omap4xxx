@@ -609,7 +609,7 @@ static struct dsscomp_dispc_limitations {
     .integer_scale_ratio_limit = 2048,
 };
 
-static int omap4_hwc_can_scale(int src_w, int src_h, int dst_w, int dst_h, int is_2d,
+static int omap4_hwc_can_scale(__u32 src_w, __u32 src_h, __u32 dst_w, __u32 dst_h, int is_2d,
                                struct dsscomp_display_info *dis, struct dsscomp_dispc_limitations *limits,
                                __u32 pclk)
 {
@@ -640,7 +640,7 @@ static int omap4_hwc_can_scale(int src_w, int src_h, int dst_w, int dst_h, int i
     /* for small parts, we need to use integer fclk/pixclk */
     if (src_w < limits->integer_scale_ratio_limit)
         fclk = fclk / pclk * pclk;
-    if (dst_w < src_w * pclk / fclk / (is_2d ? limits->max_xdecim_2d : limits->max_xdecim_1d))
+    if ((__u32) dst_w < src_w * pclk / fclk / (is_2d ? limits->max_xdecim_2d : limits->max_xdecim_1d))
         return 0;
 
     return 1;
@@ -1009,7 +1009,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             /* render via DSS overlay */
             mem_used += mem1d(handle);
             layer->compositionType = HWC_OVERLAY;
-            hwc_dev->buffers[dsscomp->num_ovls] = handle;
+            hwc_dev->buffers[dsscomp->num_ovls] = layer->handle;
 
             omap4_hwc_setup_layer(hwc_dev,
                                   &dsscomp->ovls[dsscomp->num_ovls],
@@ -1408,11 +1408,13 @@ static int omap4_hwc_device_close(hw_device_t* device)
 
 static int omap4_hwc_open_fb_hal(IMG_framebuffer_device_public_t **fb_dev)
 {
+    const struct hw_module_t *psModule;
     IMG_gralloc_module_public_t *psGrallocModule;
     int err;
 
-    err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID,
-                        (const hw_module_t**)&psGrallocModule);
+    err = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &psModule);
+    psGrallocModule = (IMG_gralloc_module_public_t *) psModule;
+
     if(err)
         goto err_out;
 
