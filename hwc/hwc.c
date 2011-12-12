@@ -68,6 +68,7 @@ struct omap4_hwc_ext {
     /* support */
     struct ext_transform_t mirror;      /* mirroring settings */
     struct ext_transform_t dock;        /* docking settings */
+    float lcd_xpy;                      /* pixel ratio for UI */
     __u8 avoid_mode_change;             /* use HDMI mode used for mirroring if possible */
 
     /* state */
@@ -543,9 +544,7 @@ static void set_ext_matrix(omap4_hwc_ext_t *ext, struct hwc_rect region)
 {
     int orig_w = WIDTH(region);
     int orig_h = HEIGHT(region);
-
-    /* assume 1:1 lcd pixel ratio */
-    float xpy = 1.;
+    float xpy = ext->lcd_xpy;
 
     /* reorientation matrix is:
        m = (center-from-target-center) * (scale-to-target) * (mirror) * (rotate) * (center-to-original-center) */
@@ -1202,7 +1201,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                 __u32 yres = HEIGHT(hwc_dev->ext.mirror_region);
                 if (hwc_dev->ext.current.rotation & 1)
                    swap(xres, yres);
-                omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1.);
+                omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, hwc_dev->ext.lcd_xpy);
                 set_ext_matrix(&hwc_dev->ext, hwc_dev->ext.mirror_region);
             }
         }
@@ -1222,7 +1221,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                 __u32 xres = o->cfg.crop.w, yres = o->cfg.crop.h;
                 if ((hwc_dev->ext.current.rotation + o->cfg.rotation) & 1)
                     swap(xres, yres);
-                float xpy = (float) o->cfg.win.w / o->cfg.win.h;
+                float xpy = hwc_dev->ext.lcd_xpy * o->cfg.win.w / o->cfg.win.h;
                 if (o->cfg.rotation & 1)
                     xpy = o->cfg.crop.h / xpy / o->cfg.crop.w;
                 else
@@ -1477,8 +1476,8 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
             __u32 yres = HEIGHT(ext->mirror_region);
             if (ext->mirror.rotation & 1)
                swap(xres, yres);
-	    ext->mirror_mode = 0;
-            int res = omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, 1.);
+            ext->mirror_mode = 0;
+            int res = omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, ext->lcd_xpy);
             if (!res) {
                 ext->mirror_mode = ext->last_mode;
                 ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
@@ -1668,6 +1667,8 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
         err = -errno;
         goto done;
     }
+    hwc_dev->ext.lcd_xpy = (float) hwc_dev->fb_dis.width_in_mm / hwc_dev->fb_dis.timings.x_res /
+                            hwc_dev->fb_dis.height_in_mm       * hwc_dev->fb_dis.timings.y_res;
 
     if (pipe(hwc_dev->pipe_fds) == -1) {
             LOGE("failed to event pipe (%d): %m", errno);
