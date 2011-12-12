@@ -877,7 +877,8 @@ static inline int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts 
     int on_tv = hwc_dev->ext.on_tv;
     int tform = hwc_dev->ext.current.enabled && (hwc_dev->ext.current.rotation || hwc_dev->ext.current.hflip);
 
-    return  /* must have at least one layer if using composition bypass to get sync object */
+    return  !hwc_dev->force_sgx &&
+            /* must have at least one layer if using composition bypass to get sync object */
             num->possible_overlay_layers &&
             num->possible_overlay_layers <= num->max_hw_overlays &&
             num->possible_overlay_layers == num->composited_layers &&
@@ -952,17 +953,15 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                 num.dockable++;
 
             num.mem += mem1d(handle);
-
-           /* Check if any of the layers are protected.
-           * if so, disable the SGX force usage
-           */
-            if (hwc_dev->force_sgx && isprotected(layer))
-                hwc_dev->force_sgx = 0;
         }
     }
 
+    /* Disable the forced SGX rendering if there is only one layer */
+    if (hwc_dev->force_sgx && num.composited_layers <= 1)
+        hwc_dev->force_sgx = 0;
+
     /* phase 3 logic */
-    if (!hwc_dev->force_sgx && can_dss_render_all(hwc_dev, &num)) {
+    if (can_dss_render_all(hwc_dev, &num)) {
         /* All layers can be handled by the DSS -- don't use SGX for composition */
         hwc_dev->use_sgx = 0;
         hwc_dev->swap_rb = num.BGR != 0;
@@ -998,9 +997,12 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         hwc_layer_t *layer = &list->hwLayers[i];
         IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
 
-        if (!hwc_dev->force_sgx &&
-            dsscomp->num_ovls < num.max_hw_overlays &&
+        if (dsscomp->num_ovls < num.max_hw_overlays &&
             can_dss_render_layer(hwc_dev, layer) &&
+            (!hwc_dev->force_sgx ||
+             /* render protected and dockable layers via DSS */
+             isprotected(layer) ||
+             (hwc_dev->ext.current.docking && hwc_dev->ext.current.enabled && dockable(layer))) &&
             mem_used + mem1d(handle) < MAX_TILER_SLOT &&
             /* can't have a transparent overlay in the middle of the framebuffer stack */
             !(is_BLENDED(layer->blending) && fb_z >= 0)) {
@@ -1102,9 +1104,6 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 
     /* mirror layers */
     hwc_dev->post2_layers = dsscomp->num_ovls;
-    if (hwc_dev->ext.current.docking && (ix_docking == -1))
-        ix_docking = dsscomp->ovls[0].cfg.ix;
-
     if (hwc_dev->ext.current.enabled && hwc_dev->ext_ovls) {
         int ix_back, ix_front, ix;
         if (hwc_dev->ext.current.docking) {
