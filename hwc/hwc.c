@@ -271,6 +271,8 @@ static void dump_set_info(omap4_hwc_device_t *hwc_dev, hwc_layer_list_t* list)
     LOGD("%s", log.buf);
 }
 
+static int sync_id = 0;
+
 static int omap4_hwc_is_valid_format(int format)
 {
     switch(format) {
@@ -299,20 +301,55 @@ static int scaled(hwc_layer_t *layer)
     return WIDTH(layer->displayFrame) != w || HEIGHT(layer->displayFrame) != h;
 }
 
-static int isprotected(hwc_layer_t *layer)
+static int is_protected(hwc_layer_t *layer)
 {
     IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
 
     return (handle->usage & GRALLOC_USAGE_PROTECTED);
 }
 
-static int sync_id = 0;
+#define is_BLENDED(layer) ((layer)->blending != HWC_BLENDING_NONE)
 
-#define is_BLENDED(blending) ((blending) != HWC_BLENDING_NONE)
+static int is_RGB(IMG_native_handle_t *handle)
+{
+    switch(handle->iFormat)
+    {
+    case HAL_PIXEL_FORMAT_BGRA_8888:
+    case HAL_PIXEL_FORMAT_BGRX_8888:
+    case HAL_PIXEL_FORMAT_RGB_565:
+        return 1;
+    default:
+        return 0;
+    }
+}
 
-#define is_RGB(format) ((format) == HAL_PIXEL_FORMAT_BGRA_8888 || (format) == HAL_PIXEL_FORMAT_RGB_565 || (format) == HAL_PIXEL_FORMAT_BGRX_8888)
-#define is_BGR(format) ((format) == HAL_PIXEL_FORMAT_RGBX_8888 || (format) == HAL_PIXEL_FORMAT_RGBA_8888)
-#define is_NV12(format) ((format) == HAL_PIXEL_FORMAT_TI_NV12 || (format) == HAL_PIXEL_FORMAT_TI_NV12_PADDED)
+static int is_BGR_format(int format)
+{
+    switch (format) {
+    case HAL_PIXEL_FORMAT_RGBX_8888:
+    case HAL_PIXEL_FORMAT_RGBA_8888:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+static int is_BGR(IMG_native_handle_t *handle)
+{
+    return is_BGR_format(handle->iFormat);
+}
+
+static int is_NV12(IMG_native_handle_t *handle)
+{
+    switch(handle->iFormat)
+    {
+    case HAL_PIXEL_FORMAT_TI_NV12:
+    case HAL_PIXEL_FORMAT_TI_NV12_PADDED:
+        return 1;
+    default:
+        return 0;
+    }
+}
 
 static int dockable(hwc_layer_t *layer)
 {
@@ -323,16 +360,16 @@ static int dockable(hwc_layer_t *layer)
 
 static unsigned int mem1d(IMG_native_handle_t *handle)
 {
-    if (handle == NULL)
+    if (handle == NULL || is_NV12(handle))
         return 0;
 
-    int bpp = is_NV12(handle->iFormat) ? 0 : (handle->iFormat == HAL_PIXEL_FORMAT_RGB_565 ? 2 : 4);
+    int bpp = handle->iFormat == HAL_PIXEL_FORMAT_RGB_565 ? 2 : 4;
     int stride = ALIGN(handle->iWidth, HW_ALIGN) * bpp;
     return stride * handle->iHeight;
 }
 
 static void
-omap4_hwc_setup_layer_base(struct dss2_ovl_cfg *oc, int index, int format, int width, int height)
+omap4_hwc_setup_layer_base(struct dss2_ovl_cfg *oc, int index, int format, int blended, int width, int height)
 {
     unsigned int bits_per_pixel;
 
@@ -343,23 +380,14 @@ omap4_hwc_setup_layer_base(struct dss2_ovl_cfg *oc, int index, int format, int w
 
     /* convert color format */
     switch (format) {
-    case HAL_PIXEL_FORMAT_RGBX_8888:
-        /* Should be XBGR32, but this isn't supported */
-        oc->color_mode = OMAP_DSS_COLOR_RGB24U;
-        bits_per_pixel = 32;
-        break;
-
     case HAL_PIXEL_FORMAT_RGBA_8888:
-        /* Should be ABGR32, but this isn't supported */
-        oc->color_mode = OMAP_DSS_COLOR_ARGB32;
-        bits_per_pixel = 32;
-        break;
-
     case HAL_PIXEL_FORMAT_BGRA_8888:
         oc->color_mode = OMAP_DSS_COLOR_ARGB32;
         bits_per_pixel = 32;
-        break;
+        if (blended)
+                break;
 
+    case HAL_PIXEL_FORMAT_RGBX_8888:
     case HAL_PIXEL_FORMAT_BGRX_8888:
         oc->color_mode = OMAP_DSS_COLOR_RGB24U;
         bits_per_pixel = 32;
@@ -410,11 +438,7 @@ omap4_hwc_setup_layer(omap4_hwc_device_t *hwc_dev, struct dss2_ovl_info *ovl,
 
     //dump_layer(layer);
 
-    if (format == HAL_PIXEL_FORMAT_BGRA_8888 && !is_BLENDED(layer->blending)) {
-        format = HAL_PIXEL_FORMAT_BGRX_8888;
-    }
-
-    omap4_hwc_setup_layer_base(oc, index, format, width, height);
+    omap4_hwc_setup_layer_base(oc, index, format, is_BLENDED(layer), width, height);
 
     /* convert transformation - assuming 0-set config */
     if (layer->transform & HWC_TRANSFORM_FLIP_H)
@@ -735,7 +759,7 @@ static int omap4_hwc_can_scale_layer(omap4_hwc_device_t *hwc_dev, hwc_layer_t *l
 
     /* NOTE: layers should be able to be scaled externally since
        framebuffer is able to be scaled on selected external resolution */
-    return omap4_hwc_can_scale(src_w, src_h, dst_w, dst_h, is_NV12(handle->iFormat), &hwc_dev->fb_dis, &limits,
+    return omap4_hwc_can_scale(src_w, src_h, dst_w, dst_h, is_NV12(handle), &hwc_dev->fb_dis, &limits,
                                hwc_dev->fb_dis.timings.pixel_clock);
 }
 
@@ -751,7 +775,7 @@ static int omap4_hwc_is_valid_layer(omap4_hwc_device_t *hwc_dev,
         return 0;
 
     /* 1D buffers: no transform, must fit in TILER slot */
-    if (!is_NV12(handle->iFormat)) {
+    if (!is_NV12(handle)) {
         if (layer->transform)
             return 0;
         if (mem1d(handle) > MAX_TILER_SLOT)
@@ -978,14 +1002,14 @@ static inline int can_dss_render_layer(omap4_hwc_device_t *hwc_dev,
 
     return omap4_hwc_is_valid_layer(hwc_dev, layer, handle) &&
            /* cannot rotate non-NV12 layers on external display */
-           (!tform || is_NV12(handle->iFormat)) &&
+           (!tform || is_NV12(handle)) &&
            /* skip non-NV12 layers if also using SGX (if nv12_only flag is set) */
-           (!hwc_dev->flags_nv12_only || (!hwc_dev->use_sgx || is_NV12(handle->iFormat))) &&
+           (!hwc_dev->flags_nv12_only || (!hwc_dev->use_sgx || is_NV12(handle))) &&
            /* make sure RGB ordering is consistent (if rgb_order flag is set) */
-           (!(hwc_dev->swap_rb ? is_RGB(handle->iFormat) : is_BGR(handle->iFormat)) ||
+           (!(hwc_dev->swap_rb ? is_RGB(handle) : is_BGR(handle)) ||
             !hwc_dev->flags_rgb_order) &&
            /* TV can only render RGB */
-           !(on_tv && is_BGR(handle->iFormat));
+           !(on_tv && is_BGR(handle));
 }
 
 static inline int display_area(struct dss2_ovl_info *o)
@@ -1015,14 +1039,14 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             num.possible_overlay_layers++;
 
             /* NV12 layers can only be rendered on scaling overlays */
-            if (scaled(layer) || is_NV12(handle->iFormat))
+            if (scaled(layer) || is_NV12(handle))
                 num.scaled_layers++;
 
-            if (is_BGR(handle->iFormat))
+            if (is_BGR(handle))
                 num.BGR++;
-            else if (is_RGB(handle->iFormat))
+            else if (is_RGB(handle))
                 num.RGB++;
-            else if (is_NV12(handle->iFormat))
+            else if (is_NV12(handle))
                 num.NV12++;
 
             if (dockable(layer))
@@ -1044,7 +1068,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     } else {
         /* Use SGX for composition plus first 3 layers that are DSS renderable */
         hwc_dev->use_sgx = 1;
-        hwc_dev->swap_rb = is_BGR(hwc_dev->fb_dev->base.format);
+        hwc_dev->swap_rb = is_BGR_format(hwc_dev->fb_dev->base.format);
     }
     if (debug) {
         LOGD("prepare (%d) - %s (comp=%d, poss=%d/%d scaled, RGB=%d,BGR=%d,NV12=%d) (ext=%s%s%ddeg%s %dex/%dmx (last %dex,%din)\n",
@@ -1077,11 +1101,12 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             can_dss_render_layer(hwc_dev, layer) &&
             (!hwc_dev->force_sgx ||
              /* render protected and dockable layers via DSS */
-             isprotected(layer) ||
+             is_protected(layer) ||
              (hwc_dev->ext.current.docking && hwc_dev->ext.current.enabled && dockable(layer))) &&
             mem_used + mem1d(handle) < MAX_TILER_SLOT &&
             /* can't have a transparent overlay in the middle of the framebuffer stack */
-            !(is_BLENDED(layer->blending) && fb_z >= 0)) {
+            !(is_BLENDED(layer) && fb_z >= 0)) {
+
             /* render via DSS overlay */
             mem_used += mem1d(handle);
             layer->compositionType = HWC_OVERLAY;
@@ -1102,8 +1127,8 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 
             /* ensure GFX layer is never scaled */
             if (dsscomp->num_ovls == 0) {
-                scaled_gfx = scaled(layer) || is_NV12(handle->iFormat);
-            } else if (scaled_gfx && !scaled(layer) && !is_NV12(handle->iFormat)) {
+                scaled_gfx = scaled(layer) || is_NV12(handle);
+            } else if (scaled_gfx && !scaled(layer) && !is_NV12(handle)) {
                 /* swap GFX layer with this one */
                 dsscomp->ovls[dsscomp->num_ovls].cfg.ix = 0;
                 dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls;
@@ -1140,7 +1165,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                 continue;
             if ((layer->flags & HWC_SKIP_LAYER) || !layer->handle)
                 continue;
-            if (!is_BLENDED(layer->blending))
+            if (!is_BLENDED(layer))
                 layer->hints |= HWC_HINT_CLEAR_FB;
         }
     }
@@ -1154,7 +1179,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             continue;
         if ((layer->flags & HWC_SKIP_LAYER) || !layer->handle)
             continue;
-        if (is_BLENDED(layer->blending))
+        if (is_BLENDED(layer))
             hwc_dev->ovls_blending = 1;
     }
 
@@ -1170,6 +1195,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         hwc_dev->buffers[0] = NULL;
         omap4_hwc_setup_layer_base(&dsscomp->ovls[0].cfg, fb_z,
                                    hwc_dev->fb_dev->base.format,
+                                   1,   /* FB is always premultiplied */
                                    hwc_dev->fb_dev->base.width,
                                    hwc_dev->fb_dev->base.height);
         dsscomp->ovls[0].cfg.pre_mult_alpha = 1;
