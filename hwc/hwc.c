@@ -70,6 +70,8 @@ struct omap4_hwc_ext {
     struct ext_transform_t dock;        /* docking settings */
     float lcd_xpy;                      /* pixel ratio for UI */
     __u8 avoid_mode_change;             /* use HDMI mode used for mirroring if possible */
+    __u8 force_dock;                     /* must dock */
+    __u8 hdmi_state;                     /* whether HDMI is connected */
 
     /* state */
     __u8 on_tv;                         /* using a tv */
@@ -1523,9 +1525,10 @@ err_out:
     return err;
 }
 
-static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
+static void handle_hotplug(omap4_hwc_device_t *hwc_dev)
 {
     omap4_hwc_ext_t *ext = &hwc_dev->ext;
+    __u8 state = ext->hdmi_state;
 
     pthread_mutex_lock(&hwc_dev->lock);
     ext->dock.enabled = ext->mirror.enabled = 0;
@@ -1549,6 +1552,13 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
         ext->mirror.hflip = (atoi(value) & EXT_HFLIP) > 0;
         ext->mirror.docking = 0;
 
+        if (ext->force_dock) {
+            /* restrict to docking with no transform */
+            ext->mirror.enabled = 0;
+            ext->dock.rotation = 0;
+            ext->dock.hflip = 0;
+        }
+
         /* select best mode for mirroring */
         if (ext->mirror.enabled) {
             ext->current = ext->mirror;
@@ -1562,13 +1572,14 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
     } else {
         ext->last_mode = 0;
     }
-    LOGI("external display changed (state=%d, mirror={%s tform=%ddeg%s}, dock={%s tform=%ddeg%s}, tv=%d", state,
+    LOGI("external display changed (state=%d, mirror={%s tform=%ddeg%s}, dock={%s tform=%ddeg%s%s}, tv=%d", state,
          ext->mirror.enabled ? "enabled" : "disabled",
          ext->mirror.rotation * 90,
          ext->mirror.hflip ? "+hflip" : "",
          ext->dock.enabled ? "enabled" : "disabled",
          ext->dock.rotation * 90,
          ext->dock.hflip ? "+hflip" : "",
+         ext->force_dock ? " forced" : "",
          ext->on_tv);
 
     pthread_mutex_unlock(&hwc_dev->lock);
@@ -1579,7 +1590,9 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev, int state)
 
 static void handle_uevents(omap4_hwc_device_t *hwc_dev, const char *s)
 {
-    if (strcmp(s, "change@/devices/virtual/switch/hdmi"))
+    int dock = !strcmp(s, "change@/devices/virtual/switch/dock");
+    if (!dock &&
+        strcmp(s, "change@/devices/virtual/switch/hdmi"))
         return;
 
     s += strlen(s) + 1;
@@ -1587,7 +1600,11 @@ static void handle_uevents(omap4_hwc_device_t *hwc_dev, const char *s)
     while(*s) {
         if (!strncmp(s, "SWITCH_STATE=", strlen("SWITCH_STATE="))) {
             int state = atoi(s + strlen("SWITCH_STATE="));
-            handle_hotplug(hwc_dev, state);
+            if (dock)
+                hwc_dev->ext.force_dock = state == 1;
+            else
+                hwc_dev->ext.hdmi_state = state == 1;
+            handle_hotplug(hwc_dev);
         }
 
         s += strlen(s) + 1;
@@ -1790,14 +1807,20 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
 
     /* read switch state */
     int sw_fd = open("/sys/class/switch/hdmi/state", O_RDONLY);
-    int hpd = 0;
     if (sw_fd >= 0) {
         char value;
         if (read(sw_fd, &value, 1) == 1)
-            hpd = value == '1';
+            hwc_dev->ext.hdmi_state = value == '1';
         close(sw_fd);
     }
-    handle_hotplug(hwc_dev, hpd);
+    sw_fd = open("/sys/class/switch/dock/state", O_RDONLY);
+    if (sw_fd >= 0) {
+        char value;
+        if (read(sw_fd, &value, 1) == 1)
+            hwc_dev->ext.force_dock = value == '1';
+        close(sw_fd);
+    }
+    handle_hotplug(hwc_dev);
 
     LOGI("omap4_hwc_device_open(rgb_order=%d nv12_only=%d)",
         hwc_dev->flags_rgb_order, hwc_dev->flags_nv12_only);
