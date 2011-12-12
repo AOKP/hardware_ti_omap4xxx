@@ -1093,6 +1093,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 
     /* set up if DSS layers */
     unsigned int mem_used = 0;
+    hwc_dev->ovls_blending = 0;
     for (i = 0; list && i < list->numHwLayers; i++) {
         hwc_layer_t *layer = &list->hwLayers[i];
         IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
@@ -1110,6 +1111,14 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             /* render via DSS overlay */
             mem_used += mem1d(handle);
             layer->compositionType = HWC_OVERLAY;
+
+            /* clear FB above all opaque layers if rendering via SGX */
+            if (hwc_dev->use_sgx && !is_BLENDED(layer))
+                layer->hints |= HWC_HINT_CLEAR_FB;
+            /* see if any of the (non-backmost) overlays are doing blending */
+            else if (is_BLENDED(layer) && i > 0)
+                hwc_dev->ovls_blending = 1;
+
             hwc_dev->buffers[dsscomp->num_ovls] = layer->handle;
 
             omap4_hwc_setup_layer(hwc_dev,
@@ -1154,33 +1163,6 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                     dsscomp->ovls[1 + fb_z++].cfg.zorder--;
             }
         }
-    }
-
-    /* clear FB above all opaque layers if rendering via SGX */
-    if (hwc_dev->use_sgx) {
-        for (i = 0; list && i < list->numHwLayers; i++) {
-            hwc_layer_t *layer = &list->hwLayers[i];
-            IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
-            if (layer->compositionType == HWC_FRAMEBUFFER)
-                continue;
-            if ((layer->flags & HWC_SKIP_LAYER) || !layer->handle)
-                continue;
-            if (!is_BLENDED(layer))
-                layer->hints |= HWC_HINT_CLEAR_FB;
-        }
-    }
-
-    /* see if any of the (non-backmost) overlays are doing blending */
-    hwc_dev->ovls_blending = 0;
-    for (i = 1; list && i < list->numHwLayers; i++) {
-        hwc_layer_t *layer = &list->hwLayers[i];
-        IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
-        if (layer->compositionType == HWC_FRAMEBUFFER)
-            continue;
-        if ((layer->flags & HWC_SKIP_LAYER) || !layer->handle)
-            continue;
-        if (is_BLENDED(layer))
-            hwc_dev->ovls_blending = 1;
     }
 
     /* if scaling GFX (e.g. only 1 scaled surface) use a VID pipe */
