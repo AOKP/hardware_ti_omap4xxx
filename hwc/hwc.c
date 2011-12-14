@@ -22,6 +22,7 @@
 #include <poll.h>
 #include <sys/ioctl.h>
 #include <linux/fb.h>
+#include <sys/mman.h>
 
 #include <cutils/properties.h>
 #include <cutils/log.h>
@@ -31,6 +32,7 @@
 #include <EGL/egl.h>
 #include <utils/Timers.h>
 #include <hardware_legacy/uevent.h>
+#include <png.h>
 
 #define ASPECT_RATIO_TOLERANCE 0.02f
 
@@ -99,6 +101,15 @@ enum {
     EXT_HFLIP       = (1 << 2), /* flip l-r on output (after rotation) */
 };
 
+/* ARGB image */
+struct omap4_hwc_img {
+    int width;
+    int height;
+    int rowbytes;
+    int size;
+    unsigned char *ptr;
+} dock_image = { .rowbytes = 0 };
+
 struct omap4_hwc_module {
     hwc_module_t base;
 
@@ -119,6 +130,9 @@ struct omap4_hwc_device {
     int dsscomp_fd;             /* file descriptor for /dev/dsscomp */
     int hdmi_fb_fd;             /* file descriptor for /dev/fb1 */
     int pipe_fds[2];            /* pipe to event thread */
+
+    int img_mem_size;           /* size of fb for hdmi */
+    void *img_mem_ptr;          /* start of fb for hdmi */
 
     int flags_rgb_order;
     int flags_nv12_only;
@@ -683,6 +697,8 @@ static struct dsscomp_dispc_limitations {
     __u8 max_downscale;
     __u8 min_width;
     __u16 integer_scale_ratio_limit;
+    __u16 max_width;
+    __u16 max_height;
 } limits = {
     .max_xdecim_1d = 16,
     .max_xdecim_2d = 16,
@@ -692,6 +708,8 @@ static struct dsscomp_dispc_limitations {
     .max_downscale = 4,
     .min_width = 2,
     .integer_scale_ratio_limit = 2048,
+    .max_width = 2048,
+    .max_height = 2048,
 };
 
 static int omap4_hwc_can_scale(__u32 src_w, __u32 src_h, __u32 dst_w, __u32 dst_h, int is_2d,
@@ -984,11 +1002,11 @@ static void decide_supported_cloning(omap4_hwc_device_t *hwc_dev, struct counts 
      * have to be disabled, and the disabling has to take effect on the current display.
      * We keep track of the available number of overlays here.
      */
-    if (ext->dock.enabled && !(ext->mirror.enabled && !num->dockable)) {
+    if (ext->dock.enabled && !(ext->mirror.enabled && !(num->dockable || ext->force_dock))) {
         /* some overlays may already be used by the external display, so we account for this */
 
         /* reserve just a video pipeline for HDMI if docking */
-        hwc_dev->ext_ovls = num->dockable ? 1 : 0;
+        hwc_dev->ext_ovls = (num->dockable || ext->force_dock) ? 1 : 0;
         num->max_hw_overlays -= max(hwc_dev->ext_ovls, hwc_dev->last_ext_ovls);
 
         /* use mirroring transform if we are auto-switching to docking mode while mirroring*/
@@ -1296,6 +1314,17 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         if (ext->current.docking && ix_docking >= 0) {
             if (clone_external_layer(hwc_dev, ix_docking) == 0)
                 dsscomp->ovls[dsscomp->num_ovls - 1].cfg.zorder = z++;
+        } else if (ext->current.docking && ix_docking < 0 && ext->force_dock) {
+            ix_docking = dsscomp->num_ovls;
+            struct dss2_ovl_info *oi = &dsscomp->ovls[ix_docking];
+            omap4_hwc_setup_layer_base(&oi->cfg, 0, HAL_PIXEL_FORMAT_BGRA_8888, 1,
+                                       dock_image.width, dock_image.height);
+            oi->cfg.stride = dock_image.rowbytes;
+            if (clone_external_layer(hwc_dev, ix_docking) == 0) {
+                oi->addressing = OMAP_DSS_BUFADDR_FB;
+                oi->ba = 0;
+                z++;
+            }
         } else if (!ext->current.docking) {
             int res = 0;
 
@@ -1481,6 +1510,121 @@ static void omap4_hwc_dump(struct hwc_composer_device *dev, char *buff, int buff
     }
 }
 
+static void free_png_image(omap4_hwc_device_t *hwc_dev, struct omap4_hwc_img *img)
+{
+    memset(img, 0, sizeof(*img));
+}
+
+static int load_png_image(omap4_hwc_device_t *hwc_dev, char *path, struct omap4_hwc_img *img)
+{
+    void *ptr = NULL;
+    png_bytepp row_pointers = NULL;
+
+    FILE *fd = fopen(path, "rb");
+    if (!fd) {
+        LOGE("failed to open PNG file %s: (%d)", path, errno);
+        return -EINVAL;
+    }
+
+    const int SIZE_PNG_HEADER = 8;
+    __u8 header[SIZE_PNG_HEADER];
+    fread(header, 1, SIZE_PNG_HEADER, fd);
+    if (png_sig_cmp(header, 0, SIZE_PNG_HEADER)) {
+        LOGE("%s is not a PNG file", path);
+        goto fail;
+    }
+
+    png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (!png_ptr)
+         goto fail_alloc;
+    png_infop info_ptr = png_create_info_struct(png_ptr);
+    if (!info_ptr)
+         goto fail_alloc;
+
+    if (setjmp(png_jmpbuf(png_ptr)))
+        goto fail_alloc;
+
+    png_init_io(png_ptr, fd);
+    png_set_sig_bytes(png_ptr, SIZE_PNG_HEADER);
+    png_set_user_limits(png_ptr, limits.max_width, limits.max_height);
+    png_read_info(png_ptr, info_ptr);
+
+    __u8 bit_depth = png_get_bit_depth(png_ptr, info_ptr);
+    __u32 width = png_get_image_width(png_ptr, info_ptr);
+    __u32 height = png_get_image_height(png_ptr, info_ptr);
+    __u8 color_type = png_get_color_type(png_ptr, info_ptr);
+
+    switch (color_type) {
+    case PNG_COLOR_TYPE_PALETTE:
+        png_set_palette_to_rgb(png_ptr);
+        png_set_filler(png_ptr, 128, PNG_FILLER_AFTER);
+        break;
+    case PNG_COLOR_TYPE_GRAY:
+        if (bit_depth < 8) {
+            png_set_expand_gray_1_2_4_to_8(png_ptr);
+            if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS))
+                png_set_tRNS_to_alpha(png_ptr);
+        } else {
+            png_set_filler(png_ptr, 128, PNG_FILLER_AFTER);
+        }
+        /* fall through */
+    case PNG_COLOR_TYPE_GRAY_ALPHA:
+        png_set_gray_to_rgb(png_ptr);
+        break;
+    case PNG_COLOR_TYPE_RGB:
+        png_set_filler(png_ptr, 128, PNG_FILLER_AFTER);
+        /* fall through */
+    case PNG_COLOR_TYPE_RGB_ALPHA:
+        png_set_bgr(png_ptr);
+        break;
+    default:
+        LOGE("unsupported PNG color: %x", color_type);
+        goto fail_alloc;
+    }
+
+    if (bit_depth == 16)
+        png_set_strip_16(png_ptr);
+
+    const int bpp = 4;
+    img->size = ALIGN(width * height * bpp, 4096);
+    if (img->size > hwc_dev->img_mem_size) {
+        LOGE("image does not fit into framebuffer area (%d > %d)", img->size, hwc_dev->img_mem_size);
+        goto fail_alloc;
+    }
+    img->ptr = hwc_dev->img_mem_ptr;
+
+    row_pointers = calloc(height, sizeof(*row_pointers));
+    if (!row_pointers) {
+        LOGE("failed to allocate row pointers");
+        goto fail_alloc;
+    }
+    __u32 i;
+    for (i = 0; i < height; i++)
+        row_pointers[i] = img->ptr + i * width * bpp;
+    png_set_rows(png_ptr, info_ptr, row_pointers);
+    png_read_update_info(png_ptr, info_ptr);
+    img->rowbytes = png_get_rowbytes(png_ptr, info_ptr);
+
+    png_read_image(png_ptr, row_pointers);
+    png_read_end(png_ptr, NULL);
+    free(row_pointers);
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    fclose(fd);
+    img->width = width;
+    img->height = height;
+    return 0;
+
+fail_alloc:
+    free_png_image(hwc_dev, img);
+    free(row_pointers);
+    if (!png_ptr || !info_ptr)
+        LOGE("failed to allocate PNG structures");
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+fail:
+    fclose(fd);
+    return -EINVAL;
+}
+
 
 static int omap4_hwc_device_close(hw_device_t* device)
 {
@@ -1559,6 +1703,11 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev)
             ext->mirror.enabled = 0;
             ext->dock.rotation = 0;
             ext->dock.hflip = 0;
+
+            if (!dock_image.rowbytes) {
+                property_get("persist.hwc.dock_image", value, "/vendor/res/images/dock/dock.png");
+                load_png_image(hwc_dev, value, &dock_image);
+            }
         }
 
         /* select best mode for mirroring */
@@ -1744,6 +1893,21 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     hwc_dev->fb_fd = open("/dev/graphics/fb0", O_RDWR);
     if (hwc_dev->fb_fd < 0) {
         LOGE("failed to open fb (%d)", errno);
+        err = -errno;
+        goto done;
+    }
+
+    struct fb_fix_screeninfo fix;
+    if (ioctl(hwc_dev->fb_fd, FBIOGET_FSCREENINFO, &fix)) {
+        LOGE("failed to get fb info (%d)", errno);
+        err = -errno;
+        goto done;
+    }
+
+    hwc_dev->img_mem_size = fix.smem_len;
+    hwc_dev->img_mem_ptr = mmap(NULL, fix.smem_len, PROT_WRITE, MAP_SHARED, hwc_dev->fb_fd, 0);
+    if (hwc_dev->img_mem_ptr == MAP_FAILED) {
+        LOGE("failed to map fb memory");
         err = -errno;
         goto done;
     }
