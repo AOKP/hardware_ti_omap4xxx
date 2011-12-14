@@ -1292,8 +1292,11 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 
     if (hwc_dev->use_sgx) {
         /* assign a z-layer for fb */
-        if (fb_z < 0)
-            LOGE("**** should have assigned z-layer for fb");
+        if (fb_z < 0) {
+            if (num.composited_layers)
+                LOGE("**** should have assigned z-layer for fb");
+            fb_z = z++;
+        }
 
         hwc_dev->buffers[0] = NULL;
         omap4_hwc_setup_layer_base(&dsscomp->ovls[0].cfg, fb_z,
