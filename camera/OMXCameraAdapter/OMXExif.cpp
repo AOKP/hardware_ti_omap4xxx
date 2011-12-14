@@ -333,7 +333,7 @@ status_t OMXCameraAdapter::setupEXIF()
          if ( OMX_TI_TagReadWrite == exifTags->eStatusDateTime )
              {
              int status = gettimeofday (&sTv, NULL);
-             pTime = gmtime (&sTv.tv_sec);
+             pTime = localtime (&sTv.tv_sec);
              if ( ( 0 == status ) && ( NULL != pTime ) )
                 {
                 snprintf(( char * ) sharedPtr, EXIF_DATE_TIME_SIZE,
@@ -535,7 +535,7 @@ status_t OMXCameraAdapter::setupEXIF_libjpeg(ExifElementsTable* exifTable,
 
     if ((NO_ERROR == ret)) {
         int status = gettimeofday (&sTv, NULL);
-        pTime = gmtime (&sTv.tv_sec);
+        pTime = localtime (&sTv.tv_sec);
         char temp_value[EXIF_DATE_TIME_SIZE + 1];
         if ((0 == status) && (NULL != pTime)) {
             snprintf(temp_value, EXIF_DATE_TIME_SIZE,
