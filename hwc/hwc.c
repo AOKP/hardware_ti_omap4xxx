@@ -1092,6 +1092,7 @@ static int clone_layer(omap4_hwc_device_t *hwc_dev, int ix) {
     /* reserve overlays at end for other display */
     o->cfg.ix = MAX_HW_OVERLAYS - 1 - ext_ovl_ix;
     o->cfg.mgr_ix = 1;
+    o->addressing = OMAP_DSS_BUFADDR_OVL_IX;
     o->ba = ix;
 
     /* use distinct z values (to simplify z-order checking) */
@@ -1233,9 +1234,8 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                                   handle->iHeight);
 
             dsscomp->ovls[dsscomp->num_ovls].cfg.ix = dsscomp->num_ovls;
-            /* just marking dss layers */
-            dsscomp->ovls[dsscomp->num_ovls].address = (void *) (dsscomp->num_ovls * 4096 + 0xA0000000);
-            dsscomp->ovls[dsscomp->num_ovls].uv = (__u32) hwc_dev->buffers[dsscomp->num_ovls];
+            dsscomp->ovls[dsscomp->num_ovls].addressing = OMAP_DSS_BUFADDR_LAYER_IX;
+            dsscomp->ovls[dsscomp->num_ovls].ba = dsscomp->num_ovls;
 
             /* ensure GFX layer is never scaled */
             if (dsscomp->num_ovls == 0) {
@@ -1284,6 +1284,8 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                                    hwc_dev->fb_dev->base.width,
                                    hwc_dev->fb_dev->base.height);
         dsscomp->ovls[0].cfg.pre_mult_alpha = 1;
+        dsscomp->ovls[0].addressing = OMAP_DSS_BUFADDR_LAYER_IX;
+        dsscomp->ovls[0].ba = 0;
     }
 
     /* mirror layers */
@@ -1293,7 +1295,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     if (ext->current.enabled && hwc_dev->ext_ovls) {
         if (ext->current.docking && ix_docking >= 0) {
             if (clone_external_layer(hwc_dev, ix_docking) == 0)
-                z++;
+                dsscomp->ovls[dsscomp->num_ovls - 1].cfg.zorder = z++;
         } else if (!ext->current.docking) {
             int res = 0;
 
