@@ -282,9 +282,9 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
     memset(&mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mPrevPortIndex], 0, sizeof(OMXCameraPortParameters));
 
     //Initialize 3A defaults
-    ret = apply3ADefaults(mParameters3A);
+    ret = init3AParams(mParameters3A);
     if ( NO_ERROR != ret ) {
-        CAMHAL_LOGEA("Couldn't apply 3A defaults!");
+        CAMHAL_LOGEA("Couldn't init 3A params!");
         goto EXIT;
     }
 
