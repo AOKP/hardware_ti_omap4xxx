@@ -928,7 +928,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
             !omap4_hwc_can_scale(xres, yres, ext_fb_xres, ext_fb_yres,
                                  1, &d.dis, &limits,
                                  d.dis.timings.pixel_clock)) {
-            LOGW("DSS scaler cannot support HDMI cloning");
+            ALOGW("DSS scaler cannot support HDMI cloning");
             return -1;
         }
     }
@@ -1403,18 +1403,18 @@ static void omap4_hwc_reset_screen(omap4_hwc_device_t *hwc_dev)
         /* remove bootloader image from the screen as blank/unblank does not change the composition */
         ret = ioctl(hwc_dev->dsscomp_fd, DSSCIOC_SETUP_DISPC, &d);
         if (ret)
-            LOGW("failed to remove bootloader image");
+            ALOGW("failed to remove bootloader image");
 
         /* blank and unblank fd to make sure display is properly programmed on boot.
          * This is needed because the bootloader can not be trusted.
          */
         ret = ioctl(hwc_dev->fb_fd, FBIOBLANK, FB_BLANK_POWERDOWN);
         if (ret)
-            LOGW("failed to blank display");
+            ALOGW("failed to blank display");
 
         ret = ioctl(hwc_dev->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
         if (ret)
-            LOGW("failed to blank display");
+            ALOGW("failed to blank display");
     }
 }
 
