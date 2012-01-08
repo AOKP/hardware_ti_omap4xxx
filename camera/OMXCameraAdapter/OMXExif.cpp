@@ -799,7 +799,7 @@ status_t OMXCameraAdapter::convertGPSCoord(double coord,
 
     if ( coord == 0 ) {
 
-        LOGE("Invalid GPS coordinate");
+        ALOGE("Invalid GPS coordinate");
 
         return -EINVAL;
     }

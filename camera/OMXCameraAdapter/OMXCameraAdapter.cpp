@@ -590,7 +590,7 @@ void saveFile(unsigned char   *buff, int width, int height, int format) {
     sprintf(fn, "/preview%03d.yuv", counter);
     fd = open(fn, O_CREAT | O_WRONLY | O_SYNC | O_TRUNC, 0777);
     if(fd < 0) {
-        LOGE("Unable to open file %s: %s", fn, strerror(fd));
+        ALOGE("Unable to open file %s: %s", fn, strerror(fd));
         return;
     }
 
@@ -3008,8 +3008,8 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
 #ifdef DEBUG_LOG
         if(mBuffersWithDucati.indexOfKey((int)pBuffHeader->pBuffer)<0)
             {
-            LOGE("Buffer was never with Ducati!! 0x%x", pBuffHeader->pBuffer);
-            for(int i=0;i<mBuffersWithDucati.size();i++) LOGE("0x%x", mBuffersWithDucati.keyAt(i));
+            ALOGE("Buffer was never with Ducati!! 0x%x", pBuffHeader->pBuffer);
+            for(int i=0;i<mBuffersWithDucati.size();i++) ALOGE("0x%x", mBuffersWithDucati.keyAt(i));
             }
         mBuffersWithDucati.removeItem((int)pBuffHeader->pBuffer);
 #endif

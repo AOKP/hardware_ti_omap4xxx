@@ -90,8 +90,8 @@
 #define CAMHAL_LOGVA(str)
 #define CAMHAL_LOGVB(str, ...)
 
-#define CAMHAL_LOGEA LOGE
-#define CAMHAL_LOGEB LOGE
+#define CAMHAL_LOGEA ALOGE
+#define CAMHAL_LOGEB ALOGE
 
 #undef LOG_FUNCTION_NAME
 #undef LOG_FUNCTION_NAME_EXIT

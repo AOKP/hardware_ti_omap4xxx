@@ -66,7 +66,7 @@ VT_resizeFrame_Video_opt2_lp
   if (!i_img_ptr || !i_img_ptr->imgPtr ||
     !o_img_ptr || !o_img_ptr->imgPtr)
   {
-	LOGE("Image Point NULL");
+	ALOGE("Image Point NULL");
 	ALOGV("VT_resizeFrame_Video_opt2_lp-");
 	return FALSE;
   }
@@ -95,7 +95,7 @@ VT_resizeFrame_Video_opt2_lp
   /* make sure valid input size */
   if (idx < 1 || idy < 1 || i_img_ptr->uStride < 1)
 	{
-	LOGE("idx or idy less then 1 idx = %d idy = %d stride = %d", idx, idy, i_img_ptr->uStride);
+	ALOGE("idx or idy less then 1 idx = %d idy = %d stride = %d", idx, idy, i_img_ptr->uStride);
 	ALOGV("VT_resizeFrame_Video_opt2_lp-");
 	return FALSE;
 	}
@@ -297,7 +297,7 @@ VT_resizeFrame_Video_opt2_lp
   }
   else
   {
-	LOGE("eFormat not supported");
+	ALOGE("eFormat not supported");
 	ALOGV("VT_resizeFrame_Video_opt2_lp-");
 	return FALSE;
   }

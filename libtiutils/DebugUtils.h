@@ -24,8 +24,8 @@
 #define DBGUTILS_LOGVB(str,...)     ALOGV("%s:%d %s - " str,__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);
 #define DBGUTILS_LOGDA(str)         ALOGD("%s:%d %s - " str,__FILE__, __LINE__,__FUNCTION__);
 #define DBGUTILS_LOGDB(str, ...)    ALOGD("%s:%d %s - " str,__FILE__, __LINE__, __FUNCTION__, __VA_ARGS__);
-#define DBGUTILS_LOGEA(str)         LOGE("%s:%d %s - " str,__FILE__, __LINE__, __FUNCTION__);
-#define DBGUTILS_LOGEB(str, ...)    LOGE("%s:%d %s - " str,__FILE__, __LINE__,__FUNCTION__, __VA_ARGS__);
+#define DBGUTILS_LOGEA(str)         ALOGE("%s:%d %s - " str,__FILE__, __LINE__, __FUNCTION__);
+#define DBGUTILS_LOGEB(str, ...)    ALOGE("%s:%d %s - " str,__FILE__, __LINE__,__FUNCTION__, __VA_ARGS__);
 #define LOG_FUNCTION_NAME           ALOGV("%d: %s() ENTER", __LINE__, __FUNCTION__);
 #define LOG_FUNCTION_NAME_EXIT      ALOGV("%d: %s() EXIT", __LINE__, __FUNCTION__);
 

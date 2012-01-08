@@ -58,7 +58,7 @@ TIOMXPlugin::TIOMXPlugin()
         (*mInit)();
     }
     else
-        LOGE("%s: failed to load %s", __func__, LIBOMX);
+        ALOGE("%s: failed to load %s", __func__, LIBOMX);
 }
 
 TIOMXPlugin::~TIOMXPlugin() {
@@ -99,7 +99,7 @@ OMX_ERRORTYPE TIOMXPlugin::enumerateComponents(
         size_t size,
         OMX_U32 index) {
     if (mLibHandle == NULL) {
-	LOGE("mLibHandle is NULL!");
+	ALOGE("mLibHandle is NULL!");
         return OMX_ErrorUndefined;
     }
 

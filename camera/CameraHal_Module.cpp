@@ -501,7 +501,7 @@ int camera_device_open(const hw_module_t* module, const char* name,
 
         if(cameraid > num_cameras)
         {
-            LOGE("camera service provided cameraid out of bounds, "
+            ALOGE("camera service provided cameraid out of bounds, "
                     "cameraid = %d, num supported = %d",
                     cameraid, num_cameras);
             rv = -EINVAL;
@@ -510,7 +510,7 @@ int camera_device_open(const hw_module_t* module, const char* name,
 
         if(gCamerasOpen >= MAX_SIMUL_CAMERAS_SUPPORTED)
         {
-            LOGE("maximum number of cameras already open");
+            ALOGE("maximum number of cameras already open");
             rv = -ENOMEM;
             goto fail;
         }
@@ -518,7 +518,7 @@ int camera_device_open(const hw_module_t* module, const char* name,
         camera_device = (ti_camera_device_t*)malloc(sizeof(*camera_device));
         if(!camera_device)
         {
-            LOGE("camera_device allocation fail");
+            ALOGE("camera_device allocation fail");
             rv = -ENOMEM;
             goto fail;
         }
@@ -526,7 +526,7 @@ int camera_device_open(const hw_module_t* module, const char* name,
         camera_ops = (camera_device_ops_t*)malloc(sizeof(*camera_ops));
         if(!camera_ops)
         {
-            LOGE("camera_ops allocation fail");
+            ALOGE("camera_ops allocation fail");
             rv = -ENOMEM;
             goto fail;
         }
@@ -572,7 +572,7 @@ int camera_device_open(const hw_module_t* module, const char* name,
 
         if(gCameraProperties.getProperties(cameraid, &properties) < 0)
         {
-            LOGE("Couldn't get camera properties");
+            ALOGE("Couldn't get camera properties");
             rv = -ENOMEM;
             goto fail;
         }
@@ -581,14 +581,14 @@ int camera_device_open(const hw_module_t* module, const char* name,
 
         if(!camera)
         {
-            LOGE("Couldn't create instance of CameraHal class");
+            ALOGE("Couldn't create instance of CameraHal class");
             rv = -ENOMEM;
             goto fail;
         }
 
         if(properties && (camera->initialize(properties) != android::NO_ERROR))
         {
-            LOGE("Couldn't initialize camera instance");
+            ALOGE("Couldn't initialize camera instance");
             rv = -ENODEV;
             goto fail;
         }
@@ -656,7 +656,7 @@ int camera_get_camera_info(int camera_id, struct camera_info *info)
     //Get camera properties for camera index
     if(gCameraProperties.getProperties(camera_id, &properties) < 0)
     {
-        LOGE("Couldn't get camera properties");
+        ALOGE("Couldn't get camera properties");
         rv = -EINVAL;
         goto end;
     }
