@@ -267,7 +267,7 @@ void ExifElementsTable::insertExifToJpeg(unsigned char* jpeg, size_t jpeg_size) 
     ResetJpgfile();
     if (ReadJpegSectionsFromBuffer(jpeg, jpeg_size, read_mode)) {
         jpeg_opened = true;
-        create_EXIF(table, exif_tag_count, gps_tag_count);
+        create_EXIF(table, exif_tag_count, gps_tag_count, has_datetime_tag);
     }
 }
 
@@ -333,11 +333,8 @@ status_t ExifElementsTable::insertElement(const char* tag, const char* value) {
         table[position].Tag = TagNameToValue(tag);
         exif_tag_count++;
 
-        // jhead isn't taking datetime tag...this is a WA
         if (strcmp(tag, TAG_DATETIME) == 0) {
-            ImageInfo.numDateTimeTags = 1;
-            memcpy(ImageInfo.DateTime, value,
-                   MIN(ARRAY_SIZE(ImageInfo.DateTime), value_length + 1));
+            has_datetime_tag = true;
         }
     }
 

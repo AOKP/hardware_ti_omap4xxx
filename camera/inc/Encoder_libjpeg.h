@@ -86,7 +86,7 @@ class ExifElementsTable {
     public:
         ExifElementsTable() :
            gps_tag_count(0), exif_tag_count(0), position(0),
-           jpeg_opened(false) { }
+           jpeg_opened(false), has_datetime_tag(false) { }
         ~ExifElementsTable();
 
         status_t insertElement(const char* tag, const char* value);
@@ -102,6 +102,7 @@ class ExifElementsTable {
         unsigned int exif_tag_count;
         unsigned int position;
         bool jpeg_opened;
+        bool has_datetime_tag;
 };
 
 class Encoder_libjpeg : public Thread {
