@@ -42,6 +42,7 @@
 
 #include "smc_properties_parser.h"
 #include "lib_manifest2.h"
+#include "lib_uuid.h"
 #include "s_error.h"
 
 /* ---------------------------------------------------------------------------------
@@ -57,7 +58,7 @@
 #define GET_LAST_ERR  errno
 #endif
 
-#if defined (LINUX) || defined (__SYMBIAN32__) || defined (__ANDROID32__)
+#if defined (LINUX) || defined (__SYMBIAN32__) || defined (ANDROID)
 #define STRICMP strcasecmp
 #elif defined(_WIN32_WCE)
 #define STRICMP _stricmp
@@ -241,7 +242,7 @@ static NODE* SMCPropListFindElement(LIST* pList,char* pName,bool bIsCaseSensitiv
 
 
 static S_RESULT SMCPropYacc(uint8_t* pBuffer, uint32_t nBufferLength,
-                     CONF_FILE* pConfFile)
+                     CONF_FILE* pConfFile, SERVICE_SECTION* pService)
 {
    S_RESULT nError=S_SUCCESS;
    LIST *pPublicPropertyList=NULL;
@@ -264,6 +265,15 @@ static S_RESULT SMCPropYacc(uint8_t* pBuffer, uint32_t nBufferLength,
    sParserContext.nManifestLength = nBufferLength;
    sParserContext.nType = LIB_MANIFEST2_TYPE_SOURCE_WITH_SECTIONS;
 
+   if (pService!=NULL)
+   {
+      pPublicPropertyList=&pService->sPublicPropertyList;
+      pPrivatePropertyList=&pService->sPrivatePropertyList;
+      /* read inside a service compiled manifest */
+      sParserContext.nType = LIB_MANIFEST2_TYPE_COMPILED;
+      sprintf(serviceManifestName, "%s(manifest)", pService->sNode.pName);
+      sParserContext.pManifestName = serviceManifestName;
+   }
    libManifest2InitContext(&sParserContext);
 
    while (true)
@@ -382,6 +392,47 @@ static S_RESULT SMCPropYacc(uint8_t* pBuffer, uint32_t nBufferLength,
          }
          else
          {
+            if (strcmp(pProperty->sNode.pName,CONFIG_SERVICE_ID_PROPERTY_NAME) == 0)
+            {
+               if (pService!=NULL)
+               {
+                  pService->sNode.pName=malloc(nValueLength+1);
+                  if (pService->sNode.pName==NULL)
+                  {
+                     nError=S_ERROR_OUT_OF_MEMORY;
+                     goto error;
+                  }
+#if defined (LINUX) || defined (__SYMBIAN32__) || defined(ANDROID)
+                  {
+                     // put each char of the value in uppercase
+                     char* p=pProperty->pValue;
+                     while(*p)
+                     {
+                        *p=toupper(*p);
+                        p++;
+                     }
+                  }
+#else
+                  _strupr(pProperty->pValue);
+#endif
+                  memcpy(pService->sNode.pName,pProperty->pValue,nValueLength+1);
+
+                  if (!libUUIDFromString((const uint8_t*)pProperty->pValue,&pService->sUUID))
+                  {
+                     nError=S_ERROR_WRONG_SIGNATURE;
+                     goto error;
+                  }
+                  {
+                     S_UUID sNullUUID;
+                     memset(&sNullUUID,0,sizeof(S_UUID));
+                     if (!memcmp(&pService->sUUID,&sNullUUID,sizeof(S_UUID)))
+                     {
+                        nError=S_ERROR_WRONG_SIGNATURE;
+                        goto error;
+                     }
+                  }
+               }
+            }
             if ((nValueLength > strlen(CONFIG_PROPERTY_NAME)) &&
                 (memcmp(pProperty->sNode.pName, CONFIG_PROPERTY_NAME, strlen(CONFIG_PROPERTY_NAME)) == 0))
             {
@@ -411,10 +462,10 @@ error:
          TRACE_ERROR("Configuration file: wrong service UUID: %s\n", pValueZ);
          break;
       case S_ERROR_OUT_OF_MEMORY:
-	  TRACE_ERROR("Out of memory\n");
+         TRACE_ERROR("Out of memory\n");
          break;
       case S_ERROR_ITEM_NOT_FOUND:
-	  TRACE_ERROR("Configuration file: service \"%s\" not found\n", pNameZ);
+         TRACE_ERROR("Configuration file: service \"%s\" not found\n", pNameZ);
          break;
       }
    }
@@ -544,7 +595,7 @@ S_RESULT SMCPropParseConfigFile(char* pConfigFilename,CONF_FILE* pConfFile)
       assert(0);
    }
 
-   nError=SMCPropYacc(pFile,nFileLength,pConfFile);
+   nError=SMCPropYacc(pFile,nFileLength,pConfFile,NULL);
 
    if(pConfigFilename != NULL)
    {

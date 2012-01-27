@@ -76,7 +76,7 @@ typedef enum
    STATE_BINARY
 } INTEGER_FORMAT;
 
-#if defined (LINUX) || defined(__ANDROID32__)
+#if defined (LINUX) || defined(ANDROID)
 #define SEPARATOR_CHAR '/'
 
 #elif defined (WIN32) || defined (__SYMBIAN32__) || defined (_WIN32_WCE)
@@ -151,7 +151,7 @@ static bool checkFilePath(char *pPath)
          printf("Path %s doesn't point on a directory.\n", pDir);
          return false;
       }
-#if (!defined(__SYMBIAN32__)) && (!defined(_WIN32_WCE)) && (!defined(__ANDROID32__))
+#if (!defined(__SYMBIAN32__)) && (!defined(_WIN32_WCE)) && (!defined(ANDROID))
       // TODO : under Symbian, Android and WM, check access right of a directory failed? I don't know why...
        /* check read access */
        if ((buf.st_mode & S_IREAD) != S_IREAD)

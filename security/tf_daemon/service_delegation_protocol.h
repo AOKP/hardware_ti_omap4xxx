@@ -70,6 +70,10 @@
 #define DELEGATION_NOTIFY_TYPE_INFO                 0x000000E3
 #define DELEGATION_NOTIFY_TYPE_DEBUG                0x000000E4
 
+#ifdef SUPPORT_RPMB_PARTITION
+#define RPMB_PARTITION_ID                 14
+#endif
+
 typedef struct
 {
    uint32_t nInstructionID;
@@ -90,6 +94,21 @@ typedef struct
    uint32_t nWorkspaceOffset;
 } DELEGATION_RW_INSTRUCTION;
 
+#ifdef SUPPORT_RPMB_PARTITION
+typedef struct
+{
+   uint32_t nInstructionID;
+   uint8_t  nMAC[32];
+   uint32_t nWorkspaceOffset[16];
+   uint8_t  pNonce[16];
+   uint32_t nMC;
+   uint16_t nAddr;
+   uint16_t nBlockCount;
+   uint16_t nResult;
+   uint16_t nRequest;
+} DELEGATION_RPMB_INSTRUCTION;
+#endif
+
 typedef struct
 {
    uint32_t nInstructionID;
@@ -102,6 +121,9 @@ typedef union
    DELEGATION_NOTIFY_INSTRUCTION     sNotify;
    DELEGATION_RW_INSTRUCTION         sReadWrite;
    DELEGATION_SET_SIZE_INSTRUCTION   sSetSize;
+#ifdef SUPPORT_RPMB_PARTITION
+   DELEGATION_RPMB_INSTRUCTION       sAuthRW;
+#endif
 } DELEGATION_INSTRUCTION;
 
 typedef struct
