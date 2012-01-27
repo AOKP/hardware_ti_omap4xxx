@@ -35,7 +35,7 @@
 #define __S_TYPE_H__
 
 /* C99 integer types */
-#if (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L) &&(!defined(__ANDROID32__))
+#if (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L) &&(!defined(ANDROID))
 
 #include <limits.h>
 
