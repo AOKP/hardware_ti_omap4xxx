@@ -96,6 +96,13 @@ typedef struct
 #define TRACE_WARNING(...)
 #define TRACE_INFO(...)
 #else
+#if defined ANDROID
+#define LOG_TAG "TEE"
+#include <android/log.h>
+#define TRACE_INFO(format, ...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, format, __VA_ARGS__)
+#define TRACE_ERROR(format, ...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, format, __VA_ARGS__)
+#define TRACE_WARNING(format, ...) __android_log_print(TRACE_WARNING, LOG_TAG, format, __VA_ARGS__)
+#else
 static void TRACE_ERROR(const char* format, ...)
 {
    va_list ap;
@@ -125,6 +132,7 @@ static void TRACE_INFO(const char* format, ...)
    fprintf(stderr, "\n");
    va_end(ap);
 }
+#endif /* ANDROID */
 #endif /* NDEBUG */
 
 
@@ -784,7 +792,7 @@ TEEC_Result TEEC_OpenSessionEx (
        if (connectionData != NULL)
        {
            *(uint32_t*)sCommand.sOpenClientSession.sLoginData = *(uint32_t*)connectionData;
-           sCommand.sHeader.nMessageSize += sizeof(uint32_t);
+           sCommand.sHeader.nMessageSize += 1;
        }
    }
    sCommand.sOpenClientSession.nCancellationID    = (uint32_t)operation; // used for TEEC_RequestCancellation

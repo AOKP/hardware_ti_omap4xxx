@@ -34,15 +34,6 @@
 #include "s_type.h"
 
 /**
- * This header file defines some structures needed for the secure channel
- * protocol. See your Product Reference Manual for a specification of the
- * SChannel protocol.
- */
-// jroux to do : remove
-#undef SMC_PROTOCOL_VERSION
-#define SMC_PROTOCOL_VERSION 0x06000000
-
-/**
  * Time representation.
  */
 typedef uint64_t SCTIME;
@@ -105,6 +96,15 @@ typedef uint64_t SCTIME;
  * Login types
  */
 #include "schannel6_logins.h"
+
+/*
+ * Limits and sizes
+ */
+
+/* Maximum number of L1 descriptors covered by a registered shared memory block.
+   Must be kept in synch with TF_MAX_COARSE_PAGES in tf_protocol.h
+   in the Linux kernel driver. */
+#define SCHANNEL6_MAX_DESCRIPTORS_PER_REGISTERED_SHARED_MEM 128
 
 /**
  * Command parameters.
@@ -217,7 +217,7 @@ typedef struct
    uint32_t                      nBlockID;
    uint32_t                      nSharedMemSize;
    uint32_t                      nSharedMemStartOffset;
-   uint32_t                      nSharedMemDescriptors[8];
+   uint32_t                      nSharedMemDescriptors[SCHANNEL6_MAX_DESCRIPTORS_PER_REGISTERED_SHARED_MEM];
 
 }SCHANNEL6_REGISTER_SHARED_MEMORY_COMMAND;
 
