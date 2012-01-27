@@ -59,15 +59,15 @@
 /*
  * This version number must be updated for each new release
  */
-#define S_VERSION_MAIN  "01.04"
-#define S_VERSION_RESOURCE 1,4,0,S_VERSION_BUILD
+#define S_VERSION_MAIN  "01.06"
+#define S_VERSION_RESOURCE 1,6,0,S_VERSION_BUILD
 
 /*
 * If this is a patch or engineering version use the following
 * defines to set the version number. Else set these values to 0.
 */
-#define S_VERSION_PATCH 11
-#define S_VERSION_ENG 0
+#define S_VERSION_ENG 1
+#define S_VERSION_PATCH 0
 
 #ifdef S_VERSION_BUILD
 /* TRICK: detect if S_VERSION is defined but empty */
@@ -106,8 +106,8 @@
 	S_VERSION_OS \
 	S_VERSION_PLATFORM \
 	S_VERSION_MAIN \
-	_S_VERSION_PATCH \
 	_S_VERSION_ENG \
+	_S_VERSION_PATCH \
 	"."  __STRINGIFY2(S_VERSION_BUILD) " " \
 	S_VERSION_VARIANT
 
