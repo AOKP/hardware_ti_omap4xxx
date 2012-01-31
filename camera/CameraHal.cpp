@@ -131,9 +131,7 @@ void CameraHal::enableMsgType(int32_t msgType)
 
     // ignoring enable focus message from camera service
     // we will enable internally in autoFocus call
-    if (msgType & CAMERA_MSG_FOCUS) {
-        msgType &= ~CAMERA_MSG_FOCUS;
-    }
+    msgType &= ~(CAMERA_MSG_FOCUS | CAMERA_MSG_FOCUS_MOVE);
 
     {
     Mutex::Autolock lock(mLock);
@@ -2678,14 +2676,34 @@ status_t CameraHal::sendCommand(int32_t cmd, int32_t arg1, int32_t arg2)
     if ( ( NO_ERROR == ret ) && ( NULL == mCameraAdapter ) )
         {
         CAMHAL_LOGEA("No CameraAdapter instance");
-        ret = -EINVAL;
+        return -EINVAL;
         }
+
+    ///////////////////////////////////////////////////////
+    // Following commands do NOT need preview to be started
+    ///////////////////////////////////////////////////////
+    switch(cmd) {
+        case CAMERA_CMD_ENABLE_FOCUS_MOVE_MSG:
+            bool enable = static_cast<bool>(arg1);
+            Mutex::Autolock lock(mLock);
+            if (enable) {
+                mMsgEnabled |= CAMERA_MSG_FOCUS_MOVE;
+            } else {
+                mMsgEnabled &= ~CAMERA_MSG_FOCUS_MOVE;
+            }
+            return NO_ERROR;
+        break;
+    }
 
     if ( ( NO_ERROR == ret ) && ( !previewEnabled() ))
         {
         CAMHAL_LOGEA("Preview is not running");
         ret = -EINVAL;
         }
+
+    ///////////////////////////////////////////////////////
+    // Following commands NEED preview to be started
+    ///////////////////////////////////////////////////////
 
     if ( NO_ERROR == ret )
         {

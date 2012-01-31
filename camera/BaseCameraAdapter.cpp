@@ -985,7 +985,7 @@ status_t BaseCameraAdapter::sendCommand(CameraCommands operation, int value1, in
     return ret;
 }
 
-status_t BaseCameraAdapter::notifyFocusSubscribers(bool status)
+status_t BaseCameraAdapter::notifyFocusSubscribers(CameraHalEvent::FocusStatus status)
 {
     event_callback eventCb;
     CameraHalEvent focusEvent;
@@ -999,10 +999,12 @@ status_t BaseCameraAdapter::notifyFocusSubscribers(bool status)
     }
 
 #if PPM_INSTRUMENTATION || PPM_INSTRUMENTATION_ABS
-
-     //dump the AF latency
-     CameraHal::PPM("Focus finished in: ", &mStartFocus);
-
+     if (status == CameraHalEvent::FOCUS_STATUS_PENDING) {
+        gettimeofday(&mStartFocus, NULL);
+     } else {
+        //dump the AF latency
+        CameraHal::PPM("Focus finished in: ", &mStartFocus);
+    }
 #endif
 
     focusEvent.mEventData = new CameraHalEvent::CameraHalEventData();
@@ -1011,8 +1013,7 @@ status_t BaseCameraAdapter::notifyFocusSubscribers(bool status)
     }
 
     focusEvent.mEventType = CameraHalEvent::EVENT_FOCUS_LOCKED;
-    focusEvent.mEventData->focusEvent.focusLocked = status;
-    focusEvent.mEventData->focusEvent.focusError = !status;
+    focusEvent.mEventData->focusEvent.focusStatus = status;
 
     for (unsigned int i = 0 ; i < mFocusSubscribers.size(); i++ )
         {
@@ -1518,7 +1519,7 @@ status_t BaseCameraAdapter::autoFocus()
 
     LOG_FUNCTION_NAME;
 
-    notifyFocusSubscribers(false);
+    notifyFocusSubscribers(CameraHalEvent::FOCUS_STATUS_FAIL);
 
     LOG_FUNCTION_NAME_EXIT;
 

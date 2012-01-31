@@ -141,8 +141,7 @@ status_t OMXCameraAdapter::doAutoFocus()
     } else if ( mParameters3A.Focus == OMX_IMAGE_FocusControlAuto ) {
         // In case we have CAF running we should first check the AF status.
         // If it has managed to lock, then do as usual and return status
-        // immediately. If lock is not available, then switch temporarily
-        // to 'autolock' and do normal AF.
+        // immediately.
         ret = checkFocus(&focusStatus);
         if ( NO_ERROR != ret ) {
             CAMHAL_LOGEB("Focus status check failed 0x%x!", ret);
@@ -164,12 +163,6 @@ status_t OMXCameraAdapter::doAutoFocus()
         eError = OMX_SetConfig(mCameraAdapterParameters.mHandleComp,
                                (OMX_INDEXTYPE)OMX_TI_IndexConfigAutofocusEnable,
                                &bOMX);
-
-        ret = RegisterForEvent(mCameraAdapterParameters.mHandleComp,
-                                    (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
-                                    OMX_ALL,
-                                    OMX_IndexConfigCommonFocusStatus,
-                                    mDoAFSem);
 
         // force AF, Ducati will take care of whether CAF
         // or AF will be performed, depending on light conditions
@@ -200,19 +193,14 @@ status_t OMXCameraAdapter::doAutoFocus()
         //If somethiing bad happened while we wait
         if (mComponentState == OMX_StateInvalid) {
           CAMHAL_LOGEA("Invalid State after Auto Focus Exitting!!!");
-          return EINVAL;
+          return -EINVAL;
         }
 
-        if( ret != NO_ERROR) {
+        if(ret != NO_ERROR) {
             //Disable auto focus callback from Ducati
             setFocusCallback(false);
             CAMHAL_LOGEA("Autofocus callback timeout expired");
-            RemoveEvent(mCameraAdapterParameters.mHandleComp,
-                                        (OMX_EVENTTYPE) OMX_EventIndexSettingChanged,
-                                        OMX_ALL,
-                                        OMX_IndexConfigCommonFocusStatus,
-                                        NULL );
-            returnFocusStatus(true);
+            ret = returnFocusStatus(true);
         } else {
             ret = returnFocusStatus(false);
         }
@@ -401,7 +389,7 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
 {
     status_t ret = NO_ERROR;
     OMX_PARAM_FOCUSSTATUSTYPE eFocusStatus;
-    bool focusStatus = false;
+    CameraHalEvent::FocusStatus focusStatus = CameraHalEvent::FOCUS_STATUS_FAIL;
     BaseCameraAdapter::AdapterState state, nextState;
     BaseCameraAdapter::getState(state);
     BaseCameraAdapter::getNextState(nextState);
@@ -436,7 +424,7 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
 
         if ( timeoutReached )
             {
-            focusStatus = false;
+            focusStatus = CameraHalEvent::FOCUS_STATUS_FAIL;
             }
         else
             {
@@ -444,7 +432,7 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
                 {
                     case OMX_FocusStatusReached:
                         {
-                        focusStatus = true;
+                        focusStatus = CameraHalEvent::FOCUS_STATUS_SUCCESS;
                         break;
                         }
                     case OMX_FocusStatusOff:
@@ -452,7 +440,7 @@ status_t OMXCameraAdapter::returnFocusStatus(bool timeoutReached)
                     case OMX_FocusStatusRequest:
                     default:
                         {
-                        focusStatus = false;
+                        focusStatus = CameraHalEvent::FOCUS_STATUS_FAIL;
                         break;
                         }
                 }
@@ -520,7 +508,6 @@ status_t OMXCameraAdapter::checkFocus(OMX_PARAM_FOCUSSTATUSTYPE *eFocusStatus)
     if ( NO_ERROR == ret )
         {
         OMX_INIT_STRUCT_PTR (eFocusStatus, OMX_PARAM_FOCUSSTATUSTYPE);
-
         eError = OMX_GetConfig(mCameraAdapterParameters.mHandleComp,
                                OMX_IndexConfigCommonFocusStatus,
                                eFocusStatus);
@@ -798,6 +785,54 @@ status_t OMXCameraAdapter::setTouchFocus()
     LOG_FUNCTION_NAME_EXIT;
 
     return ret;
+}
+
+void OMXCameraAdapter::handleFocusCallback() {
+    OMX_PARAM_FOCUSSTATUSTYPE eFocusStatus;
+    CameraHalEvent::FocusStatus focusStatus = CameraHalEvent::FOCUS_STATUS_FAIL;
+    status_t ret = NO_ERROR;
+    BaseCameraAdapter::AdapterState nextState;
+    BaseCameraAdapter::getNextState(nextState);
+
+    OMX_INIT_STRUCT(eFocusStatus, OMX_PARAM_FOCUSSTATUSTYPE);
+
+    ret = checkFocus(&eFocusStatus);
+
+    if (NO_ERROR != ret) {
+        CAMHAL_LOGEA("Focus status check failed!");
+        // signal and unblock doAutoFocus
+        if (AF_ACTIVE & nextState) {
+            mDoAFSem.Signal();
+        }
+        return;
+    } else if (AF_ACTIVE & nextState) { // Handling for AF callback
+        // signal doAutoFocus when a end of scan message comes
+        // ignore start of scan
+       if (eFocusStatus.eFocusStatus != OMX_FocusStatusRequest) {
+            mDoAFSem.Signal();
+       }
+       return;
+   }
+
+    if (mParameters3A.Focus != (OMX_IMAGE_FOCUSCONTROLTYPE) OMX_IMAGE_FocusControlAuto) {
+       CAMHAL_LOGDA("unregistered focus callback when not in CAF or doAutoFocus... not handling");
+       return;
+    }
+
+    // Handling for CAF Callbacks
+    switch (eFocusStatus.eFocusStatus) {
+        case OMX_FocusStatusRequest:
+            focusStatus = CameraHalEvent::FOCUS_STATUS_PENDING;
+            break;
+        case OMX_FocusStatusReached:
+        case OMX_FocusStatusOff:
+        case OMX_FocusStatusUnableToReach:
+        default:
+            focusStatus = CameraHalEvent::FOCUS_STATUS_DONE;
+            break;
+    }
+
+    notifyFocusSubscribers(focusStatus);
 }
 
 };

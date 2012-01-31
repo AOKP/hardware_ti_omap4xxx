@@ -455,6 +455,7 @@ private:
     status_t checkFocus(OMX_PARAM_FOCUSSTATUSTYPE *eFocusStatus);
     status_t returnFocusStatus(bool timeoutReached);
     status_t getFocusMode(OMX_IMAGE_CONFIG_FOCUSCONTROLTYPE &focusMode);
+    void handleFocusCallback();
 
 
     //Focus distances
@@ -670,7 +671,7 @@ private:
                 COMMAND_EXIT = -1,
                 CAMERA_START_IMAGE_CAPTURE = 0,
                 CAMERA_PERFORM_AUTOFOCUS = 1,
-                CAMERA_SWITCH_TO_EXECUTING
+                CAMERA_SWITCH_TO_EXECUTING,
             };
 
         private:
@@ -708,6 +709,7 @@ public:
         enum {
             COMMAND_EXIT = -1,
             CAMERA_FILL_BUFFER_DONE,
+            CAMERA_FOCUS_STATUS,
         };
 
     private:

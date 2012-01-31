@@ -331,6 +331,13 @@ public:
         ALL_EVENTS = 0xFFFF ///Maximum of 16 event types supported
     };
 
+    enum FocusStatus {
+        FOCUS_STATUS_SUCCESS = 0x1,
+        FOCUS_STATUS_FAIL = 0x2,
+        FOCUS_STATUS_PENDING = 0x4,
+        FOCUS_STATUS_DONE = 0x8,
+    };
+
     ///Class declarations
     ///@remarks Add a new class for a new event type added above
 
@@ -341,8 +348,7 @@ public:
 
     ///Focus event specific data
     typedef struct FocusEventData_t {
-        bool focusLocked;
-        bool focusError;
+        FocusStatus focusStatus;
         int currentFocusValue;
     } FocusEventData;
 
