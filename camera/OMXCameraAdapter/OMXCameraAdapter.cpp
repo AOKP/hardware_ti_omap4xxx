@@ -3404,7 +3404,8 @@ status_t OMXCameraAdapter::setExtraData(bool enable, OMX_U32 nPortIndex, OMX_EXT
 
     LOG_FUNCTION_NAME;
 
-    if (OMX_StateInvalid == mComponentState) {
+    if ( ( OMX_StateInvalid == mComponentState ) ||
+         ( NULL == mCameraAdapterParameters.mHandleComp ) ) {
         CAMHAL_LOGEA("OMX component is in invalid state");
         return -EINVAL;
     }
