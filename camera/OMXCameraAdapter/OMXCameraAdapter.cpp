@@ -3461,7 +3461,6 @@ OMXCameraAdapter::OMXCameraAdapter(size_t sensor_index)
     mTimeSourceDelta = 0;
     onlyOnce = true;
 
-    mDoAFSem.Create(0);
     mInitSem.Create(0);
     mFlushSem.Create(0);
     mUsePreviewDataSem.Create(0);
