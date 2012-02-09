@@ -228,19 +228,19 @@ status_t OMXCameraAdapter::detectFaces(OMX_BUFFERHEADERTYPE* pBuffHeader,
                          platformPrivate->pMetaDataBuffer,
                          platformPrivate->nMetaDataSize);
         } else {
-            CAMHAL_LOGEB("OMX_TI_PLATFORMPRIVATE size mismatch: expected = %d, received = %d",
+            CAMHAL_LOGDB("OMX_TI_PLATFORMPRIVATE size mismatch: expected = %d, received = %d",
                          ( unsigned int ) sizeof(OMX_TI_PLATFORMPRIVATE),
                          ( unsigned int ) platformPrivate->nSize);
             return -EINVAL;
         }
     }  else {
-        CAMHAL_LOGEA("Invalid OMX_TI_PLATFORMPRIVATE");
+        CAMHAL_LOGDA("Invalid OMX_TI_PLATFORMPRIVATE");
         return-EINVAL;
     }
 
 
     if ( 0 >= platformPrivate->nMetaDataSize ) {
-        CAMHAL_LOGEB("OMX_TI_PLATFORMPRIVATE nMetaDataSize is size is %d",
+        CAMHAL_LOGDB("OMX_TI_PLATFORMPRIVATE nMetaDataSize is size is %d",
                      ( unsigned int ) platformPrivate->nMetaDataSize);
         return -EINVAL;
     }
@@ -257,7 +257,7 @@ status_t OMXCameraAdapter::detectFaces(OMX_BUFFERHEADERTYPE* pBuffHeader,
                      extraData->nPortIndex,
                      extraData->nVersion);
     } else {
-        CAMHAL_LOGEA("Invalid OMX_OTHER_EXTRADATATYPE");
+        CAMHAL_LOGDA("Invalid OMX_OTHER_EXTRADATATYPE");
         return -EINVAL;
     }
 
@@ -272,7 +272,7 @@ status_t OMXCameraAdapter::detectFaces(OMX_BUFFERHEADERTYPE* pBuffHeader,
                          faceData->nPortIndex,
                          faceData->nVersion);
         } else {
-            CAMHAL_LOGEB("OMX_FACEDETECTIONTYPE size mismatch: expected = %d, received = %d",
+            CAMHAL_LOGDB("OMX_FACEDETECTIONTYPE size mismatch: expected = %d, received = %d",
                          ( unsigned int ) sizeof(OMX_FACEDETECTIONTYPE),
                          ( unsigned int ) faceData->nSize);
             return -EINVAL;

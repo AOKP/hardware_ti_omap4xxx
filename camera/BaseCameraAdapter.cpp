@@ -1055,7 +1055,7 @@ status_t BaseCameraAdapter::notifyShutterSubscribers()
         shutterEvent.mCookie = ( void * ) mShutterSubscribers.keyAt(i);
         eventCb = ( event_callback ) mShutterSubscribers.valueAt(i);
 
-        CAMHAL_LOGEA("Sending shutter callback");
+        CAMHAL_LOGDA("Sending shutter callback");
 
         eventCb ( &shutterEvent );
     }
@@ -1695,6 +1695,12 @@ status_t BaseCameraAdapter::setState(CameraCommands operation)
                     CAMHAL_LOGDB("Adapter state switch INTIALIZED_STATE->INTIALIZED_STATE event = 0x%x",
                                  operation);
                     mNextState = INTIALIZED_STATE;
+                    break;
+
+                case CAMERA_CANCEL_AUTOFOCUS:
+                case CAMERA_STOP_BRACKET_CAPTURE:
+                case CAMERA_STOP_IMAGE_CAPTURE:
+                    ret = INVALID_OPERATION;
                     break;
 
                 default:
