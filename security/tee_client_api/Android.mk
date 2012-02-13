@@ -13,8 +13,9 @@ ifdef S_VERSION_BUILD
 LOCAL_CFLAGS += -DS_VERSION_BUILD=$(S_VERSION_BUILD)
 endif
 
+LOCAL_LDLIBS += -llog
+
 LOCAL_CFLAGS += -DLINUX
-LOCAL_LDFLAGS += -llog
 LOCAL_CFLAGS += -I $(LOCAL_PATH)/../tf_sdk/include/
 
 LOCAL_MODULE:= libtee_client_api_driver
