@@ -59,8 +59,6 @@ LOCAL_C_INCLUDES += \
     $(LOCAL_PATH)/inc/OMXCameraAdapter \
     $(LOCAL_PATH)/../libtiutils \
     hardware/ti/omap4xxx/tiler \
-    frameworks/base/include/ui \
-    frameworks/base/include/utils \
     hardware/ti/omap4xxx/domx/omx_core/inc \
     hardware/ti/omap4xxx/domx/mm_osal/inc \
     frameworks/base/include/media/stagefright \
