@@ -237,10 +237,10 @@ int execute_functional_script(char *script) {
                     stopRecording();
                     closeRecorder();
 
-                    camera = Camera::connect(camera_index);
+                    camera = Camera::connect(camera_index, false, false);
                       if ( NULL == camera.get() ) {
                           sleep(1);
-                          camera = Camera::connect(camera_index);
+                          camera = Camera::connect(camera_index, false, false);
 
                           if ( NULL == camera.get() ) {
                               return -1;
