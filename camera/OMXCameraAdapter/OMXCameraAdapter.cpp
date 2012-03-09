@@ -537,6 +537,8 @@ status_t OMXCameraAdapter::setParameters(const CameraParameters &params)
         mOMXStateSwitch = true;
         }
 
+#ifdef OMAP_ENHANCEMENT
+
     if ( (valstr = params.get(TICameraParameters::KEY_MEASUREMENT_ENABLE)) != NULL )
         {
         if (strcmp(valstr, (const char *) TICameraParameters::MEASUREMENT_ENABLE) == 0)
@@ -557,6 +559,8 @@ status_t OMXCameraAdapter::setParameters(const CameraParameters &params)
         //Disable measurement data by default
         mMeasurementEnabled = false;
         }
+
+#endif
 
     ret |= setParametersCapture(params, state);
 
@@ -678,6 +682,8 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
                    mParameters.get(CameraParameters::KEY_FOCUS_DISTANCES));
         }
 
+#ifdef OMAP_ENHANCEMENT
+
     OMX_INIT_STRUCT_PTR (&exp, OMX_CONFIG_EXPOSUREVALUETYPE);
     exp.nPortIndex = OMX_ALL;
 
@@ -692,6 +698,8 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
         {
         CAMHAL_LOGEB("OMX error 0x%x, while retrieving current ISO value", eError);
         }
+
+#endif
 
     {
     Mutex::Autolock lock(mZoomLock);
@@ -745,7 +753,6 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
         CAMHAL_LOGDB("Auto WhiteBalance Lock get %s", mParams.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK));
         params.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, valstr);
       }
-
 
     LOG_FUNCTION_NAME_EXIT;
 }

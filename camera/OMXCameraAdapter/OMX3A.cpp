@@ -75,6 +75,7 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
     status_t ret = NO_ERROR;
     int mode = 0;
     const char *str = NULL;
+    int varint = 0;
     BaseCameraAdapter::AdapterState nextState;
     BaseCameraAdapter::getNextState(nextState);
 
@@ -111,6 +112,8 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
         CAMHAL_LOGVB("SceneMode %d", mParameters3A.SceneMode);
     }
 
+#ifdef OMAP_ENHANCEMENT
+
     str = params.get(TICameraParameters::KEY_EXPOSURE_MODE);
     mode = getLUTvalue_HALtoOMX( str, ExpLUT);
     if ( ( str != NULL ) && ( mParameters3A.Exposure != mode ))
@@ -122,6 +125,8 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
             mPending3Asettings |= SetExpMode;
             }
         }
+
+#endif
 
     str = params.get(CameraParameters::KEY_WHITE_BALANCE);
     mode = getLUTvalue_HALtoOMX( str, WBalLUT);
@@ -135,53 +140,57 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
             }
         }
 
-    if ( 0 <= params.getInt(TICameraParameters::KEY_CONTRAST) )
+#ifdef OMAP_ENHANCEMENT
+
+    varint = params.getInt(TICameraParameters::KEY_CONTRAST);
+    if ( 0 <= varint )
         {
         if ( mFirstTimeInit ||
-             ( (mParameters3A.Contrast  + CONTRAST_OFFSET) !=
-                     params.getInt(TICameraParameters::KEY_CONTRAST)) )
+             ( (mParameters3A.Contrast  + CONTRAST_OFFSET) != varint ) )
             {
-            mParameters3A.Contrast = params.getInt(TICameraParameters::KEY_CONTRAST) - CONTRAST_OFFSET;
+            mParameters3A.Contrast = varint - CONTRAST_OFFSET;
             CAMHAL_LOGDB("Contrast %d", mParameters3A.Contrast);
             mPending3Asettings |= SetContrast;
             }
         }
 
-    if ( 0 <= params.getInt(TICameraParameters::KEY_SHARPNESS) )
+    varint = params.getInt(TICameraParameters::KEY_SHARPNESS);
+    if ( 0 <= varint )
         {
         if ( mFirstTimeInit ||
-             ((mParameters3A.Sharpness + SHARPNESS_OFFSET) !=
-                     params.getInt(TICameraParameters::KEY_SHARPNESS)))
+             ((mParameters3A.Sharpness + SHARPNESS_OFFSET) != varint ))
             {
-            mParameters3A.Sharpness = params.getInt(TICameraParameters::KEY_SHARPNESS) - SHARPNESS_OFFSET;
+            mParameters3A.Sharpness = varint - SHARPNESS_OFFSET;
             CAMHAL_LOGDB("Sharpness %d", mParameters3A.Sharpness);
             mPending3Asettings |= SetSharpness;
             }
         }
 
-    if ( 0 <= params.getInt(TICameraParameters::KEY_SATURATION) )
+    varint = params.getInt(TICameraParameters::KEY_SATURATION);
+    if ( 0 <= varint )
         {
         if ( mFirstTimeInit ||
-             ((mParameters3A.Saturation + SATURATION_OFFSET) !=
-                     params.getInt(TICameraParameters::KEY_SATURATION)) )
+             ((mParameters3A.Saturation + SATURATION_OFFSET) != varint ) )
             {
-            mParameters3A.Saturation = params.getInt(TICameraParameters::KEY_SATURATION) - SATURATION_OFFSET;
+            mParameters3A.Saturation = varint - SATURATION_OFFSET;
             CAMHAL_LOGDB("Saturation %d", mParameters3A.Saturation);
             mPending3Asettings |= SetSaturation;
             }
         }
 
-    if ( 0 <= params.getInt(TICameraParameters::KEY_BRIGHTNESS) )
+    varint = params.getInt(TICameraParameters::KEY_BRIGHTNESS);
+    if ( 0 <= varint )
         {
         if ( mFirstTimeInit ||
-             (( mParameters3A.Brightness !=
-                     ( unsigned int ) params.getInt(TICameraParameters::KEY_BRIGHTNESS))) )
+             (( mParameters3A.Brightness != varint )) )
             {
-            mParameters3A.Brightness = (unsigned)params.getInt(TICameraParameters::KEY_BRIGHTNESS);
+            mParameters3A.Brightness = (unsigned) varint;
             CAMHAL_LOGDB("Brightness %d", mParameters3A.Brightness);
             mPending3Asettings |= SetBrightness;
             }
         }
+
+#endif
 
     str = params.get(CameraParameters::KEY_ANTIBANDING);
     mode = getLUTvalue_HALtoOMX(str,FlickerLUT);
@@ -195,6 +204,8 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
             }
         }
 
+#ifdef OMAP_ENHANCEMENT
+
     str = params.get(TICameraParameters::KEY_ISO);
     mode = getLUTvalue_HALtoOMX(str, IsoLUT);
     CAMHAL_LOGVB("ISO mode arrived in HAL : %s", str);
@@ -207,6 +218,8 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
             mPending3Asettings |= SetISO;
             }
         }
+
+#endif
 
     str = params.get(CameraParameters::KEY_FOCUS_MODE);
     mode = getLUTvalue_HALtoOMX(str, FocusLUT);
@@ -225,15 +238,14 @@ status_t OMXCameraAdapter::setParameters3A(const CameraParameters &params,
         }
 
     str = params.get(CameraParameters::KEY_EXPOSURE_COMPENSATION);
+    varint = params.getInt(CameraParameters::KEY_EXPOSURE_COMPENSATION);
     if ( mFirstTimeInit ||
           (( str != NULL ) &&
-                  (mParameters3A.EVCompensation !=
-                          params.getInt(CameraParameters::KEY_EXPOSURE_COMPENSATION))))
+                  (mParameters3A.EVCompensation != varint )))
         {
-        CAMHAL_LOGDB("Setting EV Compensation to %d",
-                     params.getInt(CameraParameters::KEY_EXPOSURE_COMPENSATION));
+        CAMHAL_LOGDB("Setting EV Compensation to %d", varint);
 
-        mParameters3A.EVCompensation = params.getInt(CameraParameters::KEY_EXPOSURE_COMPENSATION);
+        mParameters3A.EVCompensation = varint;
         mPending3Asettings |= SetEVCompensation;
         }
 
