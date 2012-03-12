@@ -8,7 +8,7 @@ LOCAL_SRC_FILES := \
 
 LOCAL_C_INCLUDES:= \
         $(TOP)/frameworks/base/include/media/stagefright/openmax \
-        $(TOP)/frameworks/media/libvideoeditor/include
+        $(TOP)/frameworks/native/include/media/editor
 
 LOCAL_SHARED_LIBRARIES :=       \
 
