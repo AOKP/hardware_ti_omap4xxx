@@ -62,7 +62,8 @@ LOCAL_C_INCLUDES += \
     hardware/ti/omap4xxx/domx/omx_core/inc \
     hardware/ti/omap4xxx/domx/mm_osal/inc \
     frameworks/base/include/media/stagefright \
-    frameworks/base/include/media/stagefright/openmax \
+    frameworks/native/include/media/hardware \
+    frameworks/native/include/media/openmax \
     external/jpeg \
     external/jhead
 
