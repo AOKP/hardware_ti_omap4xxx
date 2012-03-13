@@ -247,6 +247,8 @@ status_t OMXCameraAdapter::setParametersAlgo(const CameraParameters &params,
         mOMXStateSwitch = true;
         }
 
+#ifdef OMAP_ENHANCEMENT
+
     //Set Auto Convergence Mode
     valstr = params.get((const char *) TICameraParameters::KEY_AUTOCONVERGENCE);
     if ( valstr != NULL )
@@ -276,6 +278,8 @@ status_t OMXCameraAdapter::setParametersAlgo(const CameraParameters &params,
                 }
         CAMHAL_LOGVB("AutoConvergenceMode %s, value = %d", valstr, (int) manualconvergence);
         }
+
+#endif
 
     LOG_FUNCTION_NAME_EXIT;
 
