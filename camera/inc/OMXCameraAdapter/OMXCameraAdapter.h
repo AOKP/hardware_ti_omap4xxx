@@ -821,6 +821,7 @@ private:
     //Face detection status
     bool mFaceDetectionRunning;
     bool mFaceDetectionPaused;
+    bool mFDSwitchAlgoPriority;
 
     camera_face_t  faceDetectionLastOutput [MAX_NUM_FACES_SUPPORTED];
     int faceDetectionNumFacesLastOutput;

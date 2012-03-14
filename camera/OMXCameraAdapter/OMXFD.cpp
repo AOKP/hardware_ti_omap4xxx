@@ -62,16 +62,9 @@ status_t OMXCameraAdapter::startFaceDetection()
         goto out;
     }
 
-    if ( mFaceDetectionRunning )
-        {
-        //Disable region priority and enable face priority for AF
-        setAlgoPriority(REGION_PRIORITY, FOCUS_ALGO, false);
-        setAlgoPriority(FACE_PRIORITY, FOCUS_ALGO , true);
-
-        //Disable Region priority and enable Face priority
-        setAlgoPriority(REGION_PRIORITY, EXPOSURE_ALGO, false);
-        setAlgoPriority(FACE_PRIORITY, EXPOSURE_ALGO, true);
-        }
+    if ( mFaceDetectionRunning ) {
+        mFDSwitchAlgoPriority = true;
+    }
 
     // Note: White balance will not be face prioritized, since
     // the algorithm needs full frame statistics, and not face
