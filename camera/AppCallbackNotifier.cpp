@@ -311,8 +311,12 @@ void AppCallbackNotifier::notifyEvent()
     TIUTILS::Message msg;
     LOG_FUNCTION_NAME;
     {
-    Mutex::Autolock lock(mLock);
-    mEventQ.get(&msg);
+        Mutex::Autolock lock(mLock);
+        if(!mEventQ.isEmpty()) {
+            mEventQ.get(&msg);
+        } else {
+            return;
+        }
     }
     bool ret = true;
     CameraHalEvent *evt = NULL;
