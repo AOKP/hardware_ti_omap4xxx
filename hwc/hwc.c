@@ -335,6 +335,18 @@ static int is_protected(hwc_layer_t *layer)
 
 #define is_BLENDED(layer) ((layer)->blending != HWC_BLENDING_NONE)
 
+static int is_RGB32(IMG_native_handle_t *handle)
+{
+    switch(handle->iFormat)
+    {
+    case HAL_PIXEL_FORMAT_BGRA_8888:
+    case HAL_PIXEL_FORMAT_BGRX_8888:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 static int is_RGB(IMG_native_handle_t *handle)
 {
     switch(handle->iFormat)
@@ -1242,6 +1254,16 @@ static int setup_mirroring(omap4_hwc_device_t *hwc_dev)
     return 0;
 }
 
+/* test if layer appears to be RGB32 (4 Bpp) and > 1280x720 */
+static int is_large_rgb32_layer(const hwc_layer_t *layer)
+{
+    IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
+
+    return is_RGB32(handle) &&
+        (((layer->sourceCrop.right - layer->sourceCrop.left) > 1280) ||
+        ((layer->sourceCrop.bottom - layer->sourceCrop.top) > 720));
+}
+
 static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* list)
 {
     omap4_hwc_device_t *hwc_dev = (omap4_hwc_device_t *)dev;
@@ -1278,6 +1300,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
     int fb_z = -1;
     int scaled_gfx = 0;
     int ix_docking = -1;
+    int big_layers = 0;
 
     /* set up if DSS layers */
     unsigned int mem_used = 0;
@@ -1294,7 +1317,9 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
              (hwc_dev->ext.current.docking && hwc_dev->ext.current.enabled && dockable(layer))) &&
             mem_used + mem1d(handle) < MAX_TILER_SLOT &&
             /* can't have a transparent overlay in the middle of the framebuffer stack */
-            !(is_BLENDED(layer) && fb_z >= 0)) {
+            !(is_BLENDED(layer) && fb_z >= 0) &&
+            /* current hardware is unable to keep up with more than 1 'large' RGB32 layer */
+            !(is_large_rgb32_layer(layer) && big_layers > 0)) {
 
             /* render via DSS overlay */
             mem_used += mem1d(handle);
@@ -1340,6 +1365,11 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
             omap4_hwc_adjust_lcd_layer(hwc_dev, &dsscomp->ovls[dsscomp->num_ovls]);
             dsscomp->num_ovls++;
             z++;
+
+            /* record whether or not this was a 'big' RGB32 layer */
+            if (is_large_rgb32_layer(layer)) {
+                big_layers++;
+            }
         } else if (hwc_dev->use_sgx) {
             if (fb_z < 0) {
                 /* NOTE: we are not handling transparent cutout for now */
