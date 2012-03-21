@@ -804,7 +804,8 @@ void OMXCameraAdapter::handleFocusCallback() {
         return;
     }
 
-    if (eFocusStatus.eFocusStatus != OMX_FocusStatusRequest) {
+    if ( ( eFocusStatus.eFocusStatus != OMX_FocusStatusRequest ) &&
+         ( eFocusStatus.eFocusStatus != OMX_FocusStatusOff ) ) {
         // signal doAutoFocus when a end of scan message comes
         // ignore start of scan
         Mutex::Autolock lock(mDoAFMutex);
