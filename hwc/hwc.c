@@ -1860,7 +1860,7 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     memset(hwc_dev, 0, sizeof(*hwc_dev));
 
     hwc_dev->base.common.tag = HARDWARE_DEVICE_TAG;
-    hwc_dev->base.common.version = HWC_API_VERSION;
+    hwc_dev->base.common.version = HWC_DEVICE_API_VERSION;
     hwc_dev->base.common.module = (hw_module_t *)module;
     hwc_dev->base.common.close = omap4_hwc_device_close;
     hwc_dev->base.prepare = omap4_hwc_prepare;
@@ -2009,8 +2009,8 @@ omap4_hwc_module_t HAL_MODULE_INFO_SYM = {
     .base = {
         .common = {
             .tag =                  HARDWARE_MODULE_TAG,
-            .version_major =        1,
-            .version_minor =        0,
+            .module_api_version =   HWC_MODULE_API_VERSION,
+            .hal_api_version =      HARDWARE_HAL_API_VERSION,
             .id =                   HWC_HARDWARE_MODULE_ID,
             .name =                 "OMAP 44xx Hardware Composer HAL",
             .author =               "Texas Instruments",
