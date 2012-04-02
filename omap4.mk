@@ -36,3 +36,4 @@ PRODUCT_PACKAGES := \
 	tf_daemon \
 	libtf_crypto_sst
 
+PRODUCT_VENDOR_KERNEL_HEADERS := hardware/ti/omap4xxx/kernel-headers
