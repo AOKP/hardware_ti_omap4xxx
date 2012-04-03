@@ -831,7 +831,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
 {
     struct _qdis {
         struct dsscomp_display_info dis;
-        struct dsscomp_videomode modedb[16];
+        struct dsscomp_videomode modedb[32];
     } d = { .dis = { .ix = 1 } };
     omap4_hwc_ext_t *ext = &hwc_dev->ext;
 
