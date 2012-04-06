@@ -33,6 +33,8 @@
 static int mDebugFps = 0;
 static int mDebugFcs = 0;
 
+#undef TRUE
+#undef FALSE
 
 #define HERE(Msg) {CAMHAL_LOGEB("--===line %d, %s===--\n", __LINE__, Msg);}
 
@@ -739,17 +741,21 @@ void OMXCameraAdapter::getParameters(CameraParameters& params)
     }
 
     //Populate current lock status
-    if( (valstr = mParams.get(CameraParameters::KEY_AUTO_EXPOSURE_LOCK)) != NULL )
-      {
-        CAMHAL_LOGDB("Auto Exposure Lock get %s", mParams.get(CameraParameters::KEY_AUTO_EXPOSURE_LOCK));
-        params.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK, valstr);
-      }
+    if ( mParameters3A.ExposureLock ) {
+        params.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK,
+                   CameraParameters::TRUE);
+    } else {
+        params.set(CameraParameters::KEY_AUTO_EXPOSURE_LOCK,
+                CameraParameters::FALSE);
+    }
 
-    if( (valstr = mParams.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK)) != NULL )
-      {
-        CAMHAL_LOGDB("Auto WhiteBalance Lock get %s", mParams.get(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK));
-        params.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK, valstr);
-      }
+    if ( mParameters3A.WhiteBalanceLock ) {
+        params.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK,
+                CameraParameters::TRUE);
+    } else {
+        params.set(CameraParameters::KEY_AUTO_WHITEBALANCE_LOCK,
+                CameraParameters::FALSE);
+    }
 
     LOG_FUNCTION_NAME_EXIT;
 }
