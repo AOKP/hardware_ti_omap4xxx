@@ -151,6 +151,11 @@ struct omap4_hwc_device {
     int idle;
     int ovls_blending;
 
+    float primary_m[2][3];          /* internal transformation matrix */
+    int primary_transform;
+    int primary_rotation;
+    hwc_rect_t primary_region;
+
     /* composition data */
     struct dsscomp_setup_dispc_data dsscomp_data;
     buffer_handle_t *buffers;
@@ -668,10 +673,25 @@ crop_to_rect(struct dss2_ovl_cfg *cfg, struct hwc_rect vis_rect)
 }
 
 static void
+omap4_hwc_apply_transform(float transform[2][3],struct dss2_ovl_cfg *oc)
+{
+    float x, y, w, h;
+
+    /* display position */
+    x = transform[0][0] * oc->win.x + transform[0][1] * oc->win.y + transform[0][2];
+    y = transform[1][0] * oc->win.x + transform[1][1] * oc->win.y + transform[1][2];
+    w = transform[0][0] * oc->win.w + transform[0][1] * oc->win.h;
+    h = transform[1][0] * oc->win.w + transform[1][1] * oc->win.h;
+    oc->win.x = m_round(w > 0 ? x : x + w);
+    oc->win.y = m_round(h > 0 ? y : y + h);
+    oc->win.w = m_round(w > 0 ? w : -w);
+    oc->win.h = m_round(h > 0 ? h : -h);
+}
+
+static void
 omap4_hwc_adjust_ext_layer(omap4_hwc_ext_t *ext, struct dss2_ovl_info *ovl)
 {
     struct dss2_ovl_cfg *oc = &ovl->cfg;
-    float x, y, w, h;
 
     /* crop to clone region if mirroring */
     if (!ext->current.docking &&
@@ -680,15 +700,7 @@ omap4_hwc_adjust_ext_layer(omap4_hwc_ext_t *ext, struct dss2_ovl_info *ovl)
         return;
     }
 
-    /* display position */
-    x = ext->m[0][0] * oc->win.x + ext->m[0][1] * oc->win.y + ext->m[0][2];
-    y = ext->m[1][0] * oc->win.x + ext->m[1][1] * oc->win.y + ext->m[1][2];
-    w = ext->m[0][0] * oc->win.w + ext->m[0][1] * oc->win.h;
-    h = ext->m[1][0] * oc->win.w + ext->m[1][1] * oc->win.h;
-    oc->win.x = m_round(w > 0 ? x : x + w);
-    oc->win.y = m_round(h > 0 ? y : y + h);
-    oc->win.w = m_round(w > 0 ? w : -w);
-    oc->win.h = m_round(h > 0 ? h : -h);
+    omap4_hwc_apply_transform(ext->m, oc);
 
     /* combining transformations: F^a*R^b*F^i*R^j = F^(a+b)*R^(j+b*(-1)^i), because F*R = R^(-1)*F */
     oc->rotation += (oc->mirror ? -1 : 1) * ext->current.rotation;
@@ -720,6 +732,23 @@ static struct dsscomp_dispc_limitations {
     .max_width = 2048,
     .max_height = 2048,
 };
+
+static void
+omap4_hwc_adjust_primary_display_layer(omap4_hwc_device_t *hwc_dev, struct dss2_ovl_info *ovl)
+{
+    struct dss2_ovl_cfg *oc = &ovl->cfg;
+
+    if (crop_to_rect(&ovl->cfg, hwc_dev->primary_region) != 0) {
+        ovl->cfg.enabled = 0;
+        return;
+    }
+
+    omap4_hwc_apply_transform(hwc_dev->primary_m, oc);
+
+    /* combining transformations: F^a*R^b*F^i*R^j = F^(a+b)*R^(j+b*(-1)^i), because F*R = R^(-1)*F */
+    oc->rotation += (oc->mirror ? -1 : 1) * hwc_dev->primary_rotation;
+    oc->rotation &= 3;
+}
 
 static int omap4_hwc_can_scale(__u32 src_w, __u32 src_h, __u32 dst_w, __u32 dst_h, int is_2d,
                                struct dsscomp_display_info *dis, struct dsscomp_dispc_limitations *limits,
@@ -985,7 +1014,7 @@ static void gather_layer_statistics(omap4_hwc_device_t *hwc_dev, struct counts *
             num->possible_overlay_layers++;
 
             /* NV12 layers can only be rendered on scaling overlays */
-            if (scaled(layer) || is_NV12(handle))
+            if (scaled(layer) || is_NV12(handle) || hwc_dev->primary_transform)
                 num->scaled_layers++;
 
             if (is_BGR(handle))
@@ -1059,7 +1088,12 @@ static void decide_supported_cloning(omap4_hwc_device_t *hwc_dev, struct counts 
     if (hwc_dev->ext_ovls && ext->current.enabled && !ext->current.docking)
         num->max_hw_overlays = hwc_dev->ext_ovls;
 
-    num->max_scaling_overlays = num->max_hw_overlays - nonscaling_ovls;
+    /* If FB is not same resolution as LCD don't use GFX pipe line*/
+    if (hwc_dev->primary_transform) {
+        num->max_hw_overlays -= NUM_NONSCALING_OVERLAYS;
+        num->max_scaling_overlays = num->max_hw_overlays;
+    } else
+        num->max_scaling_overlays = num->max_hw_overlays - nonscaling_ovls;
 }
 
 static int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts *num)
@@ -1302,12 +1336,12 @@ static int omap4_hwc_prepare(struct hwc_composer_device_1 *dev, size_t numDispla
                                   handle->iWidth,
                                   handle->iHeight);
 
-            dsscomp->ovls[dsscomp->num_ovls].cfg.ix = dsscomp->num_ovls;
+            dsscomp->ovls[dsscomp->num_ovls].cfg.ix = dsscomp->num_ovls + hwc_dev->primary_transform;
             dsscomp->ovls[dsscomp->num_ovls].addressing = OMAP_DSS_BUFADDR_LAYER_IX;
             dsscomp->ovls[dsscomp->num_ovls].ba = dsscomp->num_ovls;
 
             /* ensure GFX layer is never scaled */
-            if (dsscomp->num_ovls == 0) {
+            if ((dsscomp->num_ovls == 0) && (!hwc_dev->primary_transform)) {
                 scaled_gfx = scaled(layer) || is_NV12(handle);
             } else if (scaled_gfx && !scaled(layer) && !is_NV12(handle)) {
                 /* swap GFX layer with this one */
@@ -1358,6 +1392,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device_1 *dev, size_t numDispla
         dsscomp->ovls[0].cfg.pre_mult_alpha = 1;
         dsscomp->ovls[0].addressing = OMAP_DSS_BUFADDR_LAYER_IX;
         dsscomp->ovls[0].ba = 0;
+        dsscomp->ovls[0].cfg.ix = hwc_dev->primary_transform;
     }
 
     /* mirror layers */
@@ -1394,6 +1429,14 @@ static int omap4_hwc_prepare(struct hwc_composer_device_1 *dev, size_t numDispla
             }
         }
     }
+
+    /* Apply transform for primary display */
+    if (hwc_dev->primary_transform)
+        for (i = 0; i < dsscomp->num_ovls; i++) {
+            if(dsscomp->ovls[i].cfg.mgr_ix == 0)
+                omap4_hwc_adjust_primary_display_layer(hwc_dev, &dsscomp->ovls[i]);
+        }
+
     ext->last = ext->current;
 
     if (z != dsscomp->num_ovls || dsscomp->num_ovls > MAX_HW_OVERLAYS)
@@ -1729,6 +1772,38 @@ err_out:
     return err;
 }
 
+static void set_primary_display_transform_matrix(omap4_hwc_device_t *hwc_dev)
+{
+    /* create primary display translation matrix */
+    hwc_dev->fb_dis.ix = 0;/*Default display*/
+
+    int ret = ioctl(hwc_dev->dsscomp_fd, DSSCIOC_QUERY_DISPLAY, &hwc_dev->fb_dis);
+    if (ret)
+        ALOGE("failed to get display info (%d): %m", errno);
+
+    int lcd_w = hwc_dev->fb_dis.timings.x_res;
+    int lcd_h = hwc_dev->fb_dis.timings.y_res;
+    int orig_w = hwc_dev->fb_dev->base.width;
+    int orig_h = hwc_dev->fb_dev->base.height;
+    hwc_rect_t region = {.left = 0, .top = 0, .right = orig_w, .bottom = orig_h};
+    hwc_dev->primary_region = region;
+    hwc_dev->primary_rotation = ((lcd_w > lcd_h) ^ (orig_w > orig_h)) ? 1 : 0;
+    hwc_dev->primary_transform = ((lcd_w != orig_w)||(lcd_h != orig_h)) ? 1 : 0;
+
+    ALOGI("transforming FB (%dx%d) => (%dx%d) rot%d", orig_w, orig_h, lcd_w, lcd_h, hwc_dev->primary_rotation);
+
+    /* reorientation matrix is:
+       m = (center-from-target-center) * (scale-to-target) * (mirror) * (rotate) * (center-to-original-center) */
+
+    memcpy(hwc_dev->primary_m, m_unit, sizeof(m_unit));
+    m_translate(hwc_dev->primary_m, -(orig_w >> 1), -(orig_h >> 1));
+    m_rotate(hwc_dev->primary_m, hwc_dev->primary_rotation);
+    if (hwc_dev->primary_rotation & 1)
+         swap(orig_w, orig_h);
+    m_scale(hwc_dev->primary_m, orig_w, lcd_w, orig_h, lcd_h);
+    m_translate(hwc_dev->primary_m, lcd_w >> 1, lcd_h >> 1);
+}
+
 static void handle_hotplug(omap4_hwc_device_t *hwc_dev)
 {
     omap4_hwc_ext_t *ext = &hwc_dev->ext;
@@ -1774,6 +1849,7 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev)
             ext->mirror_mode = 0;
             if (setup_mirroring(hwc_dev) == 0) {
                 ext->mirror_mode = ext->last_mode;
+                set_primary_display_transform_matrix(hwc_dev);
                 ioctl(hwc_dev->hdmi_fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
             } else
                 ext->mirror.enabled = 0;
@@ -2095,6 +2171,8 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     }
     hwc_dev->ext.lcd_xpy = (float) hwc_dev->fb_dis.width_in_mm / hwc_dev->fb_dis.timings.x_res /
                             hwc_dev->fb_dis.height_in_mm       * hwc_dev->fb_dis.timings.y_res;
+
+    set_primary_display_transform_matrix(hwc_dev);
 
     if (pipe(hwc_dev->pipe_fds) == -1) {
             ALOGE("failed to event pipe (%d): %m", errno);
