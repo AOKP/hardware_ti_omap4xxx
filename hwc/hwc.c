@@ -927,6 +927,21 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         ext->yres = 480;
     }
 
+    /*
+     * copy the xres/yres from the preferred mode
+     */
+    __u32 preferred_mode_xres = 0;
+    __u32 preferred_mode_yres = 0;
+    for (i = 0; i < d.dis.modedb_len; i++) {
+        if (d.modedb[i].flag & FB_FLAG_PREFERRED) {
+            preferred_mode_xres = d.modedb[i].xres;
+            preferred_mode_yres = d.modedb[i].yres;
+            LOGD("preferred mode %d: xres %u yres %u\n",
+                i, d.modedb[i].xres, d.modedb[i].yres);
+            break;
+        }
+    }
+
     __u32 ext_fb_xres, ext_fb_yres;
     for (i = 0; i < d.dis.modedb_len; i++) {
         __u32 score = 0;
@@ -934,6 +949,10 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         __u32 mode_yres = d.modedb[i].yres;
         __u32 ext_width = d.dis.width_in_mm;
         __u32 ext_height = d.dis.height_in_mm;
+
+        /* reject it because the hw says it can't actually use this mode */
+        if ((d.modedb[i].flag & FB_FLAG_HW_CAPABLE) == 0)
+            continue;
 
         if (d.modedb[i].flag & FB_FLAG_RATIO_4_3) {
             ext_width = 4;
@@ -959,7 +978,17 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
 
         /* prefer CEA modes */
         if (d.modedb[i].flag & (FB_FLAG_RATIO_4_3 | FB_FLAG_RATIO_16_9))
-            score = 1;
+            score += 1;
+
+        /* prefer modes that match the preferred mode's resolution */
+        if (d.modedb[i].xres == preferred_mode_xres &&
+            d.modedb[i].yres == preferred_mode_yres) {
+            score += 1;
+        }
+
+        /* prefer modes the kernel has hinted is the correct mode */
+        if (d.modedb[i].flag & FB_FLAG_PREFERRED)
+            score += 1;
 
         /* prefer the same mode as we use for mirroring to avoid mode change */
        score = (score << 1) | (i == ~ext->mirror_mode && ext->avoid_mode_change);
@@ -967,7 +996,8 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         score = add_scaling_score(score, xres, yres, 60, ext_fb_xres, ext_fb_yres,
                                   mode_xres, mode_yres, d.modedb[i].refresh ? : 1);
 
-        LOGD("#%d: %dx%d %dHz", i, mode_xres, mode_yres, d.modedb[i].refresh);
+        LOGD("#%d: %dx%d %dHz flag 0x%x vmode 0x%x", i, mode_xres, mode_yres,
+            d.modedb[i].refresh, d.modedb[i].flag, d.modedb[i].vmode);
         if (debug)
             LOGD("  score=0x%x adj.res=%dx%d", score, ext_fb_xres, ext_fb_yres);
         if (best_score < score) {
