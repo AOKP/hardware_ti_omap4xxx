@@ -24,6 +24,7 @@ PRODUCT_PACKAGES := \
 	libOMX.TI.DUCATI1.VIDEO.DECODER.secure \
 	libOMX.TI.DUCATI1.VIDEO.CAMERA \
 	libOMX.TI.DUCATI1.MISC.SAMPLE \
+        libdrmdecrypt \
 	libstagefrighthw \
         libI420colorconvert \
 	libtiutils \
