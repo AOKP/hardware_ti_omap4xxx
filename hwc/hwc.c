@@ -724,6 +724,10 @@ static int omap4_hwc_can_scale(__u32 src_w, __u32 src_h, __u32 dst_w, __u32 dst_
 
     /* NOTE: no support for checking YUV422 layers that are tricky to scale */
 
+    /* FIXME: limit vertical downscale well below theoretical limit as we saw display artifacts */
+    if (dst_h < src_h / 4)
+        return 0;
+
     /* max downscale */
     if (dst_h < src_h / limits->max_downscale / (is_2d ? limits->max_ydecim_2d : limits->max_ydecim_1d))
         return 0;
