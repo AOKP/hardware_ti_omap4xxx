@@ -1563,7 +1563,11 @@ static int omap4_hwc_set(struct hwc_composer_device *dev, hwc_display_t dpy,
 
     pthread_mutex_lock(&hwc_dev->lock);
 
-    omap4_hwc_reset_screen(hwc_dev);
+    /* disable resetting the screen on the first boot for devices
+     * with hdmi as primary input.
+     */
+    if (!hwc_dev->on_tv)
+        omap4_hwc_reset_screen(hwc_dev);
 
     invalidate = hwc_dev->ext_ovls_wanted && !hwc_dev->ext_ovls;
 
