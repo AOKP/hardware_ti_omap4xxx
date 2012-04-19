@@ -1013,13 +1013,13 @@ int stopRecording() {
 
 int openCamera() {
     printf("openCamera(camera_index=%d)\n", camera_index);
-    camera = Camera::connect(camera_index, false, false);
+    camera = Camera::connect(camera_index);
 
     if ( NULL == camera.get() ) {
         printf("Unable to connect to CameraService\n");
         printf("Retrying... \n");
         sleep(1);
-        camera = Camera::connect(camera_index, false, false);
+        camera = Camera::connect(camera_index);
 
         if ( NULL == camera.get() ) {
             printf("Giving up!! \n");
@@ -1456,10 +1456,10 @@ int functional_menu() {
                 stopRecording();
                 closeRecorder();
 
-                camera = Camera::connect(camera_index, false, false);
+                camera = Camera::connect(camera_index);
                   if ( NULL == camera.get() ) {
                       sleep(1);
-                      camera = Camera::connect(camera_index, false, false);
+                      camera = Camera::connect(camera_index);
                       if ( NULL == camera.get() ) {
                           return -1;
                       }
