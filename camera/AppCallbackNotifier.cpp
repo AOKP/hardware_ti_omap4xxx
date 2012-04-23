@@ -468,7 +468,7 @@ static void copy2Dto1D(void *dst,
     unsigned int *y_uv = (unsigned int *)src;
 
     CAMHAL_LOGVB("copy2Dto1D() y= %p ; uv=%p.",y_uv[0], y_uv[1]);
-    CAMHAL_LOGVB("pixelFormat,= %d; offset=%d",*pixelFormat,offset);
+    CAMHAL_LOGVB("pixelFormat= %s; offset=%d", pixelFormat,offset);
 
     if (pixelFormat!=NULL) {
         if (strcmp(pixelFormat, CameraParameters::PIXEL_FORMAT_YUV422I) == 0) {
@@ -1403,8 +1403,7 @@ status_t AppCallbackNotifier::startPreviewCallbacks(CameraParameters &params, vo
         size = w*h*2;
         mPreviewPixelFormat = CameraParameters::PIXEL_FORMAT_YUV422I;
         }
-    else if(strcmp(mPreviewPixelFormat, (const char *) CameraParameters::PIXEL_FORMAT_YUV420SP) == 0 ||
-            strcmp(mPreviewPixelFormat, (const char *) CameraParameters::PIXEL_FORMAT_YUV420P) == 0)
+    else if(strcmp(mPreviewPixelFormat, (const char *) CameraParameters::PIXEL_FORMAT_YUV420SP) == 0 )
         {
         size = (w*h*3)/2;
         mPreviewPixelFormat = CameraParameters::PIXEL_FORMAT_YUV420SP;
@@ -1413,6 +1412,11 @@ status_t AppCallbackNotifier::startPreviewCallbacks(CameraParameters &params, vo
         {
         size = w*h*2;
         mPreviewPixelFormat = CameraParameters::PIXEL_FORMAT_RGB565;
+        }
+    else if(strcmp(mPreviewPixelFormat, (const char *) CameraParameters::PIXEL_FORMAT_YUV420P) == 0)
+        {
+        size = (w*h*3)/2;
+        mPreviewPixelFormat = CameraParameters::PIXEL_FORMAT_YUV420P;
         }
 
     mPreviewMemory = mRequestMemory(-1, size, AppCallbackNotifier::MAX_BUFFERS, NULL);
