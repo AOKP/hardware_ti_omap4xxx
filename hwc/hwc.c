@@ -56,7 +56,7 @@
 #define HAL_PIXEL_FORMAT_BGRX_8888      0x1FF
 #define HAL_PIXEL_FORMAT_TI_NV12        0x100
 #define HAL_PIXEL_FORMAT_TI_NV12_PADDED 0x101
-#define MAX_TILER_SLOT (16 << 20)
+#define MAX_TILER_SLOT (32 << 20)
 
 struct ext_transform_t {
     __u8 rotation : 3;          /* 90-degree clockwise rotations */
@@ -323,7 +323,8 @@ static int scaled(hwc_layer_t *layer,omap4_hwc_device_t *hwc_dev)
     if (layer->transform & HWC_TRANSFORM_ROT_90)
         swap(w, h);
 
-    return (hwc_dev->fb_dis.timings.x_res != w || hwc_dev->fb_dis.timings.y_res != h);
+    return WIDTH(layer->displayFrame) != w || HEIGHT(layer->displayFrame) != h
+			|| hwc_dev->lcd_transform;
 }
 
 static int is_protected(hwc_layer_t *layer)
@@ -1071,7 +1072,7 @@ static void gather_layer_statistics(omap4_hwc_device_t *hwc_dev, struct counts *
             num->possible_overlay_layers++;
 
             /* NV12 layers can only be rendered on scaling overlays */
-            if (scaled(layer,hwc_dev) || is_NV12(handle))
+            if (scaled(layer, hwc_dev) || is_NV12(handle))
                 num->scaled_layers++;
 
             if (is_BGR(handle))
@@ -1122,6 +1123,7 @@ static void decide_supported_cloning(omap4_hwc_device_t *hwc_dev, struct counts 
          * otherwise, manage just from half the pipelines.  NOTE: there is
          * no danger of having used too many overlays for external display here.
          */
+
         num->max_hw_overlays >>= 1;
         nonscaling_ovls >>= 1;
         hwc_dev->ext_ovls = MAX_HW_OVERLAYS - num->max_hw_overlays;
@@ -1145,9 +1147,11 @@ static void decide_supported_cloning(omap4_hwc_device_t *hwc_dev, struct counts 
     if (hwc_dev->ext_ovls && ext->current.enabled && !ext->current.docking)
         num->max_hw_overlays = hwc_dev->ext_ovls;
 
-    /*If FB is not same resolution as LCD dont use GFX pipe line*/
-    if (hwc_dev->lcd_transform)
+    /* If FB is not same resolution as LCD don't use GFX pipe line*/
+    if (hwc_dev->lcd_transform) {
         num->max_hw_overlays -= 1;
+        num->max_scaling_overlays = num->max_hw_overlays;
+    }
     else
         num->max_scaling_overlays = num->max_hw_overlays - nonscaling_ovls;
 }
@@ -1221,8 +1225,8 @@ static int clone_layer(omap4_hwc_device_t *hwc_dev, int ix) {
     /* use distinct z values (to simplify z-order checking) */
     o->cfg.zorder += hwc_dev->post2_layers;
 
-     if (hwc_dev->lcd_transform)
-         omap4_hwc_adjust_lcd_layer_to_hdmi(hwc_dev,o);
+    if (hwc_dev->lcd_transform)
+        omap4_hwc_adjust_lcd_layer_to_hdmi(hwc_dev,o);
 
     omap4_hwc_adjust_ext_layer(&hwc_dev->ext, o);
     dsscomp->num_ovls++;
@@ -1235,6 +1239,11 @@ static int clone_external_layer(omap4_hwc_device_t *hwc_dev, int ix) {
 
     /* mirror only 1 external layer */
     struct dss2_ovl_info *o = &dsscomp->ovls[ix];
+
+    /*If LCD transform is enabled we need to apply reverse transform here
+           before adjusting HDMI*/
+    if (hwc_dev->lcd_transform)
+       omap4_hwc_adjust_lcd_layer_to_hdmi(hwc_dev,o);
 
     /* full screen video after transformation */
     __u32 xres = o->cfg.crop.w, yres = o->cfg.crop.h;
@@ -1372,17 +1381,17 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                                   handle->iWidth,
                                   handle->iHeight);
 
-            dsscomp->ovls[dsscomp->num_ovls].cfg.ix = dsscomp->num_ovls;
+            dsscomp->ovls[dsscomp->num_ovls].cfg.ix = dsscomp->num_ovls + hwc_dev->lcd_transform;
             dsscomp->ovls[dsscomp->num_ovls].addressing = OMAP_DSS_BUFADDR_LAYER_IX;
             dsscomp->ovls[dsscomp->num_ovls].ba = dsscomp->num_ovls;
 
             /* ensure GFX layer is never scaled */
-            if (dsscomp->num_ovls == 0) {
-                scaled_gfx = scaled(layer,hwc_dev) || is_NV12(handle);
-            } else if (scaled_gfx && !scaled(layer,hwc_dev) && !is_NV12(handle)) {
+            if ((dsscomp->num_ovls == 0) && (!hwc_dev->lcd_transform)) {
+                scaled_gfx = scaled(layer, hwc_dev) || is_NV12(handle);
+            } else if (scaled_gfx && !scaled(layer, hwc_dev) && !is_NV12(handle)) {
                 /* swap GFX layer with this one */
                 dsscomp->ovls[dsscomp->num_ovls].cfg.ix = 0;
-                dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls;
+                dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls + hwc_dev->lcd_transform;
                 scaled_gfx = 0;
             }
 
@@ -1415,13 +1424,13 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 
     /* if scaling GFX (e.g. only 1 scaled surface) use a VID pipe */
     if (scaled_gfx)
-        dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls;
+        dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls + hwc_dev->lcd_transform;
 
     if (hwc_dev->use_sgx) {
         /* assign a z-layer for fb */
         if (fb_z < 0) {
             if (num.composited_layers)
-                LOGV("**** should have assigned z-layer for fb");
+                LOGE("**** should have assigned z-layer for fb");
             fb_z = z++;
         }
 
@@ -1434,10 +1443,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         dsscomp->ovls[0].cfg.pre_mult_alpha = 1;
         dsscomp->ovls[0].addressing = OMAP_DSS_BUFADDR_LAYER_IX;
         dsscomp->ovls[0].ba = 0;
-        if (hwc_dev->lcd_transform)
-            dsscomp->ovls[0].cfg.ix = num.max_hw_overlays;
-        else
-              dsscomp->ovls[0].cfg.ix = num.max_hw_overlays-1;
+        dsscomp->ovls[0].cfg.ix = hwc_dev->lcd_transform;
         omap4_hwc_adjust_lcd_layer(hwc_dev, &dsscomp->ovls[0]);
     }
 
@@ -2126,11 +2132,11 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     hwc_dev->ext.lcd_xpy = (float) hwc_dev->fb_dis.width_in_mm / hwc_dev->fb_dis.timings.x_res /
                             hwc_dev->fb_dis.height_in_mm       * hwc_dev->fb_dis.timings.y_res;
 
-     if (hwc_dev->fb_dis.channel == OMAP_DSS_CHANNEL_DIGIT) {
+    if (hwc_dev->fb_dis.channel == OMAP_DSS_CHANNEL_DIGIT) {
         LOGI("Primary display is HDMI");
         hwc_dev->on_tv = 1;
     }
-     else {
+    else {
         hwc_dev->hdmi_fb_fd = open("/dev/graphics/fb1", O_RDWR);
         if (hwc_dev->hdmi_fb_fd < 0) {
             LOGE("failed to open hdmi fb (%d)", errno);
@@ -2138,7 +2144,7 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
             goto done;
         }
     }
-     set_lcd_transform_matrix( hwc_dev );
+    set_lcd_transform_matrix( hwc_dev );
 
     if (pipe(hwc_dev->pipe_fds) == -1) {
             LOGE("failed to event pipe (%d): %m", errno);
@@ -2151,8 +2157,7 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
         err = -errno;
         goto done;
     }
-    if (pthread_create(&hwc_dev->hdmi_thread, NULL, omap4_hwc_hdmi_thread, hwc_dev))
-    {
+    if (pthread_create(&hwc_dev->hdmi_thread, NULL, omap4_hwc_hdmi_thread, hwc_dev)) {
         LOGE("failed to create HDMI listening thread (%d): %m", errno);
         err = -errno;
         goto done;
