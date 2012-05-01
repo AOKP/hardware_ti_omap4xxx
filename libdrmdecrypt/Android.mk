@@ -5,9 +5,6 @@ include $(CLEAR_VARS)
 
 -include $(TOP)/vendor/widevine/proprietary/cryptoPlugin/decrypt-core.mk
 
-LOCAL_SRC_FILES := \
-        crypto.cpp
-
 LOCAL_C_INCLUDES:= \
         $(TOP)/frameworks/native/include/media/hardware \
         $(TOP)/vendor/widevine/proprietary/cryptoPlugin \
