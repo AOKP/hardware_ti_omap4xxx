@@ -473,6 +473,49 @@ static void copy2Dto1D(void *dst,
     if (pixelFormat!=NULL) {
         if (strcmp(pixelFormat, CameraParameters::PIXEL_FORMAT_YUV422I) == 0) {
             bytesPerPixel = 2;
+            bufferSrc = ( unsigned char * ) y_uv[0] + offset;
+            uint32_t xOff = offset % stride;
+            uint32_t yOff = offset / stride;
+            uint8_t *bufferSrcUV = ((uint8_t*)y_uv[1] + (stride/2)*yOff + xOff);
+            uint8_t *bufferSrcUVEven = bufferSrcUV;
+
+            uint8_t *bufferDstY = ( uint8_t * ) dst;
+            uint8_t *bufferDstU = bufferDstY + 1;
+            uint8_t *bufferDstV = bufferDstY + 3;
+
+            // going to convert from NV12 here and return
+            for ( int i = 0 ; i < height; i ++ ) {
+                for ( int j = 0 ; j < width / 2 ; j++ ) {
+
+                    // Y
+                    *bufferDstY = *bufferSrc;
+                    bufferSrc++;
+                    bufferDstY += 2;
+
+                    *bufferDstY = *bufferSrc;
+                    bufferSrc++;
+                    bufferDstY += 2;
+
+                    // V
+                    *bufferDstV = *(bufferSrcUV + 1);
+                    bufferDstV += 4;
+
+                    // U
+                    *bufferDstU = *bufferSrcUV;
+                    bufferDstU += 4;
+
+                    bufferSrcUV += 2;
+                }
+                if ( i % 2 ) {
+                    bufferSrcUV += ( stride - width);
+                    bufferSrcUVEven = bufferSrcUV;
+                } else {
+                    bufferSrcUV = bufferSrcUVEven;
+                }
+                bufferSrc += ( stride - width);
+            }
+
+            return;
         } else if (strcmp(pixelFormat, CameraParameters::PIXEL_FORMAT_YUV420SP) == 0 ||
                    strcmp(pixelFormat, CameraParameters::PIXEL_FORMAT_YUV420P) == 0) {
             bytesPerPixel = 1;
