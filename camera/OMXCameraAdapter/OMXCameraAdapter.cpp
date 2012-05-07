@@ -2968,6 +2968,7 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
                 {
                 ancillaryData = (OMX_TI_ANCILLARYDATATYPE*) extraData->data;
                 snapshotFrame = ancillaryData->nDCCStatus;
+                mPending3Asettings |= SetFocus;
                 }
             }
 
