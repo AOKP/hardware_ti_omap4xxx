@@ -450,6 +450,21 @@ void AppCallbackNotifier::notifyEvent()
 
 }
 
+static void alignYV12(int width,
+                      int height,
+                      int &yStride,
+                      int &uvStride,
+                      int &ySize,
+                      int &uvSize,
+                      int &size)
+{
+    yStride = ( width + 0xF ) & ~0xF;
+    uvStride = ( yStride / 2 + 0xF ) & ~0xF;
+    ySize = yStride * height;
+    uvSize = uvStride * height / 2;
+    size = ySize + uvSize * 2;
+}
+
 static void copy2Dto1D(void *dst,
                        void *src,
                        int width,
@@ -599,8 +614,12 @@ static void copy2Dto1D(void *dst,
                 //            camera adapter to support YV12. Need to address for
                 //            USBCamera
 
-                bufferDst_V = (uint16_t *) (((uint8_t*)dst)+row*height);
-                bufferDst_U = (uint16_t *) (((uint8_t*)dst)+row*height+row*height/4);
+                int yStride, uvStride, ySize, uvSize, size;
+                alignYV12(width, height, yStride, uvStride, ySize, uvSize, size);
+
+                bufferDst_V = (uint16_t *) (((uint8_t*)dst) + ySize);
+                bufferDst_U = (uint16_t *) (((uint8_t*)dst) + ySize + uvSize);
+                int inc = (uvStride - width/2)/2;
 
                 for (int i = 0 ; i < height/2 ; i++, bufferSrc_UV += alignedRow/2) {
                     int n = width;
@@ -644,7 +663,11 @@ static void copy2Dto1D(void *dst,
                     : [src_stride] "r" (stride_bytes)
                     : "cc", "memory", "q0", "q1"
                     );
+
+                    bufferDst_U += inc;
+                    bufferDst_V += inc;
                 }
+
             }
             return ;
 
@@ -1416,7 +1439,7 @@ status_t AppCallbackNotifier::startPreviewCallbacks(CameraParameters &params, vo
     sp<MemoryHeapBase> heap;
     sp<MemoryBase> buffer;
     unsigned int *bufArr;
-    size_t size = 0;
+    int size = 0;
 
     LOG_FUNCTION_NAME;
 
@@ -1458,7 +1481,8 @@ status_t AppCallbackNotifier::startPreviewCallbacks(CameraParameters &params, vo
         }
     else if(strcmp(mPreviewPixelFormat, (const char *) CameraParameters::PIXEL_FORMAT_YUV420P) == 0)
         {
-        size = (w*h*3)/2;
+        int yStride, uvStride, ySize, uvSize;
+        alignYV12(w, h, yStride, uvStride, ySize, uvSize, size);
         mPreviewPixelFormat = CameraParameters::PIXEL_FORMAT_YUV420P;
         }
 
