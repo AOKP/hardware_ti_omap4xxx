@@ -429,13 +429,9 @@ status_t OMXCameraAdapter::setParameters(const CameraParameters &params)
     ///@todo Include more camera parameters
     if ( (valstr = params.getPreviewFormat()) != NULL )
         {
-        if (strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_YUV422I) == 0)
-            {
-            CAMHAL_LOGDA("CbYCrY format selected");
-            pixFormat = OMX_COLOR_FormatCbYCrY;
-            }
-        else if(strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_YUV420SP) == 0 ||
-                strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_YUV420P) == 0)
+        if(strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_YUV420SP) == 0 ||
+           strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_YUV420P) == 0 ||
+           strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_YUV422I) == 0)
             {
             CAMHAL_LOGDA("YUV420SP format selected");
             pixFormat = OMX_COLOR_FormatYUV420SemiPlanar;
