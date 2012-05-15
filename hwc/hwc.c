@@ -143,11 +143,6 @@ struct omap4_hwc_device {
     int idle;
     int ovls_blending;
 
-    float lcd_m[2][3];          /* internal transformation matrix */
-    float lcd_hdmi_m[2][3];          /* internal transformation matrix */
-    int lcd_rotation;
-    hwc_rect_t lcd_region;
-
     /* composition data */
     struct dsscomp_setup_dispc_data dsscomp_data;
     buffer_handle_t *buffers;
@@ -158,7 +153,6 @@ struct omap4_hwc_device {
     int ext_ovls_wanted;        /* # of overlays that should be on external display for current composition */
     int last_ext_ovls;          /* # of overlays on external/internal display for last composition */
     int last_int_ovls;
-    int lcd_transform;
 };
 typedef struct omap4_hwc_device omap4_hwc_device_t;
 
@@ -323,8 +317,7 @@ static int scaled(hwc_layer_t *layer,omap4_hwc_device_t *hwc_dev)
     if (layer->transform & HWC_TRANSFORM_ROT_90)
         swap(w, h);
 
-    return WIDTH(layer->displayFrame) != w || HEIGHT(layer->displayFrame) != h
-			|| hwc_dev->lcd_transform;
+    return WIDTH(layer->displayFrame) != w || HEIGHT(layer->displayFrame) != h;
 }
 
 static int is_protected(hwc_layer_t *layer)
@@ -708,56 +701,6 @@ omap4_hwc_adjust_ext_layer(omap4_hwc_ext_t *ext, struct dss2_ovl_info *ovl)
         oc->mirror = !oc->mirror;
 }
 
-static void
-omap4_hwc_adjust_lcd_layer(omap4_hwc_device_t *hwc_dev, struct dss2_ovl_info *ovl)
-{
-    struct dss2_ovl_cfg *oc = &ovl->cfg;
-    float x, y, w, h;
-
-    /* crop to lcd region if mirroring */
-    if (crop_to_rect(&ovl->cfg, hwc_dev->lcd_region) != 0) {
-        ovl->cfg.enabled = 0;
-        return;
-    }
-
-    /* display position */
-    x = hwc_dev->lcd_m[0][0] * oc->win.x + hwc_dev->lcd_m[0][1] * oc->win.y + hwc_dev->lcd_m[0][2];
-    y = hwc_dev->lcd_m[1][0] * oc->win.x + hwc_dev->lcd_m[1][1] * oc->win.y + hwc_dev->lcd_m[1][2];
-    w = hwc_dev->lcd_m[0][0] * oc->win.w + hwc_dev->lcd_m[0][1] * oc->win.h;
-    h = hwc_dev->lcd_m[1][0] * oc->win.w + hwc_dev->lcd_m[1][1] * oc->win.h;
-    oc->win.x = m_round(w > 0 ? x : x + w);
-    oc->win.y = m_round(h > 0 ? y : y + h);
-    oc->win.w = m_round(w > 0 ? w : -w);
-    oc->win.h = m_round(h > 0 ? h : -h);
-
-    /* combining transformations: F^a*R^b*F^i*R^j = F^(a+b)*R^(j+b*(-1)^i), because F*R = R^(-1)*F */
-    oc->rotation += (oc->mirror ? -1 : 1) * hwc_dev->lcd_rotation;
-    oc->rotation &= 3;
-}
-static void
-omap4_hwc_adjust_lcd_layer_to_hdmi(omap4_hwc_device_t *hwc_dev, struct dss2_ovl_info *ovl)
-{
-    struct dss2_ovl_cfg *oc = &ovl->cfg;
-    float x, y, w, h;
-
-    if (!hwc_dev->ext.current.docking &&
-        crop_to_rect(&ovl->cfg, hwc_dev->ext.mirror_region) != 0) {
-        ovl->cfg.enabled = 0;
-        return;
-    }
-
-    /* display position */
-    x = hwc_dev->lcd_hdmi_m[0][0] * oc->win.x + hwc_dev->lcd_hdmi_m[0][1] * oc->win.y + hwc_dev->lcd_hdmi_m[0][2];
-    y = hwc_dev->lcd_hdmi_m[1][0] * oc->win.x + hwc_dev->lcd_hdmi_m[1][1] * oc->win.y + hwc_dev->lcd_hdmi_m[1][2];
-    w = hwc_dev->lcd_hdmi_m[0][0] * oc->win.w + hwc_dev->lcd_hdmi_m[0][1] * oc->win.h;
-    h = hwc_dev->lcd_hdmi_m[1][0] * oc->win.w + hwc_dev->lcd_hdmi_m[1][1] * oc->win.h;
-    oc->win.x = m_round(w > 0 ? x : x + w);
-    oc->win.y = m_round(h > 0 ? y : y + h);
-    oc->win.w = m_round(w > 0 ? w : -w);
-    oc->win.h = m_round(h > 0 ? h : -h);
-
-}
-
 static struct dsscomp_dispc_limitations {
     __u8 max_xdecim_2d;
     __u8 max_ydecim_2d;
@@ -900,6 +843,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
                                         float xpy)
 {
     int dis_ix = hwc_dev->on_tv ? 0 : 1;
+    int forced_preferred_mode = 0;
 
     struct _qdis {
         struct dsscomp_display_info dis;
@@ -933,14 +877,24 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
      */
     __u32 preferred_mode_xres = 0;
     __u32 preferred_mode_yres = 0;
-    for (i = 0; i < d.dis.modedb_len; i++) {
-        if (d.modedb[i].flag & FB_FLAG_PREFERRED) {
-            preferred_mode_xres = d.modedb[i].xres;
-            preferred_mode_yres = d.modedb[i].yres;
-            LOGD("preferred mode %d: xres %u yres %u\n",
-                i, d.modedb[i].xres, d.modedb[i].yres);
-            break;
+
+    char value[PROPERTY_VALUE_MAX];
+    if (property_get("persist.hwc.preferred_mode", value, "") <= 0 ||
+        sscanf(value, "%dx%d", &preferred_mode_xres,
+               &preferred_mode_yres) != 2) {
+        for (i = 0; i < d.dis.modedb_len; i++) {
+            if (d.modedb[i].flag & FB_FLAG_PREFERRED) {
+                preferred_mode_xres = d.modedb[i].xres;
+                preferred_mode_yres = d.modedb[i].yres;
+                LOGD("preferred mode %d: xres %u yres %u\n",
+                    i, d.modedb[i].xres, d.modedb[i].yres);
+                break;
+            }
         }
+    } else {
+        LOGD("forced preferred mode xres %u yres %u\n",
+             preferred_mode_xres, preferred_mode_yres);
+        forced_preferred_mode = 1;
     }
 
     __u32 ext_fb_xres, ext_fb_yres;
@@ -988,11 +942,11 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         }
 
         /* prefer modes the kernel has hinted is the correct mode */
-        if (d.modedb[i].flag & FB_FLAG_PREFERRED)
+        if (!forced_preferred_mode && (d.modedb[i].flag & FB_FLAG_PREFERRED))
             score += 1;
 
         /* prefer the same mode as we use for mirroring to avoid mode change */
-       score = (score << 1) | (i == ~ext->mirror_mode && ext->avoid_mode_change);
+        score = (score << 1) | (i == ~ext->mirror_mode && ext->avoid_mode_change);
 
         score = add_scaling_score(score, xres, yres, 60, ext_fb_xres, ext_fb_yres,
                                   mode_xres, mode_yres, d.modedb[i].refresh ? : 1);
@@ -1015,8 +969,14 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         sdis.mode = d.dis.modedb[best];
         LOGD("picking #%d", best);
         /* only reconfigure on change */
-        if (ext->last_mode != ~best)
+        if (ext->last_mode != ~best) {
+            char display[PROPERTY_VALUE_MAX];
+            snprintf(display, sizeof(display), "%dx%d",
+                     d.modedb[best].xres, d.modedb[best].yres);
+            LOGD("setting property sys.display-size to %s", display);
+            property_set("sys.display-size", display);
             ioctl(hwc_dev->dsscomp_fd, DSSCIOC_SETUP_DISPLAY, &sdis);
+        }
         ext->last_mode = ~best;
     } else {
         __u32 ext_width = d.dis.width_in_mm;
@@ -1147,13 +1107,7 @@ static void decide_supported_cloning(omap4_hwc_device_t *hwc_dev, struct counts 
     if (hwc_dev->ext_ovls && ext->current.enabled && !ext->current.docking)
         num->max_hw_overlays = hwc_dev->ext_ovls;
 
-    /* If FB is not same resolution as LCD don't use GFX pipe line*/
-    if (hwc_dev->lcd_transform) {
-        num->max_hw_overlays -= 1;
-        num->max_scaling_overlays = num->max_hw_overlays;
-    }
-    else
-        num->max_scaling_overlays = num->max_hw_overlays - nonscaling_ovls;
+    num->max_scaling_overlays = num->max_hw_overlays - nonscaling_ovls;
 }
 
 static int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts *num)
@@ -1225,9 +1179,6 @@ static int clone_layer(omap4_hwc_device_t *hwc_dev, int ix) {
     /* use distinct z values (to simplify z-order checking) */
     o->cfg.zorder += hwc_dev->post2_layers;
 
-    if (hwc_dev->lcd_transform)
-        omap4_hwc_adjust_lcd_layer_to_hdmi(hwc_dev,o);
-
     omap4_hwc_adjust_ext_layer(&hwc_dev->ext, o);
     dsscomp->num_ovls++;
     return 0;
@@ -1239,11 +1190,6 @@ static int clone_external_layer(omap4_hwc_device_t *hwc_dev, int ix) {
 
     /* mirror only 1 external layer */
     struct dss2_ovl_info *o = &dsscomp->ovls[ix];
-
-    /*If LCD transform is enabled we need to apply reverse transform here
-           before adjusting HDMI*/
-    if (hwc_dev->lcd_transform)
-       omap4_hwc_adjust_lcd_layer_to_hdmi(hwc_dev,o);
 
     /* full screen video after transformation */
     __u32 xres = o->cfg.crop.w, yres = o->cfg.crop.h;
@@ -1381,17 +1327,17 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                                   handle->iWidth,
                                   handle->iHeight);
 
-            dsscomp->ovls[dsscomp->num_ovls].cfg.ix = dsscomp->num_ovls + hwc_dev->lcd_transform;
+            dsscomp->ovls[dsscomp->num_ovls].cfg.ix = dsscomp->num_ovls;
             dsscomp->ovls[dsscomp->num_ovls].addressing = OMAP_DSS_BUFADDR_LAYER_IX;
             dsscomp->ovls[dsscomp->num_ovls].ba = dsscomp->num_ovls;
 
             /* ensure GFX layer is never scaled */
-            if ((dsscomp->num_ovls == 0) && (!hwc_dev->lcd_transform)) {
+            if (dsscomp->num_ovls == 0) {
                 scaled_gfx = scaled(layer, hwc_dev) || is_NV12(handle);
             } else if (scaled_gfx && !scaled(layer, hwc_dev) && !is_NV12(handle)) {
                 /* swap GFX layer with this one */
                 dsscomp->ovls[dsscomp->num_ovls].cfg.ix = 0;
-                dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls + hwc_dev->lcd_transform;
+                dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls;
                 scaled_gfx = 0;
             }
 
@@ -1401,7 +1347,6 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
                  display_area(&dsscomp->ovls[dsscomp->num_ovls]) > display_area(&dsscomp->ovls[ix_docking])))
                 ix_docking = dsscomp->num_ovls;
 
-            omap4_hwc_adjust_lcd_layer(hwc_dev, &dsscomp->ovls[dsscomp->num_ovls]);
             dsscomp->num_ovls++;
             z++;
 
@@ -1424,7 +1369,7 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
 
     /* if scaling GFX (e.g. only 1 scaled surface) use a VID pipe */
     if (scaled_gfx)
-        dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls + hwc_dev->lcd_transform;
+        dsscomp->ovls[0].cfg.ix = dsscomp->num_ovls;
 
     if (hwc_dev->use_sgx) {
         /* assign a z-layer for fb */
@@ -1443,8 +1388,6 @@ static int omap4_hwc_prepare(struct hwc_composer_device *dev, hwc_layer_list_t* 
         dsscomp->ovls[0].cfg.pre_mult_alpha = 1;
         dsscomp->ovls[0].addressing = OMAP_DSS_BUFADDR_LAYER_IX;
         dsscomp->ovls[0].ba = 0;
-        dsscomp->ovls[0].cfg.ix = hwc_dev->lcd_transform;
-        omap4_hwc_adjust_lcd_layer(hwc_dev, &dsscomp->ovls[0]);
     }
 
     /* mirror layers */
@@ -1818,49 +1761,7 @@ err_out:
     LOGE("Composer HAL failed to load compatible Graphics HAL");
     return err;
 }
-static void set_lcd_transform_matrix(omap4_hwc_device_t *hwc_dev)
-{
-/* create LCD translation matrix */
 
-     hwc_rect_t region = { .left = 0, .top = 0, .right = hwc_dev->fb_dev->base.width, .bottom = hwc_dev->fb_dev->base.height };
-    hwc_dev->fb_dis.ix = 0;/*Default display*/
-     int ret = ioctl(hwc_dev->dsscomp_fd, DSSCIOC_QUERY_DISPLAY, &hwc_dev->fb_dis);
-          if (ret) {
-               LOGE("failed to get display info (%d): %m", errno);
-          }
-
-     int lcd_w = hwc_dev->fb_dis.timings.x_res;
-     int lcd_h = hwc_dev->fb_dis.timings.y_res;
-     int orig_w = WIDTH(region);
-     int orig_h = HEIGHT(region);
-     hwc_dev->lcd_region = region;
-     hwc_dev->lcd_rotation = ((lcd_w > lcd_h) ^ (orig_w > orig_h)) ? 1 : 0;
-     hwc_dev->lcd_transform = ((lcd_w != orig_w)||(lcd_h != orig_h)) ? 1 : 0;
-
-     LOGI("transforming FB (%dx%d) => (%dx%d) rot%d", orig_w, orig_h, lcd_w, lcd_h, hwc_dev->lcd_rotation);
-
-     /* reorientation matrix is:
-        m = (center-from-target-center) * (scale-to-target) * (mirror) * (rotate) * (center-to-original-center) */
-
-     memcpy(hwc_dev->lcd_m, m_unit, sizeof(m_unit));
-     m_translate(hwc_dev->lcd_m, -(orig_w >> 1) - region.left, -(orig_h >> 1) - region.top);
-     m_rotate(hwc_dev->lcd_m, hwc_dev->lcd_rotation);
-     if (hwc_dev->lcd_rotation & 1)
-          swap(orig_w, orig_h);
-     m_scale(hwc_dev->lcd_m, orig_w, lcd_w, orig_h, lcd_h);
-     m_translate(hwc_dev->lcd_m, lcd_w >> 1, lcd_h >> 1);
-
-     /*create reverse LCD transformation*/
-     memcpy(hwc_dev->lcd_hdmi_m, m_unit, sizeof(m_unit));
-     m_translate(hwc_dev->lcd_hdmi_m, -(lcd_w >> 1) - 0, -(lcd_h >> 1) - 0);
-     m_rotate(hwc_dev->lcd_hdmi_m, hwc_dev->lcd_rotation);
-     if (hwc_dev->lcd_rotation & 1)
-          swap(lcd_w, lcd_h);
-     m_scale(hwc_dev->lcd_hdmi_m, lcd_w, orig_w, lcd_h, orig_h);
-     m_translate(hwc_dev->lcd_hdmi_m, (orig_w >> 1) - region.left,(orig_h >> 1) - region.top);
-    return;
-
-}
 static void handle_hotplug(omap4_hwc_device_t *hwc_dev)
 {
     omap4_hwc_ext_t *ext = &hwc_dev->ext;
@@ -1875,7 +1776,6 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev)
             if (omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, ext->lcd_xpy)) {
                     LOGE("Failed to set HDMI mode");
             }
-            set_lcd_transform_matrix(hwc_dev);
             ioctl(hwc_dev->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
 
             if (hwc_dev->procs && hwc_dev->procs->invalidate) {
@@ -2144,7 +2044,6 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
             goto done;
         }
     }
-    set_lcd_transform_matrix( hwc_dev );
 
     if (pipe(hwc_dev->pipe_fds) == -1) {
             LOGE("failed to event pipe (%d): %m", errno);
