@@ -641,10 +641,10 @@ status_t OMXCameraAdapter::setCaptureMode(OMXCameraAdapter::CaptureMode mode)
             CAMHAL_LOGDA("Camera mode: HIGH QUALITY_ZSL");
             camMode.eCamOperatingMode = OMX_TI_CaptureImageProfileZeroShutterLag;
 
-            valstr = mParams.get(TICameraParameters::KEY_RECORDING_HINT);
-            if (!valstr || (valstr && (strcmp(valstr, "false")))) {
+            if ( !mIternalRecordingHint ) {
                 zslHistoryLen.nHistoryLen = 5;
             }
+
             }
         else if( OMXCameraAdapter::VIDEO_MODE == mode )
             {
