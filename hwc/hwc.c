@@ -920,8 +920,23 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         sdis.mode = d.dis.modedb[best];
         ALOGD("picking #%d", best);
         /* only reconfigure on change */
-        if (ext->last_mode != ~best)
+        if (ext->last_mode != ~best) {
+            /* set a property that apps that care (e.g. YouTube) can use
+             * to determine whether or not to stream lower resolution
+             * videos when the hdmi mode is < 1080p.
+             * otherwise, they'd give us 1080p and we'd just scale it
+             * down to the hdmi mode res.  UI apps are always going
+             * to draw at 1080p and we'll scale down because the
+             * system can't support dynamic dpi changes.
+             */
+            char display[PROPERTY_VALUE_MAX];
+            snprintf(display, sizeof(display), "%dx%d",
+                     d.modedb[best].xres, d.modedb[best].yres);
+            LOGD("setting property sys.display-size to %s", display);
+            property_set("sys.display-size", display);
+
             ioctl(hwc_dev->dsscomp_fd, DSSCIOC_SETUP_DISPLAY, &sdis);
+        }
         ext->last_mode = ~best;
     } else {
         __u32 ext_width = d.dis.width_in_mm;
