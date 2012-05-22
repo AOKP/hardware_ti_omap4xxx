@@ -3,7 +3,9 @@ ifeq ($(TARGET_BOARD_PLATFORM),omap4)
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
+ifneq ($(TARGET_DEVICE),panda)
 -include $(TOP)/vendor/widevine/proprietary/cryptoPlugin/decrypt-core.mk
+endif
 
 LOCAL_C_INCLUDES:= \
         $(TOP)/frameworks/native/include/media/hardware \
