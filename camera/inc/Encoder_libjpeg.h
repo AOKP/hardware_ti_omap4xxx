@@ -93,7 +93,7 @@ class ExifElementsTable {
         void insertExifToJpeg(unsigned char* jpeg, size_t jpeg_size);
         status_t insertExifThumbnailImage(const char*, int);
         void saveJpeg(unsigned char* picture, size_t jpeg_size);
-        static const char* degreesToExifOrientation(const char*);
+        static const char* degreesToExifOrientation(unsigned int);
         static void stringToRational(const char*, unsigned int*, unsigned int*);
         static bool isAsciiTag(const char* tag);
     private:

@@ -63,69 +63,48 @@ status_t OMXCameraAdapter::setParametersCapture(const CameraParameters &params,
     CAMHAL_LOGVB("Image: cap.mWidth = %d", (int)cap->mWidth);
     CAMHAL_LOGVB("Image: cap.mHeight = %d", (int)cap->mHeight);
 
-    if ( (valstr = params.getPictureFormat()) != NULL )
-        {
-        if (strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_YUV422I) == 0)
-            {
+    if ((valstr = params.getPictureFormat()) != NULL) {
+        if (strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_YUV422I) == 0) {
             CAMHAL_LOGDA("CbYCrY format selected");
             pixFormat = OMX_COLOR_FormatCbYCrY;
-            }
-        else if(strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_YUV420SP) == 0)
-            {
+            mPictureFormatFromClient = CameraParameters::PIXEL_FORMAT_YUV422I;
+        } else if(strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_YUV420SP) == 0) {
             CAMHAL_LOGDA("YUV420SP format selected");
             pixFormat = OMX_COLOR_FormatYUV420SemiPlanar;
-            }
-        else if(strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_RGB565) == 0)
-            {
+            mPictureFormatFromClient = CameraParameters::PIXEL_FORMAT_YUV420SP;
+        } else if(strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_RGB565) == 0) {
             CAMHAL_LOGDA("RGB565 format selected");
             pixFormat = OMX_COLOR_Format16bitRGB565;
-            }
-        else if(strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_JPEG) == 0)
-            {
+            mPictureFormatFromClient = CameraParameters::PIXEL_FORMAT_RGB565;
+        } else if (strcmp(valstr, (const char *) CameraParameters::PIXEL_FORMAT_JPEG) == 0) {
             CAMHAL_LOGDA("JPEG format selected");
             pixFormat = OMX_COLOR_FormatUnused;
             mCodingMode = CodingNone;
-            }
-        else if(strcmp(valstr, (const char *) TICameraParameters::PIXEL_FORMAT_JPS) == 0)
-            {
+            mPictureFormatFromClient = CameraParameters::PIXEL_FORMAT_JPEG;
+        } else if (strcmp(valstr, (const char *) TICameraParameters::PIXEL_FORMAT_JPS) == 0) {
             CAMHAL_LOGDA("JPS format selected");
             pixFormat = OMX_COLOR_FormatUnused;
             mCodingMode = CodingJPS;
-            }
-        else if(strcmp(valstr, (const char *) TICameraParameters::PIXEL_FORMAT_MPO) == 0)
-            {
+            mPictureFormatFromClient = TICameraParameters::PIXEL_FORMAT_JPS;
+        } else if (strcmp(valstr, (const char *) TICameraParameters::PIXEL_FORMAT_MPO) == 0) {
             CAMHAL_LOGDA("MPO format selected");
             pixFormat = OMX_COLOR_FormatUnused;
             mCodingMode = CodingMPO;
-            }
-        else if(strcmp(valstr, (const char *) TICameraParameters::PIXEL_FORMAT_RAW_JPEG) == 0)
-            {
-            CAMHAL_LOGDA("RAW + JPEG format selected");
-            pixFormat = OMX_COLOR_FormatUnused;
-            mCodingMode = CodingRAWJPEG;
-            }
-        else if(strcmp(valstr, (const char *) TICameraParameters::PIXEL_FORMAT_RAW_MPO) == 0)
-            {
-            CAMHAL_LOGDA("RAW + MPO format selected");
-            pixFormat = OMX_COLOR_FormatUnused;
-            mCodingMode = CodingRAWMPO;
-            }
-        else if(strcmp(valstr, (const char *) TICameraParameters::PIXEL_FORMAT_RAW) == 0)
-            {
+            mPictureFormatFromClient = TICameraParameters::PIXEL_FORMAT_MPO;
+        } else if (strcmp(valstr, (const char *) TICameraParameters::PIXEL_FORMAT_RAW) == 0) {
             CAMHAL_LOGDA("RAW Picture format selected");
             pixFormat = OMX_COLOR_FormatRawBayer10bit;
-            }
-        else
-            {
+            mPictureFormatFromClient = TICameraParameters::PIXEL_FORMAT_RAW;
+        } else {
             CAMHAL_LOGEA("Invalid format, JPEG format selected as default");
             pixFormat = OMX_COLOR_FormatUnused;
-            }
+            mPictureFormatFromClient = NULL;
         }
-    else
-        {
+    } else {
         CAMHAL_LOGEA("Picture format is NULL, defaulting to JPEG");
         pixFormat = OMX_COLOR_FormatUnused;
-        }
+        mPictureFormatFromClient = NULL;
+    }
 
     // JPEG capture is not supported in video mode by OMX Camera
     // Set capture format to yuv422i...jpeg encode will

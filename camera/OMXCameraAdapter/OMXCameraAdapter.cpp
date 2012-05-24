@@ -191,6 +191,7 @@ status_t OMXCameraAdapter::initialize(CameraProperties::Properties* caps)
     mZoomParameterIdx = 0;
     mExposureBracketingValidEntries = 0;
     mSensorOverclock = false;
+    mIternalRecordingHint = false;
 
     mDeviceOrientation = 0;
     mCapabilities = caps;
@@ -535,6 +536,13 @@ status_t OMXCameraAdapter::setParameters(const CameraParameters &params)
         {
         mOMXStateSwitch = true;
         }
+
+    valstr = params.get(TICameraParameters::KEY_RECORDING_HINT);
+    if (!valstr || (valstr && (strcmp(valstr, CameraParameters::FALSE)))) {
+        mIternalRecordingHint = false;
+    } else {
+        mIternalRecordingHint = true;
+    }
 
 #ifdef OMAP_ENHANCEMENT
 
@@ -1465,13 +1473,6 @@ status_t OMXCameraAdapter::UseBuffersPreview(void* bufArr, int num)
 
     LOG_FUNCTION_NAME;
 
-    ///Flag to determine whether it is 3D camera or not
-    bool isS3d = false;
-    const char *valstr = NULL;
-    if ( (valstr = mParams.get(TICameraParameters::KEY_S3D_SUPPORTED)) != NULL) {
-        isS3d = (strcmp(valstr, "true") == 0);
-    }
-
     if(!bufArr)
         {
         CAMHAL_LOGEA("NULL pointer passed for buffArr");
@@ -1531,8 +1532,7 @@ status_t OMXCameraAdapter::UseBuffersPreview(void* bufArr, int num)
 
         CAMHAL_LOGDB("Camera Mode = %d", mCapMode);
 
-        if( ( mCapMode == OMXCameraAdapter::VIDEO_MODE ) ||
-            ( isS3d && (mCapMode == OMXCameraAdapter::HIGH_QUALITY)) )
+        if( mCapMode == OMXCameraAdapter::VIDEO_MODE )
             {
             ///Enable/Disable Video Noise Filter
             ret = enableVideoNoiseFilter(mVnfEnabled);
@@ -3085,17 +3085,15 @@ OMX_ERRORTYPE OMXCameraAdapter::OMXCameraAdapterFillBufferDone(OMX_IN OMX_HANDLE
         const char *valstr = NULL;
 
         pixFormat = mCameraAdapterParameters.mCameraPortParams[mCameraAdapterParameters.mImagePortIndex].mColorFormat;
-        valstr = mParams.getPictureFormat();
 
         if ( OMX_COLOR_FormatUnused == pixFormat )
             {
             typeOfFrame = CameraFrame::IMAGE_FRAME;
             mask = (unsigned int) CameraFrame::IMAGE_FRAME;
-            }
-        else if ( pixFormat == OMX_COLOR_FormatCbYCrY &&
-                  ((valstr && !strcmp(valstr, CameraParameters::PIXEL_FORMAT_JPEG)) ||
-                   !valstr) )
-            {
+        } else if ( pixFormat == OMX_COLOR_FormatCbYCrY &&
+                  ((mPictureFormatFromClient &&
+                    !strcmp(mPictureFormatFromClient, CameraParameters::PIXEL_FORMAT_JPEG)) ||
+                    !mPictureFormatFromClient) ) {
             // signals to callbacks that this needs to be coverted to jpeg
             // before returning to framework
             typeOfFrame = CameraFrame::IMAGE_FRAME;
