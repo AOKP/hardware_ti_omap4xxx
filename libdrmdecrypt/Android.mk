@@ -17,6 +17,8 @@ LOCAL_STATIC_LIBRARIES += \
 LOCAL_SHARED_LIBRARIES := \
         libstagefright_foundation       \
         liblog                          \
+        libcutils                       \
+        libcrypto
 
 LOCAL_MODULE := libdrmdecrypt
 
