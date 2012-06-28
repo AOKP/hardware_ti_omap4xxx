@@ -24,7 +24,7 @@
 
 extern "C" {
 
-#include <ion/ion.h>
+#include <ion.h>
 
 //#include <timm_osal_interfaces.h>
 //#include <timm_osal_trace.h>

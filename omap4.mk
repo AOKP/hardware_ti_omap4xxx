@@ -29,7 +29,7 @@ PRODUCT_PACKAGES := \
         libI420colorconvert \
 	libtiutils \
 	libcamera \
-	libion \
+	libion_ti \
 	camera.omap4 \
 	libomxcameraadapter \
 	hwcomposer.omap4 \
