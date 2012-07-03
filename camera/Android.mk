@@ -124,7 +124,7 @@ LOCAL_SHARED_LIBRARIES:= \
     libcutils \
     libtiutils \
     libcamera_client \
-    libion \
+    libion_ti \
 
 LOCAL_CFLAGS := -fno-short-enums -DCOPY_IMAGE_BUFFER
 

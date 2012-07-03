@@ -27,8 +27,8 @@
 #define LOG_TAG "ion"
 #include <cutils/log.h>
 
-#include <linux/ion.h>
-#include <linux/omap_ion.h>
+#include "linux_ion.h"
+#include "omap_ion.h"
 #include "ion.h"
 
 int ion_open()
