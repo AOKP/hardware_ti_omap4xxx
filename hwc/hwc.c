@@ -146,6 +146,7 @@ struct omap4_hwc_device {
     int flags_rgb_order;
     int flags_nv12_only;
 
+    int on_tv;                  /* using a tv */
     int force_sgx;
     omap4_hwc_ext_t ext;        /* external mirroring data */
     int idle;
@@ -873,10 +874,11 @@ static __u32 add_scaling_score(__u32 score,
 static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres, __u32 yres,
                                         float xpy)
 {
+    int dis_ix = hwc_dev->on_tv ? 0 : 1;
     struct _qdis {
         struct dsscomp_display_info dis;
         struct dsscomp_videomode modedb[32];
-    } d = { .dis = { .ix = 1 } };
+    } d = { .dis = { .ix = dis_ix } };
     omap4_hwc_ext_t *ext = &hwc_dev->ext;
 
     d.dis.modedb_len = sizeof(d.modedb) / sizeof(*d.modedb);
@@ -953,7 +955,7 @@ static int omap4_hwc_set_best_hdmi_mode(omap4_hwc_device_t *hwc_dev, __u32 xres,
         }
     }
     if (~best) {
-        struct dsscomp_setup_display_data sdis = { .ix = 1, };
+        struct dsscomp_setup_display_data sdis = { .ix = dis_ix };
         sdis.mode = d.dis.modedb[best];
         ALOGD("picking #%d", best);
         /* only reconfigure on change */
@@ -1099,7 +1101,7 @@ static void decide_supported_cloning(omap4_hwc_device_t *hwc_dev, struct counts 
 static int can_dss_render_all(omap4_hwc_device_t *hwc_dev, struct counts *num)
 {
     omap4_hwc_ext_t *ext = &hwc_dev->ext;
-    int on_tv = ext->on_tv && ext->current.enabled;
+    int on_tv = hwc_dev->on_tv || (ext->on_tv && ext->current.enabled);
     int tform = ext->current.enabled && (ext->current.rotation || ext->current.hflip);
 
     return  !hwc_dev->force_sgx &&
@@ -1123,7 +1125,7 @@ static inline int can_dss_render_layer(omap4_hwc_device_t *hwc_dev,
     IMG_native_handle_t *handle = (IMG_native_handle_t *)layer->handle;
 
     omap4_hwc_ext_t *ext = &hwc_dev->ext;
-    int on_tv = ext->on_tv && ext->current.enabled;
+    int on_tv = hwc_dev->on_tv || (ext->on_tv && ext->current.enabled);
     int tform = ext->current.enabled && (ext->current.rotation || ext->current.hflip);
 
     return omap4_hwc_is_valid_layer(hwc_dev, layer, handle) &&
@@ -1809,6 +1811,28 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev)
     omap4_hwc_ext_t *ext = &hwc_dev->ext;
     __u8 state = ext->hdmi_state;
 
+    /* Ignore external HDMI logic if the primary display is HDMI */
+    if (hwc_dev->on_tv) {
+        ALOGI("Primary display is HDMI - skip clone/dock logic");
+
+        if (state) {
+            __u32 xres = hwc_dev->fb_dev->base.width;
+            __u32 yres = hwc_dev->fb_dev->base.height;
+            if (omap4_hwc_set_best_hdmi_mode(hwc_dev, xres, yres, ext->lcd_xpy)) {
+                ALOGE("Failed to set HDMI mode");
+            }
+
+            ioctl(hwc_dev->fb_fd, FBIOBLANK, FB_BLANK_UNBLANK);
+
+            if (hwc_dev->procs && hwc_dev->procs->invalidate) {
+                hwc_dev->procs->invalidate(hwc_dev->procs);
+            }
+        } else
+            ext->last_mode = 0;
+
+        return;
+    }
+
     pthread_mutex_lock(&hwc_dev->lock);
     ext->dock.enabled = ext->mirror.enabled = 0;
     if (state) {
@@ -2128,13 +2152,6 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
         goto done;
     }
 
-    hwc_dev->hdmi_fb_fd = open("/dev/graphics/fb1", O_RDWR);
-    if (hwc_dev->hdmi_fb_fd < 0) {
-        ALOGE("failed to open hdmi fb (%d)", errno);
-        err = -errno;
-        goto done;
-    }
-
     hwc_dev->fb_fd = open("/dev/graphics/fb0", O_RDWR);
     if (hwc_dev->fb_fd < 0) {
         ALOGE("failed to open fb (%d)", errno);
@@ -2173,6 +2190,18 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
                             hwc_dev->fb_dis.height_in_mm       * hwc_dev->fb_dis.timings.y_res;
 
     set_primary_display_transform_matrix(hwc_dev);
+
+    if (hwc_dev->fb_dis.channel == OMAP_DSS_CHANNEL_DIGIT) {
+        ALOGI("Primary display is HDMI");
+        hwc_dev->on_tv = 1;
+    } else {
+        hwc_dev->hdmi_fb_fd = open("/dev/graphics/fb1", O_RDWR);
+        if (hwc_dev->hdmi_fb_fd < 0) {
+            ALOGE("failed to open hdmi fb (%d)", errno);
+            err = -errno;
+            goto done;
+        }
+    }
 
     if (pipe(hwc_dev->pipe_fds) == -1) {
             ALOGE("failed to event pipe (%d): %m", errno);
