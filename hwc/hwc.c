@@ -1938,7 +1938,13 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     memset(hwc_dev, 0, sizeof(*hwc_dev));
 
     hwc_dev->base.common.tag = HARDWARE_DEVICE_TAG;
-    hwc_dev->base.common.version = HWC_DEVICE_API_VERSION_0_3;
+    char product_value[PROPERTY_VALUE_MAX];
+    property_get("ro.product.board", product_value, "");
+    if (strncmp("panda", product_value, PROPERTY_VALUE_MAX) == 0)
+        hwc_dev->base.common.version = HWC_DEVICE_API_VERSION_0_2;
+    else
+        hwc_dev->base.common.version = HWC_DEVICE_API_VERSION_0_3;
+
     hwc_dev->base.common.module = (hw_module_t *)module;
     hwc_dev->base.common.close = omap4_hwc_device_close;
     hwc_dev->base.prepare = omap4_hwc_prepare;
