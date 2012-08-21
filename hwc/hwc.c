@@ -1525,7 +1525,7 @@ static int omap4_hwc_set(struct hwc_composer_device_1 *dev,
 err_out:
     pthread_mutex_unlock(&hwc_dev->lock);
 
-    if (invalidate && hwc_dev->procs && hwc_dev->procs->invalidate)
+    if (invalidate)
         hwc_dev->procs->invalidate(hwc_dev->procs);
 
     return err;
@@ -1786,8 +1786,11 @@ static void handle_hotplug(omap4_hwc_device_t *hwc_dev)
 
     pthread_mutex_unlock(&hwc_dev->lock);
 
-    if (hwc_dev->procs && hwc_dev->procs->invalidate)
-            hwc_dev->procs->invalidate(hwc_dev->procs);
+    /* hwc_dev->procs is set right after the device is opened, but there is
+     * still a race condition where a hotplug event might occur after the open
+     * but before the procs are registered. */
+    if (hwc_dev->procs)
+        hwc_dev->procs->invalidate(hwc_dev->procs);
 }
 
 static void handle_uevents(omap4_hwc_device_t *hwc_dev, const char *buff, int len)
@@ -1823,9 +1826,8 @@ static void handle_uevents(omap4_hwc_device_t *hwc_dev, const char *buff, int le
     }
 
     if (vsync) {
-        if (hwc_dev->procs && hwc_dev->procs->vsync) {
+        if (hwc_dev->procs)
             hwc_dev->procs->vsync(hwc_dev->procs, 0, timestamp);
-        }
     } else {
         if (dock)
             hwc_dev->ext.force_dock = state == 1;
@@ -1862,7 +1864,7 @@ static void *omap4_hwc_hdmi_thread(void *data)
 
         if (err == 0) {
             if (hwc_dev->idle) {
-                if (hwc_dev->procs && hwc_dev->procs->invalidate) {
+                if (hwc_dev->procs) {
                     pthread_mutex_lock(&hwc_dev->lock);
                     invalidate = !hwc_dev->force_sgx && hwc_dev->ovls_blending;
                     if (invalidate) {
@@ -1954,17 +1956,12 @@ static int omap4_hwc_event_control(struct hwc_composer_device_1* dev,
     }
 }
 
-static int omap4_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
+static int omap4_hwc_blank(struct hwc_composer_device_1 *dev, int dpy, int blank)
 {
     // We're using an older method of screen blanking based on
     // early_suspend in the kernel.  No need to do anything here.
     return 0;
 }
-
-struct hwc_methods_1 omap4_hwc_methods = {
-    .eventControl = &omap4_hwc_event_control,
-    .blank = &omap4_blank,
-};
 
 static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
                 hw_device_t** device)
@@ -2001,10 +1998,11 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
     hwc_dev->base.common.close = omap4_hwc_device_close;
     hwc_dev->base.prepare = omap4_hwc_prepare;
     hwc_dev->base.set = omap4_hwc_set;
-    hwc_dev->base.dump = omap4_hwc_dump;
-    hwc_dev->base.registerProcs = omap4_hwc_registerProcs;
+    hwc_dev->base.eventControl = omap4_hwc_event_control;
+    hwc_dev->base.blank = omap4_hwc_blank;
     hwc_dev->base.query = omap4_hwc_query;
-    hwc_dev->base.methods = &omap4_hwc_methods;
+    hwc_dev->base.registerProcs = omap4_hwc_registerProcs;
+    hwc_dev->base.dump = omap4_hwc_dump;
     hwc_dev->fb_dev = hwc_mod->fb_dev;
     *device = &hwc_dev->base.common;
 
