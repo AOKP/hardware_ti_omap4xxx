@@ -753,10 +753,10 @@ int createPreviewSurface(unsigned int width, unsigned int height, int32_t pixFor
         return -1;
     }
 
-    surfaceControl = client->createSurface(0,
+    surfaceControl = client->createSurface(String8("camera_test_menu"),
                                            previewWidth,
                                            previewHeight,
-                                           pixFormat);
+                                           pixFormat, 0);
 
     previewSurface = surfaceControl->getSurface();
 
