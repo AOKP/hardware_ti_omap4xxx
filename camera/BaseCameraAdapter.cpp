@@ -1421,6 +1421,8 @@ status_t BaseCameraAdapter::startVideoCapture()
     if ( NO_ERROR == ret )
         {
 
+        mVideoBuffersAvailable.clear();
+
         for ( unsigned int i = 0 ; i < mPreviewBuffersAvailable.size() ; i++ )
             {
             mVideoBuffersAvailable.add(mPreviewBuffersAvailable.keyAt(i), 0);
@@ -1455,8 +1457,6 @@ status_t BaseCameraAdapter::stopVideoCapture()
                 returnFrame(frameBuf, CameraFrame::VIDEO_FRAME_SYNC);
                 }
             }
-
-        mVideoBuffersAvailable.clear();
 
         mRecording = false;
         }
