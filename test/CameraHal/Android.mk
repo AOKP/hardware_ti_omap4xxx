@@ -13,7 +13,6 @@ LOCAL_SHARED_LIBRARIES:= \
 	libcutils \
 	libbinder \
 	libmedia \
-	libmedia_native \
 	libui \
 	libgui \
 	libcamera_client
