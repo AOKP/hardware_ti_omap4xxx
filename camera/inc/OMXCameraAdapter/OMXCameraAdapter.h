@@ -939,10 +939,6 @@ private:
     Mutex mFrameCountMutex;
     Condition mFirstFrameCondition;
 
-    static const nsecs_t CANCEL_AF_TIMEOUT;
-    Mutex mCancelAFMutex;
-    Condition mCancelAFCond;
-
     Mutex mDoAFMutex;
     Condition mDoAFCond;
 
