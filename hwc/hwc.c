@@ -26,6 +26,10 @@
 #include <sys/mman.h>
 #include <sys/resource.h>
 
+#ifdef SYSFS_VSYNC_NOTIFICATION
+#include <sys/prctl.h>
+#endif
+
 #include <cutils/properties.h>
 #include <cutils/log.h>
 #include <cutils/native_handle.h>
@@ -124,6 +128,9 @@ struct omap4_hwc_device {
     hwc_composer_device_1_t base;
     hwc_procs_t *procs;
     pthread_t hdmi_thread;
+#ifdef SYSFS_VSYNC_NOTIFICATION
+    pthread_t vsync_thread;
+#endif
     pthread_mutex_t lock;
 
     IMG_framebuffer_device_public_t *fb_dev;
@@ -1837,6 +1844,38 @@ static void handle_uevents(omap4_hwc_device_t *hwc_dev, const char *buff, int le
     }
 }
 
+#ifdef SYSFS_VSYNC_NOTIFICATION
+static void *omap4_hwc_vsync_sysfs_loop(void *data)
+{
+    omap4_hwc_device_t *hwc_dev = data;
+    static char buf[4096];
+    int vsync_timestamp_fd;
+    fd_set exceptfds;
+    int res;
+    int64_t timestamp = 0;
+
+    vsync_timestamp_fd = open("/sys/devices/platform/omapfb/vsync_time", O_RDONLY);
+    char thread_name[64] = "hwcVsyncThread";
+    prctl(PR_SET_NAME, (unsigned long) &thread_name, 0, 0, 0);
+    setpriority(PRIO_PROCESS, 0, -20);
+    memset(buf, 0, sizeof(buf));
+
+    ALOGD("Using sysfs mechanism for VSYNC notification");
+
+    FD_ZERO(&exceptfds);
+    FD_SET(vsync_timestamp_fd, &exceptfds);
+    do {
+        ssize_t len = read(vsync_timestamp_fd, buf, sizeof(buf));
+        timestamp = strtoull(buf, NULL, 0);
+        hwc_dev->procs->vsync(hwc_dev->procs, 0, timestamp);
+        select(vsync_timestamp_fd + 1, NULL, NULL, &exceptfds, NULL);
+        lseek(vsync_timestamp_fd, 0, SEEK_SET);
+    } while (1);
+
+    return NULL;
+}
+#endif
+
 static void *omap4_hwc_hdmi_thread(void *data)
 {
     omap4_hwc_device_t *hwc_dev = data;
@@ -2068,6 +2107,16 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
         err = -errno;
         goto done;
     }
+
+#ifdef SYSFS_VSYNC_NOTIFICATION
+    if (pthread_create(&hwc_dev->vsync_thread, NULL, omap4_hwc_vsync_sysfs_loop, hwc_dev))
+    {
+        ALOGE("pthread_create() failed : %s", errno);
+        err = -errno;
+        goto done;
+    }
+#endif
+
     if (pthread_create(&hwc_dev->hdmi_thread, NULL, omap4_hwc_hdmi_thread, hwc_dev))
     {
         ALOGE("failed to create HDMI listening thread (%d): %m", errno);

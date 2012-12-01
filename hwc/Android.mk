@@ -16,6 +16,11 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := hwcomposer.omap4
 LOCAL_CFLAGS := -DLOG_TAG=\"ti_hwc\"
 LOCAL_C_INCLUDES += external/libpng external/zlib
+
+ifeq ($(BOARD_USE_SYSFS_VSYNC_NOTIFICATION),true)
+LOCAL_CFLAGS += -DSYSFS_VSYNC_NOTIFICATION
+endif
+
 # LOG_NDEBUG=0 means verbose logging enabled
 # LOCAL_CFLAGS += -DLOG_NDEBUG=0
 include $(BUILD_SHARED_LIBRARY)
