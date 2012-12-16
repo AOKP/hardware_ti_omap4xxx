@@ -1857,7 +1857,7 @@ static void *omap4_hwc_vsync_sysfs_loop(void *data)
     vsync_timestamp_fd = open("/sys/devices/platform/omapfb/vsync_time", O_RDONLY);
     char thread_name[64] = "hwcVsyncThread";
     prctl(PR_SET_NAME, (unsigned long) &thread_name, 0, 0, 0);
-    setpriority(PRIO_PROCESS, 0, -20);
+    setpriority(PRIO_PROCESS, 0, HAL_PRIORITY_URGENT_DISPLAY);
     memset(buf, 0, sizeof(buf));
 
     ALOGD("Using sysfs mechanism for VSYNC notification");
@@ -2108,15 +2108,6 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
         goto done;
     }
 
-#ifdef SYSFS_VSYNC_NOTIFICATION
-    if (pthread_create(&hwc_dev->vsync_thread, NULL, omap4_hwc_vsync_sysfs_loop, hwc_dev))
-    {
-        ALOGE("pthread_create() failed : %s", errno);
-        err = -errno;
-        goto done;
-    }
-#endif
-
     if (pthread_create(&hwc_dev->hdmi_thread, NULL, omap4_hwc_hdmi_thread, hwc_dev))
     {
         ALOGE("failed to create HDMI listening thread (%d): %m", errno);
@@ -2166,6 +2157,15 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
         close(sw_fd);
     }
     handle_hotplug(hwc_dev);
+
+#ifdef SYSFS_VSYNC_NOTIFICATION
+    if (pthread_create(&hwc_dev->vsync_thread, NULL, omap4_hwc_vsync_sysfs_loop, hwc_dev))
+    {
+        ALOGE("pthread_create() failed (%d): %m", errno);
+        err = -errno;
+        goto done;
+    }
+#endif
 
     ALOGI("omap4_hwc_device_open(rgb_order=%d nv12_only=%d)",
         hwc_dev->flags_rgb_order, hwc_dev->flags_nv12_only);
