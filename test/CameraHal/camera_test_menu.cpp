@@ -957,7 +957,7 @@ int configureRecorder() {
         }
     }
 
-    if ( recorder->setPreviewSurface( surfaceControl->getSurface() ) < 0 ) {
+    if ( recorder->setPreviewSurface( surfaceControl->getSurface()->getIGraphicBufferProducer() ) < 0 ) {
         printf("error while configuring preview surface\n");
 
         return -1;
@@ -1080,7 +1080,7 @@ int startPreview() {
         params.setPictureSize(captureSize[captureSizeIDX].width, captureSize[captureSizeIDX].height);
 
         camera->setParameters(params.flatten());
-        camera->setPreviewDisplay(previewSurface);
+        camera->setPreviewTexture(previewSurface->getIGraphicBufferProducer());
 
         if(!hardwareActive) prevcnt = 0;
 
