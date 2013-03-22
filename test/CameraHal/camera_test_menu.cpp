@@ -430,6 +430,8 @@ bool stressTest = false;
 bool stopScript = false;
 int restartCount = 0;
 
+static const String16 processName("camera_test");
+
 /** Calculate delay from a reference time */
 unsigned long long timeval_delay(const timeval *ref) {
     unsigned long long st, end, delay;
@@ -1012,13 +1014,17 @@ int stopRecording() {
 
 int openCamera() {
     printf("openCamera(camera_index=%d)\n", camera_index);
-    camera = Camera::connect(camera_index);
+    camera = Camera::connect(camera_index,
+            processName,
+            Camera::USE_CALLING_UID);
 
     if ( NULL == camera.get() ) {
         printf("Unable to connect to CameraService\n");
         printf("Retrying... \n");
         sleep(1);
-        camera = Camera::connect(camera_index);
+        camera = Camera::connect(camera_index,
+                processName,
+                Camera::USE_CALLING_UID);
 
         if ( NULL == camera.get() ) {
             printf("Giving up!! \n");
@@ -1455,10 +1461,14 @@ int functional_menu() {
                 stopRecording();
                 closeRecorder();
 
-                camera = Camera::connect(camera_index);
+                camera = Camera::connect(camera_index,
+                        processName,
+                        Camera::USE_CALLING_UID);
                   if ( NULL == camera.get() ) {
                       sleep(1);
-                      camera = Camera::connect(camera_index);
+                      camera = Camera::connect(camera_index,
+                              processName,
+                              Camera::USE_CALLING_UID);
                       if ( NULL == camera.get() ) {
                           return -1;
                       }
