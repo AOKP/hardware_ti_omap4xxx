@@ -11,6 +11,7 @@ LOCAL_SHARED_LIBRARIES:= \
 	libui \
 	libutils \
 	libcutils \
+	liblog \
 	libbinder \
 	libmedia \
 	libui \
@@ -34,5 +35,3 @@ ifeq ($(TARGET_BOARD_PLATFORM),omap4)
 endif
 
 include $(BUILD_HEAPTRACKED_EXECUTABLE)
-
-
