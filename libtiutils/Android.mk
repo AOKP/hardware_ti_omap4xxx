@@ -16,7 +16,8 @@ LOCAL_SHARED_LIBRARIES:= \
     libui \
     libbinder \
     libutils \
-    libcutils
+    libcutils \
+    liblog
 
 LOCAL_C_INCLUDES += \
 	bionic/libc/include \

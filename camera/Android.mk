@@ -73,6 +73,7 @@ LOCAL_SHARED_LIBRARIES:= \
     libbinder \
     libutils \
     libcutils \
+    liblog \
     libtiutils \
     libmm_osal \
     libOMX_Core \
@@ -122,6 +123,7 @@ LOCAL_SHARED_LIBRARIES:= \
     libbinder \
     libutils \
     libcutils \
+    liblog \
     libtiutils \
     libcamera_client \
     libion_ti \

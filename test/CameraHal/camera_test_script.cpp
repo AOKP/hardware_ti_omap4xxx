@@ -96,6 +96,7 @@ extern size_t length_fps_ranges;
 extern size_t length_fpsConst_Ranges;
 extern size_t length_fpsConst_RangesSec;
 
+static const String16 processName("camera_test");
 
 int execute_functional_script(char *script) {
     char *cmd, *ctx, *cycle_cmd, *temp_cmd;
@@ -237,10 +238,14 @@ int execute_functional_script(char *script) {
                     stopRecording();
                     closeRecorder();
 
-                    camera = Camera::connect(camera_index);
+                    camera = Camera::connect(camera_index,
+                            processName,
+                            Camera::USE_CALLING_UID);
                       if ( NULL == camera.get() ) {
                           sleep(1);
-                          camera = Camera::connect(camera_index);
+                          camera = Camera::connect(camera_index,
+                                  processName,
+                                  Camera::USE_CALLING_UID);
 
                           if ( NULL == camera.get() ) {
                               return -1;

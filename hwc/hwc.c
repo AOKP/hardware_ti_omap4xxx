@@ -2186,8 +2186,15 @@ static int omap4_hwc_device_open(const hw_module_t* module, const char* name,
         err = -errno;
         goto done;
     }
-    hwc_dev->ext.lcd_xpy = (float) hwc_dev->fb_dis.width_in_mm / hwc_dev->fb_dis.timings.x_res /
-                            hwc_dev->fb_dis.height_in_mm       * hwc_dev->fb_dis.timings.y_res;
+
+    if (hwc_dev->fb_dis.timings.x_res && hwc_dev->fb_dis.height_in_mm) {
+        hwc_dev->ext.lcd_xpy = (float)
+                hwc_dev->fb_dis.width_in_mm / hwc_dev->fb_dis.timings.x_res /
+                hwc_dev->fb_dis.height_in_mm * hwc_dev->fb_dis.timings.y_res;
+    } else {
+        ALOGE("x resolution or the height is not populated setting lcd_xpy to 1.0\n");
+        hwc_dev->ext.lcd_xpy = 1.0;
+    }
 
     set_primary_display_transform_matrix(hwc_dev);
 
